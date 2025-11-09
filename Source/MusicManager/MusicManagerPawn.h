@@ -2,6 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "InputMappingContext.h"
+#include "EnhancedInputSubsystems.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputLibrary.h"
+//#include "EnhancedInputActionValue.h"
 #include "MusicManagerPawn.generated.h"
 
 class UCameraComponent;
@@ -11,11 +16,11 @@ class USpringArmComponent;
 /**
  * Simple pawn used as the player's in-world representative for the strategy game.
  */
-UCLASS()
-class UInputMappingContext;
-class UInputAction;
-struct FInputActionValue;
 
+//class UInputMappingContext;
+//class UInputAction;
+//struct FInputActionValue;
+UCLASS()
 class AMusicManagerPawn : public APawn
 {
     GENERATED_BODY()

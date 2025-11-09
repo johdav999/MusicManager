@@ -15,10 +15,12 @@
 #include "InputModifiers.h"
 #include "UObject/UObjectGlobals.h"
 
+
 AMusicManagerPawn::AMusicManagerPawn()
 {
     PrimaryActorTick.bCanEverTick = false;
 
+    // --- Components ---
     RootSceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("RootScene"));
     SetRootComponent(RootSceneComponent);
 
@@ -32,20 +34,39 @@ AMusicManagerPawn::AMusicManagerPawn()
     CameraComponent->SetupAttachment(SpringArmComponent, USpringArmComponent::SocketName);
     CameraComponent->bUsePawnControlRotation = false;
 
+    // --- Input mapping context ---
     MovementMappingContext = CreateDefaultSubobject<UInputMappingContext>(TEXT("MovementMappingContext"));
 
+    // --- Actions ---
     MoveForwardAction = CreateDefaultSubobject<UInputAction>(TEXT("MoveForwardAction"));
     MoveForwardAction->ValueType = EInputActionValueType::Axis1D;
-    MovementMappingContext->MapKey(MoveForwardAction, EKeys::W);
-    FEnhancedInputActionKeyMapping& MoveBackwardMapping = MovementMappingContext->MapKey(MoveForwardAction, EKeys::S);
-    MoveBackwardMapping.Modifiers.Add(NewObject<UInputModifierNegate>(this));
 
     MoveRightAction = CreateDefaultSubobject<UInputAction>(TEXT("MoveRightAction"));
     MoveRightAction->ValueType = EInputActionValueType::Axis1D;
-    MovementMappingContext->MapKey(MoveRightAction, EKeys::D);
-    FEnhancedInputActionKeyMapping& MoveLeftMapping = MovementMappingContext->MapKey(MoveRightAction, EKeys::A);
-    MoveLeftMapping.Modifiers.Add(NewObject<UInputModifierNegate>(this));
+
+    // --- Modifiers as default subobjects (safe in ctor) ---
+    UInputModifierNegate* NegBackward = CreateDefaultSubobject<UInputModifierNegate>(TEXT("NegBackward"));
+    UInputModifierNegate* NegLeft = CreateDefaultSubobject<UInputModifierNegate>(TEXT("NegLeft"));
+
+    // --- Forward/Backward (W/S) ---
+    {
+        FEnhancedActionKeyMapping& WMap = MovementMappingContext->MapKey(MoveForwardAction, EKeys::W);
+        // Positive direction => no modifier
+
+        FEnhancedActionKeyMapping& SMap = MovementMappingContext->MapKey(MoveForwardAction, EKeys::S);
+        SMap.Modifiers.Add(NegBackward); // invert S
+    }
+
+    // --- Right/Left (D/A) ---
+    {
+        FEnhancedActionKeyMapping& DMap = MovementMappingContext->MapKey(MoveRightAction, EKeys::D);
+        // Positive direction => no modifier
+
+        FEnhancedActionKeyMapping& AMap = MovementMappingContext->MapKey(MoveRightAction, EKeys::A);
+        AMap.Modifiers.Add(NegLeft); // invert A
+    }
 }
+
 
 void AMusicManagerPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
