@@ -3,6 +3,7 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "WorldDelegates.h"
 #include "EventTickerWidget.h"
 #include "Layout.h"
 #include "Blueprint/UserWidget.h"
