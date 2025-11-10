@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 #include "Math/UnrealMathUtility.h"
 #include "TimerManager.h"
+#include "Async/Async.h"
 
 DEFINE_LOG_CATEGORY(LogEventSubsystem);
 
@@ -108,8 +109,9 @@ void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
     ChildWeak.Reset();
 }
 
-void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues /*IVS*/)
+void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues IVS)
 {
+    (void)IVS;
     if (!InWorld || !InWorld->IsGameWorld())
     {
         return;
@@ -129,6 +131,31 @@ void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::Initial
     UE_LOG(LogEventSubsystem, Verbose, TEXT("Post world initialization for %s."), *InWorld->GetName());
 
     StartTimerForWorld(InWorld);
+
+    if (LayoutWeak.IsValid())
+    {
+        FMusicNewsEvent Dummy;
+        Dummy.NewsId = FGuid::NewGuid();
+        Dummy.Timestamp = FDateTime::Now();
+        Dummy.NewsType = EMusicNewsType::ArtistPerformance;
+        Dummy.SourceName = TEXT("The Wild Beats");
+        Dummy.SubjectName = TEXT("Summer Jam 1985");
+        Dummy.Headline = TEXT("The Wild Beats electrify the crowd at Summer Jam!");
+        Dummy.BodyText = TEXT("A stunning live show earns rave reviews and a surge in record sales.");
+        Dummy.Tags = { TEXT("Live"), TEXT("Rock"), TEXT("Performance") };
+
+        const TWeakObjectPtr<ULayout> LocalLayoutWeak = LayoutWeak;
+        AsyncTask(ENamedThreads::GameThread, [LocalLayoutWeak, Dummy]()
+        {
+            if (ULayout* LayoutPtr = LocalLayoutWeak.Get())
+            {
+                if (IsValid(LayoutPtr))
+                {
+                    LayoutPtr->AddNewsCardToFeed(Dummy);
+                }
+            }
+        });
+    }
 }
 
 void UEventSubsystem::HandleWorldCleanup(UWorld* InWorld, bool /*bSessionEnded*/, bool /*bCleanupResources*/)
