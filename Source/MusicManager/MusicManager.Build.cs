@@ -15,7 +15,7 @@ public class MusicManager : ModuleRules
                         "Engine",
                         "UMG",
                         "Slate",
-                        "SlateCore"
+                        "SlateCore","EnhancedInput",    "InputCore",
                 });
 
                 PrivateDependencyModuleNames.AddRange(new string[] { });
