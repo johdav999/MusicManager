@@ -55,9 +55,9 @@ UEventTickerWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
 
     NewCard->SetNewsEvent(Event);
 
-    if (UVerticalBoxSlot* const Slot = FeedContainer->AddChildToVerticalBox(NewCard))
+    if (UVerticalBoxSlot* const slot = FeedContainer->AddChildToVerticalBox(NewCard))
     {
-        Slot->SetHorizontalAlignment(HAlign_Fill);
+       slot->SetHorizontalAlignment(HAlign_Fill);
         return NewCard;
     }
 
@@ -143,11 +143,16 @@ bool UNewsFeedList::MoveNewsCardToTop(UEventTickerWidget* Card)
         return false;
     }
 
-    if (UVerticalBoxSlot* const Slot = FeedContainer->InsertChildAt(0, Card))
+    if (UPanelSlot* PanelSlot = FeedContainer->InsertChildAt(0, Card))
     {
-        Slot->SetHorizontalAlignment(HAlign_Fill);
+        if (UVerticalBoxSlot* slot = Cast<UVerticalBoxSlot>(PanelSlot))
+        {
+            slot->SetHorizontalAlignment(HAlign_Fill);
+        }
         return true;
     }
+
+
 
     UE_LOG(LogNewsFeedList, Warning, TEXT("MoveNewsCardToTop: Failed to insert card at top."));
     return false;

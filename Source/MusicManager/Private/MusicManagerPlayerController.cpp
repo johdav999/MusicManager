@@ -49,8 +49,9 @@ void AMusicManagerPlayerController::BeginPlay()
         if (UEventSubsystem* EventSubsystem = GameInstance->GetSubsystem<UEventSubsystem>())
         {
             EventSubsystem->RegisterLayout(LayoutInstance);
+			EventSubsystem->SendDummyNews();
         }
-
+        
         FInputModeGameAndUI InputMode;
         InputMode.SetHideCursorDuringCapture(false);
         InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);

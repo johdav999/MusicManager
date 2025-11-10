@@ -131,6 +131,11 @@ void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::Initial
     UE_LOG(LogEventSubsystem, Verbose, TEXT("Post world initialization for %s."), *InWorld->GetName());
 
     StartTimerForWorld(InWorld);
+    SendDummyNews();
+}
+
+void UEventSubsystem::SendDummyNews()
+{
 
     if (LayoutWeak.IsValid())
     {
@@ -146,15 +151,15 @@ void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::Initial
 
         const TWeakObjectPtr<ULayout> LocalLayoutWeak = LayoutWeak;
         AsyncTask(ENamedThreads::GameThread, [LocalLayoutWeak, Dummy]()
-        {
-            if (ULayout* LayoutPtr = LocalLayoutWeak.Get())
             {
-                if (IsValid(LayoutPtr))
+                if (ULayout* LayoutPtr = LocalLayoutWeak.Get())
                 {
-                    LayoutPtr->AddNewsCardToFeed(Dummy);
+                    if (IsValid(LayoutPtr))
+                    {
+                        LayoutPtr->AddNewsCardToFeed(Dummy);
+                    }
                 }
-            }
-        });
+            });
     }
 }
 

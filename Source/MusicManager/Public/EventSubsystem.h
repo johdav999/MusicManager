@@ -114,6 +114,7 @@ public:
 
 
     void HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues IVS);
+    void SendDummyNews();
     void HandleWorldCleanup(UWorld* InWorld, bool bSessionEnded, bool bCleanupResources);
     void StartTimerForWorld(UWorld* InWorld);
     void StopTimer();
