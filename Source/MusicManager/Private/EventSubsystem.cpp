@@ -245,8 +245,8 @@ void UEventSubsystem::OnTimerTick()
 
     if (UEventTickerWidget* Ticker = Cast<UEventTickerWidget>(Child))
     {
-        Ticker->OnEventSubsystemTick();
-        return;
+        /*Ticker->OnEventSubsystemTick();
+        return;*/
     }
 
     UE_LOG(LogEventSubsystem, Verbose, TEXT("Child widget %s is not an EventTickerWidget; skipping."), *Child->GetName());
