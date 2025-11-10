@@ -1,320 +1,278 @@
 // File: Private/EventSubsystem.cpp
 #include "EventSubsystem.h"
 
-#include "Engine/Engine.h"
-#include "Engine/World.h"
-
+#include "Blueprint/UserWidget.h"
 #include "EventTickerWidget.h"
 #include "Layout.h"
-#include "Blueprint/UserWidget.h"
+#include "Engine/World.h"
 #include "Math/UnrealMathUtility.h"
+#include "TimerManager.h"
+#include "WorldDelegates.h"
 
 DEFINE_LOG_CATEGORY(LogEventSubsystem);
 
 namespace
 {
-    constexpr float kMinTickInterval = 0.1f;
-    constexpr float kMaxTickInterval = 60.0f;
-    const FName kTickFunctionName(TEXT("OnEventSubsystemTick"));
+    constexpr float MinTickInterval = 0.1f;
+    constexpr float MaxTickInterval = 60.0f;
 }
-
-UEventSubsystem::UEventSubsystem() = default;
 
 void UEventSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
-
     Super::Initialize(Collection);
 
-    if (!WorldBeginPlayHandle.IsValid())
+    if (!WorldInitHandle.IsValid())
     {
-        WorldBeginPlayHandle = FWorldDelegates::OnWorldBeginPlay.AddUObject(this, &UEventSubsystem::HandleWorldBeginPlay);
+        WorldInitHandle = FWorldDelegates::OnPostWorldInitialization.AddUObject(this, &UEventSubsystem::HandlePostWorldInit);
+        UE_LOG(LogEventSubsystem, Display, TEXT("Bound to OnPostWorldInitialization."));
     }
 
-    if (!WorldBeginTearDownHandle.IsValid())
+    if (!WorldCleanupHandle.IsValid())
     {
-        WorldBeginTearDownHandle = FWorldDelegates::OnWorldBeginTearDown.AddUObject(this, &UEventSubsystem::HandleWorldBeginTearDown);
+        WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(this, &UEventSubsystem::HandleWorldCleanup);
+        UE_LOG(LogEventSubsystem, Display, TEXT("Bound to OnWorldCleanup."));
     }
 
-    UE_LOG(LogEventSubsystem, Verbose, TEXT("Event subsystem initialized."));
+    if (UWorld* CurrentWorld = GetWorld())
+    {
+        if (CurrentWorld->IsGameWorld() && IsSameGameInstanceWorld(*CurrentWorld))
+        {
+            StartTimerForWorld(CurrentWorld);
+        }
+    }
 }
 
 void UEventSubsystem::Deinitialize()
 {
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
-
     StopTimer();
 
-    ResetCachedWidgets();
-
-    if (WorldBeginPlayHandle.IsValid())
+    if (WorldInitHandle.IsValid())
     {
-        FWorldDelegates::OnWorldBeginPlay.Remove(WorldBeginPlayHandle);
-     
-        WorldBeginPlayHandle = FDelegateHandle();
+        FWorldDelegates::OnPostWorldInitialization.Remove(WorldInitHandle);
+        WorldInitHandle = FDelegateHandle();
     }
 
-    if (WorldBeginTearDownHandle.IsValid())
+    if (WorldCleanupHandle.IsValid())
     {
-        FWorldDelegates::OnWorldBeginTearDown.Remove(WorldBeginTearDownHandle);
-        WorldBeginTearDownHandle = FDelegateHandle();
+        FWorldDelegates::OnWorldCleanup.Remove(WorldCleanupHandle);
+        WorldCleanupHandle = FDelegateHandle();
     }
 
-    WorldWeak.Reset();
-
-    UE_LOG(LogEventSubsystem, Verbose, TEXT("Event subsystem deinitialized."));
+    LayoutWeak.Reset();
+    ChildWeak.Reset();
+    CachedWorld.Reset();
 
     Super::Deinitialize();
 }
 
 void UEventSubsystem::RegisterLayout(ULayout* InLayout)
 {
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
+    if (!ensure(IsInGameThread()))
+    {
+        return;
+    }
 
     if (!IsValid(InLayout))
     {
-        UE_LOG(LogEventSubsystem, Warning, TEXT("RegisterLayout called with invalid widget."));
+        UE_LOG(LogEventSubsystem, Warning, TEXT("RegisterLayout called with invalid layout."));
         return;
     }
 
     LayoutWeak = InLayout;
-    AttemptChildRefresh();
+    ChildWeak.Reset();
 
-    if (UWorld* LayoutWorld = InLayout->GetWorld())
-    {
-        if (LayoutWorld->IsGameWorld() && LayoutWorld->HasBegunPlay())
-        {
-            WorldWeak = LayoutWorld;
-            StartTimerForWorld(LayoutWorld);
-        }
-    }
+    UE_LOG(LogEventSubsystem, Display, TEXT("Registered layout %s."), *InLayout->GetName());
 
-    UE_LOG(LogEventSubsystem, Display, TEXT("Layout %s registered with event subsystem."), *InLayout->GetName());
+    ResolveChildWidget(*InLayout);
 }
 
 void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
 {
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
+    if (!ensure(IsInGameThread()))
+    {
+        return;
+    }
 
     if (!LayoutWeak.IsValid())
     {
         return;
     }
 
-    if (InLayout != nullptr && LayoutWeak.Get() != InLayout)
+    if (InLayout && LayoutWeak.Get() != InLayout)
     {
         return;
     }
 
-    UE_LOG(LogEventSubsystem, Display, TEXT("Layout unregistered from event subsystem."));
+    UE_LOG(LogEventSubsystem, Display, TEXT("Unregistered layout."));
 
-    ResetCachedWidgets();
-    StopTimer();
+    LayoutWeak.Reset();
+    ChildWeak.Reset();
 }
 
-void UEventSubsystem::OnTimerTick()
+void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues /*IVS*/)
 {
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
-
-    UWorld* World = WorldWeak.Get();
-    if (!IsValid(World) || !World->IsGameWorld())
+    if (!InWorld || !InWorld->IsGameWorld())
     {
-        UE_LOG(LogEventSubsystem, Verbose, TEXT("Timer tick skipped due to invalid world."));
+        return;
+    }
+
+    if (!IsSameGameInstanceWorld(*InWorld))
+    {
+        return;
+    }
+
+    if (CachedWorld.IsValid() && CachedWorld.Get() != InWorld)
+    {
         StopTimer();
-        WorldWeak.Reset();
-        ResetCachedWidgets();
-        return;
+        CachedWorld.Reset();
     }
 
-    ULayout* Layout = LayoutWeak.Get();
-    if (!IsValid(Layout))
-    {
-        UE_LOG(LogEventSubsystem, Verbose, TEXT("Timer tick stopping due to invalid layout."));
-        StopTimer();
-        ResetCachedWidgets();
-        return;
-    }
+    UE_LOG(LogEventSubsystem, Verbose, TEXT("Post world initialization for %s."), *InWorld->GetName());
 
-    UUserWidget* Child = ChildWeak.Get();
-    if (!IsValid(Child))
-    {
-        AttemptChildRefresh();
-        Child = ChildWeak.Get();
-
-        if (!IsValid(Child))
-        {
-            UE_LOG(LogEventSubsystem, Verbose, TEXT("Child widget is not available on timer tick."));
-            return;
-        }
-    }
-
-    InvokeChildTick(*Child);
-}
-
-void UEventSubsystem::HandleWorldBeginPlay(UWorld* InWorld)
-{
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
-
-    if (!IsValid(InWorld) || !InWorld->IsGameWorld())
-    {
-        return;
-    }
-
-    if (InWorld->GetGameInstance() != GetGameInstance())
-    {
-        return;
-    }
-
-    if (WorldWeak.IsValid() && WorldWeak.Get() == InWorld && IsTimerActiveForWorld(InWorld))
-    {
-        return;
-    }
-
-    WorldWeak = InWorld;
     StartTimerForWorld(InWorld);
-
-    UE_LOG(LogEventSubsystem, Verbose, TEXT("World %s began play; timer initialized."), *InWorld->GetName());
 }
 
-void UEventSubsystem::HandleWorldBeginTearDown(UWorld* InWorld)
+void UEventSubsystem::HandleWorldCleanup(UWorld* InWorld, bool /*bSessionEnded*/, bool /*bCleanupResources*/)
 {
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
-
-    if (!IsValid(InWorld) || !InWorld->IsGameWorld())
+    if (!InWorld || !InWorld->IsGameWorld())
     {
         return;
     }
 
-    if (InWorld->GetGameInstance() != GetGameInstance())
+    if (!IsSameGameInstanceWorld(*InWorld))
     {
         return;
     }
 
-    UE_LOG(LogEventSubsystem, Verbose, TEXT("World %s is tearing down; stopping timer."), *InWorld->GetName());
-
-    StopTimer();
-    WorldWeak.Reset();
-    ResetCachedWidgets();
+    if (CachedWorld.IsValid() && CachedWorld.Get() == InWorld)
+    {
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("World cleanup for %s."), *InWorld->GetName());
+        StopTimer();
+        CachedWorld.Reset();
+        ChildWeak.Reset();
+        LayoutWeak.Reset();
+    }
 }
 
 void UEventSubsystem::StartTimerForWorld(UWorld* InWorld)
 {
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
-
-    if (!IsValid(InWorld) || !InWorld->IsGameWorld())
+    if (!InWorld || !InWorld->IsGameWorld())
     {
         return;
     }
 
-    if (InWorld->GetGameInstance() != GetGameInstance())
+    if (!IsSameGameInstanceWorld(*InWorld))
     {
         return;
     }
 
-    const float ClampedInterval = FMath::Clamp(TickIntervalSeconds, kMinTickInterval, kMaxTickInterval);
+    const float ClampedInterval = FMath::Clamp(TickIntervalSeconds, MinTickInterval, MaxTickInterval);
     if (!FMath::IsNearlyEqual(ClampedInterval, TickIntervalSeconds))
     {
         TickIntervalSeconds = ClampedInterval;
     }
 
-    if (IsTimerActiveForWorld(InWorld))
-    {
-        return;
-    }
-
     FTimerManager& TimerManager = InWorld->GetTimerManager();
-    TimerManager.SetTimer(EventTimerHandle, this, &UEventSubsystem::OnTimerTick, ClampedInterval, true, ClampedInterval);
+    TimerManager.SetTimer(EventTimerHandle, this, &UEventSubsystem::OnTimerTick, ClampedInterval, true);
 
-    UE_LOG(LogEventSubsystem, Verbose, TEXT("Event timer started with interval %.2f seconds."), ClampedInterval);
+    CachedWorld = InWorld;
+
+    UE_LOG(LogEventSubsystem, Display, TEXT("Started timer for world %s (interval %.2f seconds)."), *InWorld->GetName(), ClampedInterval);
 }
 
 void UEventSubsystem::StopTimer()
 {
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
-
-    if (UWorld* World = WorldWeak.Get())
+    if (UWorld* World = CachedWorld.Get())
     {
         if (World->IsGameWorld())
         {
-            World->GetTimerManager().ClearTimer(EventTimerHandle);
+            FTimerManager& TimerManager = World->GetTimerManager();
+            if (TimerManager.TimerExists(EventTimerHandle) || TimerManager.IsTimerActive(EventTimerHandle))
+            {
+                TimerManager.ClearTimer(EventTimerHandle);
+                UE_LOG(LogEventSubsystem, Display, TEXT("Stopped timer for world %s."), *World->GetName());
+            }
+            else
+            {
+                TimerManager.ClearTimer(EventTimerHandle);
+            }
         }
     }
 
     EventTimerHandle.Invalidate();
 }
 
-void UEventSubsystem::ResetCachedWidgets()
-{
-    ChildWeak.Reset();
-    LayoutWeak.Reset();
-}
-
-void UEventSubsystem::AttemptChildRefresh()
+void UEventSubsystem::OnTimerTick()
 {
     check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
+
+    UE_LOG(LogEventSubsystem, Verbose, TEXT("Event subsystem tick."));
+
+    UWorld* World = CachedWorld.Get();
+    if (!IsValid(World) || !World->IsGameWorld())
+    {
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping tick due to invalid world."));
+        StopTimer();
+        CachedWorld.Reset();
+        ChildWeak.Reset();
+        return;
+    }
 
     ULayout* Layout = LayoutWeak.Get();
     if (!IsValid(Layout))
     {
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("No layout registered; skipping tick."));
         ChildWeak.Reset();
         return;
     }
 
-    UUserWidget* FoundChild = Layout->GetChildByNameOrClass(ChildWidgetName, ChildWidgetClass);
-    if (IsValid(FoundChild))
+    if (Layout->GetWorld() != World)
     {
-        ChildWeak = FoundChild;
-        UE_LOG(LogEventSubsystem, Verbose, TEXT("Cached child widget %s."), *FoundChild->GetName());
-    }
-    else
-    {
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("Layout world mismatch; skipping tick."));
         ChildWeak.Reset();
-    }
-}
-
-void UEventSubsystem::InvokeChildTick(UUserWidget& ChildWidget) const
-{
-    check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
-
-    if (UEventTickerWidget* TickerWidget = Cast<UEventTickerWidget>(&ChildWidget))
-    {
-        TickerWidget->OnEventSubsystemTick();
         return;
     }
 
-    if (UFunction* TickFunction = ChildWidget.FindFunction(kTickFunctionName))
+    UUserWidget* Child = ChildWeak.Get();
+    if (!IsValid(Child))
     {
-        ChildWidget.ProcessEvent(TickFunction, nullptr);
+        Child = ResolveChildWidget(*Layout);
+        if (!IsValid(Child))
+        {
+            UE_LOG(LogEventSubsystem, Verbose, TEXT("Unable to resolve child widget for layout %s."), *Layout->GetName());
+            return;
+        }
     }
-    else
+
+    if (UEventTickerWidget* Ticker = Cast<UEventTickerWidget>(Child))
     {
-        UE_LOG(LogEventSubsystem, Verbose, TEXT("Child widget %s has no OnEventSubsystemTick event."), *ChildWidget.GetName());
+        Ticker->OnEventSubsystemTick();
+        return;
     }
+
+    UE_LOG(LogEventSubsystem, Verbose, TEXT("Child widget %s is not an EventTickerWidget; skipping."), *Child->GetName());
 }
 
-bool UEventSubsystem::IsTimerActiveForWorld(const UWorld* InWorld) const
+UUserWidget* UEventSubsystem::ResolveChildWidget(ULayout& Layout)
 {
-    if (!IsValid(InWorld) || !InWorld->IsGameWorld())
+    if (!ensure(IsInGameThread()))
     {
-        return false;
+        return nullptr;
     }
 
-    if (WorldWeak.Get() != InWorld)
+    UUserWidget* ResolvedChild = Layout.GetChildByNameOrClass(ChildWidgetName, ChildWidgetClass);
+    if (IsValid(ResolvedChild))
     {
-        return false;
+        ChildWeak = ResolvedChild;
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("Resolved child widget %s."), *ResolvedChild->GetName());
+        return ResolvedChild;
     }
 
-    const FTimerManager& TimerManager = InWorld->GetTimerManager();
-    return TimerManager.TimerExists(EventTimerHandle) || TimerManager.IsTimerActive(EventTimerHandle);
+    ChildWeak.Reset();
+    return nullptr;
+}
+
+bool UEventSubsystem::IsSameGameInstanceWorld(const UWorld& World) const
+{
+    return World.GetGameInstance() == GetGameInstance();
 }
