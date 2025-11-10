@@ -3,6 +3,8 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Widget.h"
+#include "EventTickerWidget.h"
+#include "NewsFeedList.h"
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -48,4 +50,50 @@ UUserWidget* ULayout::GetChildByNameOrClass(FName WidgetName, TSubclassOf<UUserW
     }
 
     return nullptr;
+}
+
+void ULayout::AddNewsCardToFeed(const FMusicNewsEvent& Event)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AddNewsCardToFeed called off the game thread."));
+        return;
+    }
+
+    if (!IsValid(NewsFeedList))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AddNewsCardToFeed: NewsFeedList is invalid on layout %s."), *GetName());
+        return;
+    }
+
+    if (!IsValid(NewsFeedList->AddNewsCard(Event)))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AddNewsCardToFeed: Failed to add news card."));
+    }
+}
+
+void ULayout::RemoveNewsCardFromFeed(UEventTickerWidget* Card)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RemoveNewsCardFromFeed called off the game thread."));
+        return;
+    }
+
+    if (!IsValid(Card))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RemoveNewsCardFromFeed: Card is invalid."));
+        return;
+    }
+
+    if (!IsValid(NewsFeedList))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RemoveNewsCardFromFeed: NewsFeedList is invalid on layout %s."), *GetName());
+        return;
+    }
+
+    if (!NewsFeedList->RemoveNewsCard(Card))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RemoveNewsCardFromFeed: Failed to remove news card."));
+    }
 }
