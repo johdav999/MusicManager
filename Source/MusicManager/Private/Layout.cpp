@@ -1,10 +1,12 @@
 // File: Private/Layout.cpp
 #include "Layout.h"
 
+#include "Async/Async.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Widget.h"
 #include "EventTickerWidget.h"
 #include "NewsFeedList.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -66,7 +68,11 @@ void ULayout::AddNewsCardToFeed(const FMusicNewsEvent& Event)
         return;
     }
 
-    if (!IsValid(NewsFeedList->AddNewsCard(Event)))
+    if (UEventTickerWidget* NewTicker = NewsFeedList->AddNewsCard(Event))
+    {
+        BindTickerEvents(NewTicker);
+    }
+    else
     {
         UE_LOG(LogTemp, Warning, TEXT("AddNewsCardToFeed: Failed to add news card."));
     }
@@ -95,5 +101,44 @@ void ULayout::RemoveNewsCardFromFeed(UEventTickerWidget* Card)
     if (!NewsFeedList->RemoveNewsCard(Card))
     {
         UE_LOG(LogTemp, Warning, TEXT("RemoveNewsCardFromFeed: Failed to remove news card."));
+    }
+}
+
+void ULayout::BindTickerEvents(UEventTickerWidget* NewTicker)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        return;
+    }
+
+    if (!IsValid(NewTicker))
+    {
+        return;
+    }
+
+    NewTicker->OnNewsCardClicked.Clear();
+    NewTicker->OnNewsCardClicked.AddDynamic(this, &ULayout::HandleTickerClicked);
+}
+
+void ULayout::HandleTickerClicked(UEventTickerWidget* ClickedTicker)
+{
+    if (!IsInGameThread())
+    {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis = TWeakObjectPtr<ULayout>(this), WeakTicker = TWeakObjectPtr<UEventTickerWidget>(ClickedTicker)]()
+        {
+            if (ULayout* Self = WeakThis.Get())
+            {
+                if (UEventTickerWidget* Ticker = WeakTicker.Get())
+                {
+                    Self->HandleTickerClicked(Ticker);
+                }
+            }
+        });
+        return;
+    }
+
+    if (IsValid(ClickedTicker))
+    {
+        OnNewsCardSelected.Broadcast(ClickedTicker);
     }
 }

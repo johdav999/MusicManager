@@ -1,11 +1,14 @@
 // File: Private/EventTickerWidget.cpp
 #include "EventTickerWidget.h"
 
+#include "Async/Async.h"
+#include "Components/Button.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
 UEventTickerWidget::UEventTickerWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -15,6 +18,13 @@ UEventTickerWidget::UEventTickerWidget(const FObjectInitializer& ObjectInitializ
 void UEventTickerWidget::NativeConstruct()
 {
     Super::NativeConstruct();
+
+    if (IsValid(ClickButton))
+    {
+        ClickButton->OnClicked.Clear();
+        ClickButton->OnClicked.AddDynamic(this, &UEventTickerWidget::HandleButtonClicked);
+    }
+
     Refresh();
 }
 
@@ -133,5 +143,25 @@ void UEventTickerWidget::Refresh_Implementation()
 
         CategoryIcon->SetVisibility(DesiredVisibility);
         CategoryIcon->SetColorAndOpacity(CategoryColor);
+    }
+}
+
+void UEventTickerWidget::HandleButtonClicked()
+{
+    if (!IsInGameThread())
+    {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis = TWeakObjectPtr<UEventTickerWidget>(this)]()
+        {
+            if (UEventTickerWidget* Self = WeakThis.Get())
+            {
+                Self->HandleButtonClicked();
+            }
+        });
+        return;
+    }
+
+    if (IsValid(this))
+    {
+        OnNewsCardClicked.Broadcast(this);
     }
 }

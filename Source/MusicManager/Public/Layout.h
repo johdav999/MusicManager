@@ -3,16 +3,18 @@
 
 #include "Blueprint/UserWidget.h"
 #include "EventSubsystem.h"
+#include "EventTickerWidget.h"
 #include "Layout.generated.h"
 
-class UEventTickerWidget;
 class UNewsFeedList;
 class UUserWidget;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
  */
-UCLASS()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNewsCardSelected, UEventTickerWidget*, SelectedCard);
+
+UCLASS(BlueprintType, Blueprintable)
 class ULayout final : public UUserWidget
 {
     GENERATED_BODY()
@@ -30,7 +32,19 @@ public:
     UFUNCTION(BlueprintCallable, Category="News")
     void RemoveNewsCardFromFeed(UEventTickerWidget* Card);
 
+    /** Raised when any card in the feed is clicked */
+    UPROPERTY(BlueprintAssignable, Category="News")
+    FOnNewsCardSelected OnNewsCardSelected;
+
+    /** Called when a ticker widget is created and added to the feed */
+    UFUNCTION(BlueprintCallable, Category="News")
+    void BindTickerEvents(UEventTickerWidget* NewTicker);
+
 protected:
     UPROPERTY(meta=(BindWidgetOptional))
     UNewsFeedList* NewsFeedList;
+
+private:
+    UFUNCTION()
+    void HandleTickerClicked(UEventTickerWidget* ClickedTicker);
 };
