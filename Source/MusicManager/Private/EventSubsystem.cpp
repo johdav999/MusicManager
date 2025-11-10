@@ -3,7 +3,7 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
-#include "WorldDelegates.h"
+
 #include "EventTickerWidget.h"
 #include "Layout.h"
 #include "Blueprint/UserWidget.h"
@@ -52,6 +52,7 @@ void UEventSubsystem::Deinitialize()
     if (WorldBeginPlayHandle.IsValid())
     {
         FWorldDelegates::OnWorldBeginPlay.Remove(WorldBeginPlayHandle);
+     
         WorldBeginPlayHandle = FDelegateHandle();
     }
 
