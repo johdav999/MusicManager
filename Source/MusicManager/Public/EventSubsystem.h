@@ -29,7 +29,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="EventSubsystem")
     void UnregisterLayout(ULayout* InLayout);
 
-private:
+
     void HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues IVS);
     void HandleWorldCleanup(UWorld* InWorld, bool bSessionEnded, bool bCleanupResources);
     void StartTimerForWorld(UWorld* InWorld);
@@ -49,9 +49,10 @@ private:
     UPROPERTY(EditAnywhere, Config)
     FName ChildWidgetName = TEXT("EventTicker");
 
-    UPROPERTY(EditAnywhere, Config)
+    UPROPERTY(EditAnywhere,BlueprintReadWrite, Config)
     TSubclassOf<UUserWidget> ChildWidgetClass;
-
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TWeakObjectPtr<ULayout> LayoutWeak;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TWeakObjectPtr<UUserWidget> ChildWeak;
 };

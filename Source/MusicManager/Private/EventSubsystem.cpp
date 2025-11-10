@@ -7,7 +7,6 @@
 #include "Engine/World.h"
 #include "Math/UnrealMathUtility.h"
 #include "TimerManager.h"
-#include "WorldDelegates.h"
 
 DEFINE_LOG_CATEGORY(LogEventSubsystem);
 
