@@ -8,13 +8,11 @@ public class MusicManager : ModuleRules
         {
                 PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-                PublicDependencyModuleNames.AddRange(new string[]
+                PublicDependencyModuleNames.AddRange(new[]
                 {
                         "Core",
                         "CoreUObject",
                         "Engine",
-                        "InputCore",
-                        "EnhancedInput",
                         "UMG",
                         "Slate",
                         "SlateCore"
