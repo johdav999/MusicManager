@@ -2,10 +2,15 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
+#include "EventSubsystem.h"
 #include "EventTickerWidget.generated.h"
 
+class UHorizontalBox;
+class UImage;
+class UTextBlock;
+
 /**
- * Widget notified by the event subsystem on each timer tick.
+ * Widget that presents a single music news event.
  */
 UCLASS()
 class UEventTickerWidget : public UUserWidget
@@ -15,11 +20,37 @@ class UEventTickerWidget : public UUserWidget
 public:
     UEventTickerWidget(const FObjectInitializer& ObjectInitializer);
 
-    /** Called when the event subsystem fires its timer. Implement in Blueprint if desired. */
-    UFUNCTION(BlueprintImplementableEvent, Category="EventSubsystem")
-    void OnEventSubsystemTick();
+    virtual void NativeConstruct() override;
+
+    UFUNCTION(BlueprintCallable, Category="News")
+    void SetNewsEvent(const FMusicNewsEvent& InEvent);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="News", meta=(ExposeOnSpawn=true))
+    FMusicNewsEvent NewsEvent;
 
 protected:
-    /** Default fallback invoked when no Blueprint override is provided. */
-    virtual void OnEventSubsystemTick_Implementation();
+    UPROPERTY(meta=(BindWidgetOptional))
+    UTextBlock* HeadlineText;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UTextBlock* SourceText;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UTextBlock* TimestampText;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UTextBlock* SubjectText;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UTextBlock* BodyText;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UHorizontalBox* TagContainer;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UImage* CategoryIcon;
+
+    UFUNCTION(BlueprintNativeEvent, Category="News")
+    void Refresh();
+    virtual void Refresh_Implementation();
 };
