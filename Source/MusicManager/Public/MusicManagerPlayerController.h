@@ -4,7 +4,7 @@
 #include "GameFramework/PlayerController.h"
 #include "MusicManagerPlayerController.generated.h"
 
-class ULayoutWidget;
+class ULayout;
 
 /**
  * Custom player controller responsible for initializing player-specific systems.
@@ -21,10 +21,10 @@ protected:
     virtual void BeginPlay() override;
 
     /** Base layout widget class added to the viewport at BeginPlay. */
-    UPROPERTY(EditDefaultsOnly, Category = "UI")
-    TSubclassOf<ULayoutWidget> LayoutWidgetClass;
+    UPROPERTY(EditDefaultsOnly, Category="UI")
+    TSubclassOf<class ULayout> LayoutClass = nullptr;
 
     /** Instance of the layout widget added to the viewport. */
-    UPROPERTY()
-    TObjectPtr<ULayoutWidget> LayoutWidgetInstance;
+    UPROPERTY(Transient)
+    TObjectPtr<class ULayout> LayoutInstance = nullptr;
 };
