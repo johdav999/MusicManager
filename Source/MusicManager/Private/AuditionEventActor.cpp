@@ -1,0 +1,39 @@
+#include "AuditionEventActor.h"
+
+AAuditionEventActor::AAuditionEventActor()
+{
+    PrimaryActorTick.bCanEverTick = false;
+    ActiveWidget = nullptr;
+}
+
+void AAuditionEventActor::StartAudition()
+{
+    if (!WidgetClass)
+    {
+        return;
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        ActiveWidget = CreateWidget<UAuditionWidget>(World, WidgetClass);
+        if (ActiveWidget)
+        {
+            ActiveWidget->AuditionData = AuditionData;
+            ActiveWidget->AddToViewport();
+        }
+    }
+}
+
+void AAuditionEventActor::FinalizeDeal(bool bAcceptDeal)
+{
+    AuditionData.bSignedArtist = bAcceptDeal;
+    AuditionData.Outcome = bAcceptDeal ? TEXT("Deal Accepted") : TEXT("Deal Rejected");
+
+    if (ActiveWidget)
+    {
+        ActiveWidget->AuditionData = AuditionData;
+        ActiveWidget->UpdateNegotiationValues();
+    }
+
+    OnNegotiationUpdated.Broadcast();
+}
