@@ -27,7 +27,7 @@ struct FArtistData
     float SongwritingQuality = 0.f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FString ReviewerNotes = TEXT("");
+    FString Genre = TEXT("");
 };
 
 USTRUCT(BlueprintType)
