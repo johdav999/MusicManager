@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "AuditionTypes.h"
+#include "Components/TextBlock.h"
+#include "Components/Slider.h"
 #include "AuditionWidget.generated.h"
 
 UCLASS(Blueprintable)
@@ -14,6 +16,48 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FAuditionEvent AuditionData;
 
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextArtistName = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextGenre = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextVenue = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextCity = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    USlider* SliderSignUpBonus = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    USlider* SliderNumOfRecords = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    USlider* SliderRoyaltyRate = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    USlider* SliderContractYears = nullptr;
+
     UFUNCTION(BlueprintCallable)
-    void UpdateNegotiationValues();
+    void RefreshDisplay();
+
+protected:
+    virtual void NativeConstruct() override;
+
+    UFUNCTION()
+    void HandleSignUpBonusChanged(float Value);
+
+    UFUNCTION()
+    void HandleNumOfRecordsChanged(float Value);
+
+    UFUNCTION()
+    void HandleRoyaltyRateChanged(float Value);
+
+    UFUNCTION()
+    void HandleContractYearsChanged(float Value);
+
+    UFUNCTION(BlueprintImplementableEvent)
+    void OnNegotiationValueChanged();
 };
