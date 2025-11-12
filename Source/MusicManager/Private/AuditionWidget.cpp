@@ -29,6 +29,18 @@ void UAuditionWidget::NativeConstruct()
         SliderContractYears->OnValueChanged.RemoveAll(this);
         SliderContractYears->OnValueChanged.AddDynamic(this, &UAuditionWidget::HandleContractYearsChanged);
     }
+
+    if (ButtonSignArtist)
+    {
+        ButtonSignArtist->OnClicked.RemoveAll(this);
+        ButtonSignArtist->OnClicked.AddDynamic(this, &UAuditionWidget::HandleSignArtistClicked);
+    }
+
+    if (ButtonPass)
+    {
+        ButtonPass->OnClicked.RemoveAll(this);
+        ButtonPass->OnClicked.AddDynamic(this, &UAuditionWidget::HandlePassClicked);
+    }
 }
 
 void UAuditionWidget::RefreshDisplay()
@@ -121,4 +133,14 @@ void UAuditionWidget::HandleContractYearsChanged(float Value)
 {
     AuditionData.DealData.ContractYears = FMath::RoundToInt(Value);
     OnNegotiationValueChanged();
+}
+
+void UAuditionWidget::HandleSignArtistClicked()
+{
+    OnSignArtist.Broadcast();
+}
+
+void UAuditionWidget::HandlePassClicked()
+{
+    OnPass.Broadcast();
 }

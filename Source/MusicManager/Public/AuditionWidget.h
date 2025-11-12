@@ -4,8 +4,11 @@
 #include "Blueprint/UserWidget.h"
 #include "AuditionTypes.h"
 #include "Components/TextBlock.h"
+#include "Components/Button.h"
 #include "Components/Slider.h"
 #include "AuditionWidget.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnAuditionDecision);
 
 UCLASS(Blueprintable)
 class UAuditionWidget : public UUserWidget
@@ -55,6 +58,18 @@ public:
     UPROPERTY(meta = (BindWidget))
     USlider* SliderContractYears = nullptr;
 
+    UPROPERTY(meta = (BindWidget))
+    UButton* ButtonSignArtist = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UButton* ButtonPass = nullptr;
+
+    UPROPERTY(BlueprintAssignable, Category = "Audition")
+    FOnAuditionDecision OnSignArtist;
+
+    UPROPERTY(BlueprintAssignable, Category = "Audition")
+    FOnAuditionDecision OnPass;
+
     UFUNCTION(BlueprintCallable)
     void RefreshDisplay();
 
@@ -72,6 +87,12 @@ protected:
 
     UFUNCTION()
     void HandleContractYearsChanged(float Value);
+
+    UFUNCTION()
+    void HandleSignArtistClicked();
+
+    UFUNCTION()
+    void HandlePassClicked();
 
     UFUNCTION(BlueprintImplementableEvent)
     void OnNegotiationValueChanged();
