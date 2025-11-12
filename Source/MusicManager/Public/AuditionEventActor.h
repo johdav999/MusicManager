@@ -36,4 +36,10 @@ public:
 private:
     UPROPERTY()
     UAuditionWidget* ActiveWidget;
+
+    UFUNCTION()
+    void HandleSignArtist();
+
+    UFUNCTION()
+    void HandlePassOnArtist();
 };

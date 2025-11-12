@@ -20,6 +20,8 @@ void AAuditionEventActor::StartAudition()
         {
             ActiveWidget->AuditionData = AuditionData;
             ActiveWidget->AddToViewport();
+            ActiveWidget->OnSignArtist.AddDynamic(this, &AAuditionEventActor::HandleSignArtist);
+            ActiveWidget->OnPass.AddDynamic(this, &AAuditionEventActor::HandlePassOnArtist);
         }
     }
 }
@@ -36,4 +38,14 @@ void AAuditionEventActor::FinalizeDeal(bool bAcceptDeal)
     }
 
     OnNegotiationUpdated.Broadcast();
+}
+
+void AAuditionEventActor::HandleSignArtist()
+{
+    FinalizeDeal(true);
+}
+
+void AAuditionEventActor::HandlePassOnArtist()
+{
+    FinalizeDeal(false);
 }
