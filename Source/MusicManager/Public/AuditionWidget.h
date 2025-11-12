@@ -29,6 +29,21 @@ public:
     UTextBlock* TextCity = nullptr;
 
     UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextPerformanceScore = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextStagePresence = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextAudienceEngagement = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextVocalQuality = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextSongwritingQuality = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
     USlider* SliderSignUpBonus = nullptr;
 
     UPROPERTY(meta = (BindWidget))
