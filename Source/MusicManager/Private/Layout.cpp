@@ -6,6 +6,8 @@
 #include "Components/Widget.h"
 #include "EventTickerWidget.h"
 #include "NewsFeedList.h"
+#include "AuditionWidget.h"
+#include "Types/SlateEnums.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
@@ -118,6 +120,7 @@ void ULayout::BindTickerEvents(UEventTickerWidget* NewTicker)
 
     NewTicker->OnNewsCardClicked.Clear();
     NewTicker->OnNewsCardClicked.AddDynamic(this, &ULayout::HandleTickerClicked);
+    NewTicker->SetLayoutReference(this);
 }
 
 void ULayout::HandleTickerClicked(UEventTickerWidget* ClickedTicker)
@@ -141,4 +144,29 @@ void ULayout::HandleTickerClicked(UEventTickerWidget* ClickedTicker)
     {
         OnNewsCardSelected.Broadcast(ClickedTicker);
     }
+}
+
+void ULayout::ShowAuditionWidget()
+{
+    const TWeakObjectPtr<ULayout> WeakThis(this);
+    AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+    {
+        if (ULayout* Self = WeakThis.Get())
+        {
+            if (!IsValid(Self))
+            {
+                return;
+            }
+
+            if (!IsValid(Self->AuditionWidget))
+            {
+                return;
+            }
+
+            if (!Self->AuditionWidget->IsVisible())
+            {
+                Self->AuditionWidget->SetVisibility(ESlateVisibility::Visible);
+            }
+        }
+    });
 }

@@ -15,33 +15,34 @@ DECLARE_LOG_CATEGORY_EXTERN(LogEventSubsystem, Log, All);
 UENUM(BlueprintType)
 enum class EMusicNewsType : uint8
 {
-    None                UMETA(DisplayName = "None"),
+    None                        UMETA(DisplayName = "None"),
 
     // --- Artist & career ---
-    ArtistSigned        UMETA(DisplayName = "Artist Signed to Label"),
-    ArtistDropped       UMETA(DisplayName = "Artist Dropped from Label"),
-    ArtistPerformance   UMETA(DisplayName = "Live Performance"),
-    ArtistAward         UMETA(DisplayName = "Artist Wins Award"),
-    ArtistScandal       UMETA(DisplayName = "Artist Scandal or Controversy"),
+    ArtistSigned                UMETA(DisplayName = "Artist Signed to Label"),
+    ArtistDropped               UMETA(DisplayName = "Artist Dropped from Label"),
+    ArtistPerformance           UMETA(DisplayName = "Live Performance"),
+    ArtistAward                 UMETA(DisplayName = "Artist Wins Award"),
+    ArtistScandal               UMETA(DisplayName = "Artist Scandal or Controversy"),
+    NewUpcomingArtistPerforming UMETA(DisplayName = "Upcoming Artist Performing"),
 
     // --- Releases & production ---
-    RecordRelease       UMETA(DisplayName = "Record Release"),
-    MusicVideoRelease   UMETA(DisplayName = "Music Video Release"),
-    RecordingSession    UMETA(DisplayName = "Recording Session Started/Ended"),
-    ChartAchievement    UMETA(DisplayName = "Chart Achievement"),
+    RecordRelease               UMETA(DisplayName = "Record Release"),
+    MusicVideoRelease           UMETA(DisplayName = "Music Video Release"),
+    RecordingSession            UMETA(DisplayName = "Recording Session Started/Ended"),
+    ChartAchievement            UMETA(DisplayName = "Chart Achievement"),
 
     // --- Business & industry ---
-    DealSigned          UMETA(DisplayName = "New Business Deal"),
-    MarketingPush       UMETA(DisplayName = "Marketing Campaign Launch"),
-    Partnership         UMETA(DisplayName = "Partnership or Collaboration"),
-    FinancialReport     UMETA(DisplayName = "Financial Report or Milestone"),
-    LabelExpansion      UMETA(DisplayName = "Label Expansion / New Office"),
+    DealSigned                  UMETA(DisplayName = "New Business Deal"),
+    MarketingPush               UMETA(DisplayName = "Marketing Campaign Launch"),
+    Partnership                 UMETA(DisplayName = "Partnership or Collaboration"),
+    FinancialReport             UMETA(DisplayName = "Financial Report or Milestone"),
+    LabelExpansion              UMETA(DisplayName = "Label Expansion / New Office"),
 
     // --- World & culture ---
-    FestivalAnnouncement UMETA(DisplayName = "Festival or Event Announcement"),
-    IndustryTrend        UMETA(DisplayName = "Industry Trend"),
-    RivalLabelNews       UMETA(DisplayName = "Rival Label News"),
-    MarketShift          UMETA(DisplayName = "Market Shift"),
+    FestivalAnnouncement        UMETA(DisplayName = "Festival or Event Announcement"),
+    IndustryTrend               UMETA(DisplayName = "Industry Trend"),
+    RivalLabelNews              UMETA(DisplayName = "Rival Label News"),
+    MarketShift                 UMETA(DisplayName = "Market Shift"),
 };
 
 USTRUCT(BlueprintType)

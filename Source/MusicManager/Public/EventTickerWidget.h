@@ -2,13 +2,15 @@
 #pragma once
 
 #include "Blueprint/UserWidget.h"
-#include "Components/Button.h"
 #include "EventSubsystem.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 #include "EventTickerWidget.generated.h"
 
 class UHorizontalBox;
 class UImage;
 class UTextBlock;
+class UButton;
+class ULayout;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNewsCardClicked, UEventTickerWidget*, ClickedCard);
 
@@ -31,6 +33,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category="News")
     void SetNewsEvent(const FMusicNewsEvent& InEvent);
+
+    UFUNCTION(BlueprintCallable, Category="Layout")
+    void SetLayoutReference(ULayout* InLayout);
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="News", meta=(ExposeOnSpawn=true))
     FMusicNewsEvent NewsEvent;
@@ -58,7 +63,7 @@ protected:
     UImage* CategoryIcon;
 
     /** Button in the widget (bound from UMG Blueprint) */
-    UPROPERTY(meta=(BindWidgetOptional))
+    UPROPERTY(meta=(BindWidget))
     UButton* ClickButton;
 
     UFUNCTION(BlueprintNativeEvent, Category="News")
@@ -67,5 +72,9 @@ protected:
 
 private:
     UFUNCTION()
-    void HandleButtonClicked();
+    void OnClickButton();
+
+    EMusicNewsType CurrentNewsType = EMusicNewsType::None;
+
+    TWeakObjectPtr<ULayout> LayoutRef;
 };

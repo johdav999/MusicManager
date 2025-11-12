@@ -8,6 +8,7 @@
 
 class UNewsFeedList;
 class UUserWidget;
+class UAuditionWidget;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
@@ -40,9 +41,15 @@ public:
     UFUNCTION(BlueprintCallable, Category="News")
     void BindTickerEvents(UEventTickerWidget* NewTicker);
 
+    UFUNCTION(BlueprintCallable, Category="Layout")
+    void ShowAuditionWidget();
+
 protected:
     UPROPERTY(meta=(BindWidgetOptional))
     UNewsFeedList* NewsFeedList;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout")
+    UAuditionWidget* AuditionWidget;
 
 private:
     UFUNCTION()
