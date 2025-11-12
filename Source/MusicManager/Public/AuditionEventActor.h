@@ -4,8 +4,10 @@
 #include "GameFramework/Actor.h"
 #include "AuditionTypes.h"
 #include "AuditionWidget.h"
-#include "Delegates/DelegateCombinations.h"
 #include "AuditionEventActor.generated.h"
+
+// Declare a dynamic multicast delegate that Blueprints can bind to
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNegotiationUpdated);
 
 UCLASS()
 class AAuditionEventActor : public AActor
@@ -15,19 +17,20 @@ class AAuditionEventActor : public AActor
 public:
     AAuditionEventActor();
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audition")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audition")
     FAuditionEvent AuditionData;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audition")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audition")
     TSubclassOf<UAuditionWidget> WidgetClass;
 
-    UPROPERTY(BlueprintAssignable, Category="Audition")
-    FSimpleMulticastDelegate OnNegotiationUpdated;
+    // Blueprint event version of the delegate
+    UPROPERTY(BlueprintAssignable, Category = "Audition")
+    FOnNegotiationUpdated OnNegotiationUpdated;
 
-    UFUNCTION(BlueprintCallable, Category="Audition")
+    UFUNCTION(BlueprintCallable, Category = "Audition")
     void StartAudition();
 
-    UFUNCTION(BlueprintCallable, Category="Audition")
+    UFUNCTION(BlueprintCallable, Category = "Audition")
     void FinalizeDeal(bool bAcceptDeal);
 
 private:

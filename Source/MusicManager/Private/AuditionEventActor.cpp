@@ -32,7 +32,7 @@ void AAuditionEventActor::FinalizeDeal(bool bAcceptDeal)
     if (ActiveWidget)
     {
         ActiveWidget->AuditionData = AuditionData;
-        ActiveWidget->UpdateNegotiationValues();
+        ActiveWidget->SetVisibility(ESlateVisibility::Hidden);
     }
 
     OnNegotiationUpdated.Broadcast();
