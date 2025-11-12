@@ -53,6 +53,31 @@ void UAuditionWidget::RefreshDisplay()
         TextCity->SetText(FText::FromString(AuditionData.City));
     }
 
+    if (TextPerformanceScore)
+    {
+        TextPerformanceScore->SetText(FText::AsNumber(AuditionData.ArtistData.PerformanceScore));
+    }
+
+    if (TextStagePresence)
+    {
+        TextStagePresence->SetText(FText::AsNumber(AuditionData.ArtistData.StagePresence));
+    }
+
+    if (TextAudienceEngagement)
+    {
+        TextAudienceEngagement->SetText(FText::AsNumber(AuditionData.ArtistData.AudienceEngagement));
+    }
+
+    if (TextVocalQuality)
+    {
+        TextVocalQuality->SetText(FText::AsNumber(AuditionData.ArtistData.VocalQuality));
+    }
+
+    if (TextSongwritingQuality)
+    {
+        TextSongwritingQuality->SetText(FText::AsNumber(AuditionData.ArtistData.SongwritingQuality));
+    }
+
     if (SliderSignUpBonus)
     {
         SliderSignUpBonus->SetValue(AuditionData.DealData.SignUpBonus);
