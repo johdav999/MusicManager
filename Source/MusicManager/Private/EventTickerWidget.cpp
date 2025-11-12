@@ -8,6 +8,7 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
+#include "Layout.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
 UEventTickerWidget::UEventTickerWidget(const FObjectInitializer& ObjectInitializer)
@@ -22,7 +23,7 @@ void UEventTickerWidget::NativeConstruct()
     if (IsValid(ClickButton))
     {
         ClickButton->OnClicked.Clear();
-        ClickButton->OnClicked.AddDynamic(this, &UEventTickerWidget::HandleButtonClicked);
+        ClickButton->OnClicked.AddDynamic(this, &UEventTickerWidget::OnClickButton);
     }
 
     Refresh();
@@ -31,7 +32,25 @@ void UEventTickerWidget::NativeConstruct()
 void UEventTickerWidget::SetNewsEvent(const FMusicNewsEvent& InEvent)
 {
     NewsEvent = InEvent;
+    CurrentNewsType = InEvent.NewsType;
     Refresh();
+}
+
+void UEventTickerWidget::SetLayoutReference(ULayout* InLayout)
+{
+    if (!IsInGameThread())
+    {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis = TWeakObjectPtr<UEventTickerWidget>(this), WeakLayout = TWeakObjectPtr<ULayout>(InLayout)]()
+        {
+            if (UEventTickerWidget* Self = WeakThis.Get())
+            {
+                Self->SetLayoutReference(WeakLayout.Get());
+            }
+        });
+        return;
+    }
+
+    LayoutRef = InLayout;
 }
 
 void UEventTickerWidget::Refresh_Implementation()
@@ -112,6 +131,7 @@ void UEventTickerWidget::Refresh_Implementation()
             CategoryColor = FLinearColor(0.75f, 0.19f, 0.19f, 1.0f);
             break;
         case EMusicNewsType::ArtistPerformance:
+        case EMusicNewsType::NewUpcomingArtistPerforming:
         case EMusicNewsType::FestivalAnnouncement:
             CategoryColor = FLinearColor(0.26f, 0.41f, 0.85f, 1.0f);
             break;
@@ -146,7 +166,7 @@ void UEventTickerWidget::Refresh_Implementation()
     }
 }
 
-void UEventTickerWidget::HandleButtonClicked()
+void UEventTickerWidget::OnClickButton()
 {
     if (!IsInGameThread())
     {
@@ -154,14 +174,45 @@ void UEventTickerWidget::HandleButtonClicked()
         {
             if (UEventTickerWidget* Self = WeakThis.Get())
             {
-                Self->HandleButtonClicked();
+                Self->OnClickButton();
             }
         });
         return;
     }
 
+    switch (CurrentNewsType)
+    {
+    case EMusicNewsType::NewUpcomingArtistPerforming:
+        if (LayoutRef.IsValid())
+        {
+            const TWeakObjectPtr<ULayout> LocalLayout = LayoutRef;
+            AsyncTask(ENamedThreads::GameThread, [LocalLayout]()
+            {
+                if (ULayout* Layout = LocalLayout.Get())
+                {
+                    if (IsValid(Layout))
+                    {
+                        Layout->ShowAuditionWidget();
+                    }
+                }
+            });
+        }
+        break;
+    default:
+        break;
+    }
+
     if (IsValid(this))
     {
-        OnNewsCardClicked.Broadcast(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis = TWeakObjectPtr<UEventTickerWidget>(this)]()
+        {
+            if (UEventTickerWidget* Self = WeakThis.Get())
+            {
+                if (IsValid(Self))
+                {
+                    Self->OnNewsCardClicked.Broadcast(Self);
+                }
+            }
+        });
     }
 }
