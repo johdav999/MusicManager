@@ -43,13 +43,13 @@ void UAuditionWidget::NativeConstruct()
     }
 }
 
-void UAuditionWidget::OnVisibilityChanged(ESlateVisibility InVisibility)
+void UAuditionWidget::CreateDummyAudition()
 {
-    Super::OnVisibilityChanged(InVisibility);
 
-    const bool bIsNowVisible = InVisibility != ESlateVisibility::Collapsed && InVisibility != ESlateVisibility::Hidden;
 
-    if (!bHasInitializedTestData && bIsNowVisible && !IsDesignTime())
+
+
+    if (!bHasInitializedTestData && !IsDesignTime())
     {
         bHasInitializedTestData = true;
 

@@ -73,10 +73,14 @@ public:
     UFUNCTION(BlueprintCallable)
     void RefreshDisplay();
 
+    UFUNCTION(BlueprintCallable)
+    void CreateDummyAudition();
+
 protected:
     virtual void NativeConstruct() override;
 
-    virtual void OnVisibilityChanged(ESlateVisibility InVisibility) override;
+
+
 
     UFUNCTION()
     void HandleSignUpBonusChanged(float Value);

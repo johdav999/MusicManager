@@ -163,6 +163,7 @@ void ULayout::ShowAuditionWidget()
                 return;
             }
 
+			Self->AuditionWidget->CreateDummyAudition();
             if (!Self->AuditionWidget->IsVisible())
             {
                 Self->AuditionWidget->SetVisibility(ESlateVisibility::Visible);
