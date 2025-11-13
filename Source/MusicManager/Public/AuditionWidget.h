@@ -76,6 +76,8 @@ public:
 protected:
     virtual void NativeConstruct() override;
 
+    virtual void OnVisibilityChanged(ESlateVisibility InVisibility) override;
+
     UFUNCTION()
     void HandleSignUpBonusChanged(float Value);
 
@@ -96,4 +98,7 @@ protected:
 
     UFUNCTION(BlueprintImplementableEvent)
     void OnNegotiationValueChanged();
+
+private:
+    bool bHasInitializedTestData = false;
 };

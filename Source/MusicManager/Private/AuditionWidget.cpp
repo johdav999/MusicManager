@@ -43,6 +43,37 @@ void UAuditionWidget::NativeConstruct()
     }
 }
 
+void UAuditionWidget::OnVisibilityChanged(ESlateVisibility InVisibility)
+{
+    Super::OnVisibilityChanged(InVisibility);
+
+    const bool bIsNowVisible = InVisibility != ESlateVisibility::Collapsed && InVisibility != ESlateVisibility::Hidden;
+
+    if (!bHasInitializedTestData && bIsNowVisible && !IsDesignTime())
+    {
+        bHasInitializedTestData = true;
+
+        FArtistData DummyArtistData;
+        DummyArtistData.ArtistName = TEXT("Test Artist");
+        DummyArtistData.PerformanceScore = 0.85f;
+        DummyArtistData.StagePresence = 0.75f;
+        DummyArtistData.AudienceEngagement = 0.9f;
+        DummyArtistData.VocalQuality = 0.8f;
+        DummyArtistData.SongwritingQuality = 0.7f;
+        DummyArtistData.Genre = TEXT("Pop");
+
+        AuditionData.ArtistData = DummyArtistData;
+        AuditionData.VenueName = TEXT("Test Venue");
+        AuditionData.City = TEXT("Test City");
+        AuditionData.DealData.SignUpBonus = 10000.f;
+        AuditionData.DealData.NumOfRecords = 3;
+        AuditionData.DealData.RoyaltyRate = 0.15f;
+        AuditionData.DealData.ContractYears = 4;
+
+        RefreshDisplay();
+    }
+}
+
 void UAuditionWidget::RefreshDisplay()
 {
     if (TextArtistName)
