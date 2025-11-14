@@ -10,24 +10,40 @@ void UAuditionWidget::NativeConstruct()
     {
         SliderSignUpBonus->OnValueChanged.RemoveAll(this);
         SliderSignUpBonus->OnValueChanged.AddDynamic(this, &UAuditionWidget::HandleSignUpBonusChanged);
+        if (TextSignUpBonusValue)
+        {
+            TextSignUpBonusValue->SetText(FText::AsNumber(FMath::RoundToInt(SliderSignUpBonus->GetValue())));
+        }
     }
 
     if (SliderNumOfRecords)
     {
         SliderNumOfRecords->OnValueChanged.RemoveAll(this);
         SliderNumOfRecords->OnValueChanged.AddDynamic(this, &UAuditionWidget::HandleNumOfRecordsChanged);
+        if (TextNumOfRecordsValue)
+        {
+            TextNumOfRecordsValue->SetText(FText::AsNumber(FMath::RoundToInt(SliderNumOfRecords->GetValue())));
+        }
     }
 
     if (SliderRoyaltyRate)
     {
         SliderRoyaltyRate->OnValueChanged.RemoveAll(this);
         SliderRoyaltyRate->OnValueChanged.AddDynamic(this, &UAuditionWidget::HandleRoyaltyRateChanged);
+        if (TextRoyaltyRateValue)
+        {
+            TextRoyaltyRateValue->SetText(FText::AsNumber(FMath::RoundToInt(SliderRoyaltyRate->GetValue())));
+        }
     }
 
     if (SliderContractYears)
     {
         SliderContractYears->OnValueChanged.RemoveAll(this);
         SliderContractYears->OnValueChanged.AddDynamic(this, &UAuditionWidget::HandleContractYearsChanged);
+        if (TextContractYearsValue)
+        {
+            TextContractYearsValue->SetText(FText::AsNumber(FMath::RoundToInt(SliderContractYears->GetValue())));
+        }
     }
 
     if (ButtonSignArtist)
@@ -145,24 +161,40 @@ void UAuditionWidget::RefreshDisplay()
 void UAuditionWidget::HandleSignUpBonusChanged(float Value)
 {
     AuditionData.DealData.SignUpBonus = Value;
+    if (TextSignUpBonusValue)
+    {
+        TextSignUpBonusValue->SetText(FText::AsNumber(FMath::RoundToInt(Value)));
+    }
     OnNegotiationValueChanged();
 }
 
 void UAuditionWidget::HandleNumOfRecordsChanged(float Value)
 {
     AuditionData.DealData.NumOfRecords = FMath::RoundToInt(Value);
+    if (TextNumOfRecordsValue)
+    {
+        TextNumOfRecordsValue->SetText(FText::AsNumber(FMath::RoundToInt(Value)));
+    }
     OnNegotiationValueChanged();
 }
 
 void UAuditionWidget::HandleRoyaltyRateChanged(float Value)
 {
     AuditionData.DealData.RoyaltyRate = Value;
+    if (TextRoyaltyRateValue)
+    {
+        TextRoyaltyRateValue->SetText(FText::AsNumber(FMath::RoundToInt(Value)));
+    }
     OnNegotiationValueChanged();
 }
 
 void UAuditionWidget::HandleContractYearsChanged(float Value)
 {
     AuditionData.DealData.ContractYears = FMath::RoundToInt(Value);
+    if (TextContractYearsValue)
+    {
+        TextContractYearsValue->SetText(FText::AsNumber(FMath::RoundToInt(Value)));
+    }
     OnNegotiationValueChanged();
 }
 
