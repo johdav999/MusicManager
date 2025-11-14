@@ -1,4 +1,6 @@
 #include "AuditionWidget.h"
+#include "ArtistManagerSubsystem.h"
+#include "FArtistDealTerms.h"
 
 void UAuditionWidget::NativeConstruct()
 {
@@ -200,6 +202,23 @@ void UAuditionWidget::HandleContractYearsChanged(float Value)
 
 void UAuditionWidget::HandleSignArtistClicked()
 {
+    FArtistDealTerms Deal;
+    Deal.ArtistId = AuditionData.ArtistData.ArtistName;
+    Deal.ContractYears = SliderContractYears ? static_cast<int32>(SliderContractYears->GetValue()) : AuditionData.DealData.ContractYears;
+    Deal.NumRecords = SliderNumOfRecords ? static_cast<int32>(SliderNumOfRecords->GetValue()) : AuditionData.DealData.NumOfRecords;
+    Deal.RoyaltyRate = SliderRoyaltyRate ? SliderRoyaltyRate->GetValue() : AuditionData.DealData.RoyaltyRate;
+    Deal.SignUpBonus = SliderSignUpBonus ? SliderSignUpBonus->GetValue() : AuditionData.DealData.SignUpBonus;
+    Deal.bExclusive = true;
+    Deal.ProposedStartDate = FDateTime::Now();
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UArtistManagerSubsystem* Subsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            Subsystem->SignArtist(Deal, AuditionData.ArtistData);
+        }
+    }
+
     OnSignArtist.Broadcast();
 }
 
