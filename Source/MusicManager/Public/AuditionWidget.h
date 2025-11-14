@@ -50,13 +50,25 @@ public:
     USlider* SliderSignUpBonus = nullptr;
 
     UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextSignUpBonusValue = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
     USlider* SliderNumOfRecords = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextNumOfRecordsValue = nullptr;
 
     UPROPERTY(meta = (BindWidget))
     USlider* SliderRoyaltyRate = nullptr;
 
     UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextRoyaltyRateValue = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
     USlider* SliderContractYears = nullptr;
+
+    UPROPERTY(meta = (BindWidget))
+    UTextBlock* TextContractYearsValue = nullptr;
 
     UPROPERTY(meta = (BindWidget))
     UButton* ButtonSignArtist = nullptr;
