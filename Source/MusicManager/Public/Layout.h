@@ -48,7 +48,7 @@ protected:
     UPROPERTY(meta=(BindWidgetOptional))
     UNewsFeedList* NewsFeedList;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout")
+    UPROPERTY(meta = (BindWidgetOptional))
     UAuditionWidget* AuditionWidget;
 
 private:

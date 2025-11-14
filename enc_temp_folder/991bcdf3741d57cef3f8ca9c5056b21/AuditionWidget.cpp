@@ -62,7 +62,7 @@ void UAuditionWidget::CreateDummyAudition()
         DummyArtistData.SongwritingQuality = 0.7f;
         DummyArtistData.Genre = TEXT("Pop");
 
-        AuditionData.ArtistData = DummyArtistData;ed 
+        AuditionData.ArtistData = DummyArtistData;
         AuditionData.VenueName = TEXT("Test Venue");
         AuditionData.City = TEXT("Test City");
         AuditionData.DealData.SignUpBonus = 10000.f;

@@ -142,12 +142,12 @@ void UEventSubsystem::SendDummyNews()
         FMusicNewsEvent Dummy;
         Dummy.NewsId = FGuid::NewGuid();
         Dummy.Timestamp = FDateTime::Now();
-        Dummy.NewsType = EMusicNewsType::ArtistPerformance;
+        Dummy.NewsType = EMusicNewsType::NewUpcomingArtistPerforming;
         Dummy.SourceName = TEXT("The Wild Beats");
-        Dummy.SubjectName = TEXT("Summer Jam 1985");
-        Dummy.Headline = TEXT("The Wild Beats electrify the crowd at Summer Jam!");
-        Dummy.BodyText = TEXT("A stunning live show earns rave reviews and a surge in record sales.");
-        Dummy.Tags = { TEXT("Live"), TEXT("Rock"), TEXT("Performance") };
+        Dummy.SubjectName = TEXT("New Artist");
+        Dummy.Headline = TEXT("New artist on the block!");
+        Dummy.BodyText = TEXT("Johnny Rocker performs at the Mug");
+        Dummy.Tags = { TEXT("Live"), TEXT("Rockabilly"), TEXT("Performance") };
 
         const TWeakObjectPtr<ULayout> LocalLayoutWeak = LayoutWeak;
         AsyncTask(ENamedThreads::GameThread, [LocalLayoutWeak, Dummy]()
