@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Engine/Texture2D.h"
 #include "UObject/SoftObjectPtr.h"
+#include "UObject/SoftObjectPath.h"
 #include "CommandPanelWidget.generated.h"
 
 /** Description of a single command entry shown in the panel. */
@@ -90,6 +91,9 @@ private:
 
     /** Create widgets for all commands in CommandDefinitions. */
     void GenerateCommandItems();
+
+    /** Internal callback used to update the definition once an icon load completes. */
+    void OnIconLoadedInternal(const FSoftObjectPath& LoadedPath, UObject* LoadedObject, FCommandDefinition Definition);
 
     /** Callback when an icon asset finishes streaming in. */
     void HandleIconLoaded(FCommandDefinition Definition);
