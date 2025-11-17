@@ -2,12 +2,14 @@
 #include "EventTickerWidget.h"
 
 #include "Async/Async.h"
+#include "AuditionEventActor.h"
 #include "Components/Button.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
+#include "EngineUtils.h"
 #include "Layout.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 
@@ -183,20 +185,7 @@ void UEventTickerWidget::OnClickButton()
     switch (CurrentNewsType)
     {
     case EMusicNewsType::NewUpcomingArtistPerforming:
-        if (LayoutRef.IsValid())
-        {
-            const TWeakObjectPtr<ULayout> LocalLayout = LayoutRef;
-            AsyncTask(ENamedThreads::GameThread, [LocalLayout]()
-            {
-                if (ULayout* Layout = LocalLayout.Get())
-                {
-                    if (IsValid(Layout))
-                    {
-                        Layout->ShowAuditionWidget();
-                    }
-                }
-            });
-        }
+        HandleUpcomingArtistAudition();
         break;
     default:
         break;
@@ -214,5 +203,35 @@ void UEventTickerWidget::OnClickButton()
                 }
             }
         });
+    }
+}
+
+void UEventTickerWidget::HandleUpcomingArtistAudition()
+{
+    if (LayoutRef.IsValid())
+    {
+        const TWeakObjectPtr<ULayout> LocalLayout = LayoutRef;
+        AsyncTask(ENamedThreads::GameThread, [LocalLayout]()
+        {
+            if (ULayout* Layout = LocalLayout.Get())
+            {
+                if (IsValid(Layout))
+                {
+                    Layout->ShowAuditionWidget();
+                }
+            }
+        });
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        for (TActorIterator<AAuditionEventActor> It(World); It; ++It)
+        {
+            if (AAuditionEventActor* AuditionActor = *It)
+            {
+                AuditionActor->StartAudition();
+                break;
+            }
+        }
     }
 }

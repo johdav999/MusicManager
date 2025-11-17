@@ -74,6 +74,8 @@ private:
     UFUNCTION()
     void OnClickButton();
 
+    void HandleUpcomingArtistAudition();
+
     EMusicNewsType CurrentNewsType = EMusicNewsType::None;
 
     TWeakObjectPtr<ULayout> LayoutRef;
