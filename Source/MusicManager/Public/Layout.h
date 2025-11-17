@@ -3,6 +3,7 @@
 
 #include "Blueprint/UserWidget.h"
 #include "EventSubsystem.h"
+#include "ContractWidget.h"
 #include "EventTickerWidget.h"
 #include "Layout.generated.h"
 
@@ -53,6 +54,9 @@ protected:
 
     UPROPERTY(meta = (BindWidgetOptional))
     UAuditionWidget* AuditionWidget;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+	UContractWidget* ContractWidget;
 
 private:
     UFUNCTION()
