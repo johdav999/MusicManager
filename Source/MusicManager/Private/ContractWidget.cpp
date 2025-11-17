@@ -26,13 +26,13 @@ void UContractWidget::SetContractData(const FArtistContract& Contract)
     SetTextSafe(TextStartDate, ContractData.StartDate.ToString());
     SetTextSafe(TextEndDate, ContractData.EndDate.ToString());
     SetTextSafe(TextRecordsDelivered, LexToString(ContractData.RecordsDelivered));
-    SetTextSafe(TextContractActive, ContractData.bContractActive ? TEXT("True") : TEXT("False"));
-    SetTextSafe(TextLifetimeRevenue, FString::SanitizeFloat(ContractData.LifetimeRevenue));
-    SetTextSafe(TextLifetimeCost, FString::SanitizeFloat(ContractData.LifetimeCost));
-    SetTextSafe(TextLastRoyaltyPayment, FString::SanitizeFloat(ContractData.LastRoyaltyPayment));
-    SetTextSafe(TextMonthlyUpkeepCost, FString::SanitizeFloat(ContractData.MonthlyUpkeepCost));
-    SetTextSafe(TextCumulativeRoyaltyPaid, FString::SanitizeFloat(ContractData.CumulativeRoyaltyPaid));
-    SetTextSafe(TextMonthsActive, LexToString(ContractData.MonthsActive));
-    SetTextSafe(TextPerformanceMomentum, FString::SanitizeFloat(ContractData.PerformanceMomentum));
-    SetTextSafe(TextProductionProgress, FString::SanitizeFloat(ContractData.ProductionProgress));
+    //SetTextSafe(TextContractActive, ContractData.bContractActive ? TEXT("True") : TEXT("False"));
+    //SetTextSafe(TextLifetimeRevenue, FString::SanitizeFloat(ContractData.LifetimeRevenue));
+    //SetTextSafe(TextLifetimeCost, FString::SanitizeFloat(ContractData.LifetimeCost));
+    //SetTextSafe(TextLastRoyaltyPayment, FString::SanitizeFloat(ContractData.LastRoyaltyPayment));
+    //SetTextSafe(TextMonthlyUpkeepCost, FString::SanitizeFloat(ContractData.MonthlyUpkeepCost));
+    //SetTextSafe(TextCumulativeRoyaltyPaid, FString::SanitizeFloat(ContractData.CumulativeRoyaltyPaid));
+    //SetTextSafe(TextMonthsActive, LexToString(ContractData.MonthsActive));
+    //SetTextSafe(TextPerformanceMomentum, FString::SanitizeFloat(ContractData.PerformanceMomentum));
+    //SetTextSafe(TextProductionProgress, FString::SanitizeFloat(ContractData.ProductionProgress));
 }

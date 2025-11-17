@@ -50,30 +50,30 @@ protected:
     UPROPERTY(meta = (BindWidget))
     UTextBlock* TextRecordsDelivered = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextContractActive = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextContractActive = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextLifetimeRevenue = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextLifetimeRevenue = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextLifetimeCost = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextLifetimeCost = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextLastRoyaltyPayment = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextLastRoyaltyPayment = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextMonthlyUpkeepCost = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextMonthlyUpkeepCost = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextCumulativeRoyaltyPaid = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextCumulativeRoyaltyPaid = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextMonthsActive = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextMonthsActive = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextPerformanceMomentum = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextPerformanceMomentum = nullptr;
 
-    UPROPERTY(meta = (BindWidget))
-    UTextBlock* TextProductionProgress = nullptr;
+    //UPROPERTY(meta = (BindWidget))
+    //UTextBlock* TextProductionProgress = nullptr;
 };
