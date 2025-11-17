@@ -6,7 +6,7 @@
 #include "Async/Async.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/Texture2D.h"
-#include "Brushes/SlateBrush.h"
+
 #include "UObject/SoftObjectPath.h"
 
 UCommandPanelWidget::UCommandPanelWidget(const FObjectInitializer& ObjectInitializer)
