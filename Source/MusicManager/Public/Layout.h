@@ -5,11 +5,13 @@
 #include "EventSubsystem.h"
 #include "ContractWidget.h"
 #include "EventTickerWidget.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 #include "Layout.generated.h"
 
 class UNewsFeedList;
 class UUserWidget;
 class UAuditionWidget;
+class UArtistManagerSubsystem;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
@@ -23,6 +25,9 @@ class ULayout final : public UUserWidget
 
 public:
     ULayout(const FObjectInitializer& ObjectInitializer);
+
+    virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
 
     /** Locate a user widget child by name or class, preferring the name when provided. */
     UFUNCTION(BlueprintCallable, Category="EventSubsystem")
@@ -59,6 +64,15 @@ protected:
 	UContractWidget* ContractWidget;
 
 private:
+    void InitializeContractSubscriptions();
+    void CleanupContractSubscriptions();
+
+    UFUNCTION()
+    void HandleArtistSigned(const FArtistContract& SignedContract);
+
     UFUNCTION()
     void HandleTickerClicked(UEventTickerWidget* ClickedTicker);
+
+    /** Cached subsystem pointer used to manage delegate bindings safely. */
+    TWeakObjectPtr<UArtistManagerSubsystem> ArtistManagerSubsystemWeak;
 };
