@@ -171,3 +171,9 @@ void ULayout::ShowAuditionWidget()
         }
     });
 }
+
+UAuditionWidget* ULayout::GetAuditionWidget() const
+{
+    // The layout owns the widget through the blueprint hierarchy, so no extra validation is required here.
+    return AuditionWidget;
+}

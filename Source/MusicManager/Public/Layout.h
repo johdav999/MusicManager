@@ -44,6 +44,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="Layout")
     void ShowAuditionWidget();
 
+    UFUNCTION(BlueprintCallable, Category="Layout")
+    UAuditionWidget* GetAuditionWidget() const;
+
 protected:
     UPROPERTY(meta=(BindWidgetOptional))
     UNewsFeedList* NewsFeedList;
