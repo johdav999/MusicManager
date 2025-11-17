@@ -1,5 +1,9 @@
 #include "AuditionEventActor.h"
 
+#include "Async/Async.h"
+#include "EventSubsystem.h"
+#include "Layout.h"
+
 AAuditionEventActor::AAuditionEventActor()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -8,21 +12,71 @@ AAuditionEventActor::AAuditionEventActor()
 
 void AAuditionEventActor::StartAudition()
 {
-    if (!WidgetClass)
+    // Always marshal to the game thread before touching UObjects that live on the UI tree.
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<AAuditionEventActor> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (AAuditionEventActor* StrongThis = WeakThis.Get())
+            {
+                StrongThis->StartAudition();
+            }
+        });
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!IsValid(World))
     {
         return;
     }
 
-    if (UWorld* World = GetWorld())
+    UGameInstance* GameInstance = World->GetGameInstance();
+    if (!IsValid(GameInstance))
     {
-        ActiveWidget = CreateWidget<UAuditionWidget>(World, WidgetClass);
-        if (ActiveWidget)
-        {
-            ActiveWidget->AuditionData = AuditionData;
-            ActiveWidget->AddToViewport();
-            ActiveWidget->OnSignArtist.AddDynamic(this, &AAuditionEventActor::HandleSignArtist);
-            ActiveWidget->OnPass.AddDynamic(this, &AAuditionEventActor::HandlePassOnArtist);
-        }
+        return;
+    }
+
+    UEventSubsystem* EventSubsystem = GameInstance->GetSubsystem<UEventSubsystem>();
+    if (!IsValid(EventSubsystem))
+    {
+        return;
+    }
+
+    ULayout* Layout = EventSubsystem->LayoutWeak.Get();
+    if (!IsValid(Layout))
+    {
+        return;
+    }
+
+    // Reuse the audition widget bound inside the layout instead of spawning a new one.
+    UAuditionWidget* LayoutAuditionWidget = Layout->GetAuditionWidget();
+    if (!IsValid(LayoutAuditionWidget))
+    {
+        return;
+    }
+
+    ActiveWidget = LayoutAuditionWidget;
+
+    // Push the audition data to the widget so the UI stays in sync with this actor.
+    ActiveWidget->AuditionData = AuditionData;
+
+    // Ensure the widget is visible before interacting with it.
+    if (ActiveWidget->GetVisibility() != ESlateVisibility::Visible)
+    {
+        ActiveWidget->SetVisibility(ESlateVisibility::Visible);
+    }
+
+    // Bind delegates only once to avoid duplicate callbacks when the widget is reused.
+    if (!ActiveWidget->OnSignArtist.IsAlreadyBound(this, &AAuditionEventActor::HandleSignArtist))
+    {
+        ActiveWidget->OnSignArtist.AddDynamic(this, &AAuditionEventActor::HandleSignArtist);
+    }
+
+    if (!ActiveWidget->OnPass.IsAlreadyBound(this, &AAuditionEventActor::HandlePassOnArtist))
+    {
+        ActiveWidget->OnPass.AddDynamic(this, &AAuditionEventActor::HandlePassOnArtist);
     }
 }
 
