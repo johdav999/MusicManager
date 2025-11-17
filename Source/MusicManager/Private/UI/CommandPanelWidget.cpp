@@ -131,11 +131,42 @@ void UCommandPanelWidget::GenerateCommandItems()
         }
 
         Definition.IconTexture.LoadAsync(
-            FStreamableDelegate::CreateUObject(
+            FLoadSoftObjectPathAsyncDelegate::CreateUObject(
                 this,
-                &UCommandPanelWidget::HandleIconLoaded,
+                &UCommandPanelWidget::OnIconLoadedInternal,
                 Definition));
     }
+}
+
+void UCommandPanelWidget::OnIconLoadedInternal(const FSoftObjectPath& LoadedPath, UObject* LoadedObject, FCommandDefinition Definition)
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<UCommandPanelWidget> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, LoadedPath, LoadedObject, Definition]()
+        {
+            if (UCommandPanelWidget* StrongThis = WeakThis.Get())
+            {
+                StrongThis->OnIconLoadedInternal(LoadedPath, LoadedObject, Definition);
+            }
+        });
+        return;
+    }
+
+    if (!IsValid(this) || !bPanelActive)
+    {
+        return;
+    }
+
+    UTexture2D* LoadedTexture = Cast<UTexture2D>(LoadedObject);
+    if (!LoadedTexture)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("CommandPanelWidget: Icon load failed for '%s' (%s)."), *Definition.CommandName, *LoadedPath.ToString());
+    }
+
+    Definition.IconTexture = LoadedTexture;
+
+    HandleIconLoaded(Definition);
 }
 
 void UCommandPanelWidget::HandleIconLoaded(FCommandDefinition Definition)
