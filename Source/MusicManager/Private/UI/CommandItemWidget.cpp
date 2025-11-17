@@ -30,7 +30,7 @@ void UCommandItemWidget::SetCommandName(const FString& InCommandName)
 
 void UCommandItemWidget::SetCommandIcon(const FSlateBrush& InBrush)
 {
-    if (CommandImage)
+    if (IsValid(CommandImage))
     {
         // Slate brushes are value types, so copying them is safe and thread-aware on the game thread.
         CommandImage->SetBrush(InBrush);

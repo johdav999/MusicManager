@@ -2,7 +2,24 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Engine/Texture2D.h"
+#include "UObject/SoftObjectPtr.h"
 #include "CommandPanelWidget.generated.h"
+
+/** Description of a single command entry shown in the panel. */
+USTRUCT(BlueprintType)
+struct FCommandDefinition
+{
+    GENERATED_BODY()
+
+    /** Display name of the command used for binding click actions. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Command")
+    FString CommandName;
+
+    /** Optional icon that can be streamed asynchronously via soft reference. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Command")
+    TSoftObjectPtr<UTexture2D> IconTexture;
+};
 
 class UCommandItemWidget;
 class UHorizontalBox;
@@ -50,14 +67,19 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Command Panel")
     TSubclassOf<UCommandItemWidget> CommandItemWidgetClass;
 
+protected:
+    /** Data describing each command along with its optional icon. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Commands")
+    TArray<FCommandDefinition> CommandDefinitions;
+
 private:
     /** Track spawned widgets through weak pointers to avoid lifetime issues. */
     UPROPERTY(Transient)
     TArray<TWeakObjectPtr<UCommandItemWidget>> SpawnedCommandItems;
 
-    /** List of default command names to seed the panel. */
-    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Command Panel", meta = (AllowPrivateAccess = "true"))
-    TArray<FString> DefaultCommands;
+    /** Indicates whether the panel is currently constructed and ready to accept UI updates. */
+    UPROPERTY(Transient)
+    bool bPanelActive = false;
 
     /** Called when a child notifies us of a click. */
     UFUNCTION()
@@ -66,8 +88,14 @@ private:
     /** Helper to build the default list safely. */
     void BuildDefaultCommands();
 
-    /** Create widgets for all commands in DefaultCommands. */
+    /** Create widgets for all commands in CommandDefinitions. */
     void GenerateCommandItems();
+
+    /** Callback when an icon asset finishes streaming in. */
+    void HandleIconLoaded(FCommandDefinition Definition);
+
+    /** Applies the resolved texture to an item using a transient brush. */
+    void ApplyIconToItem(UCommandItemWidget* Item, UTexture2D* Texture);
 
     /** Utility to remove bindings when this widget goes away. */
     void CleanupChildBindings();
