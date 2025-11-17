@@ -88,15 +88,15 @@ void UCommandPanelWidget::BuildDefaultCommands()
     };
 
     CommandDefinitions = {
-        MakeDefinition(TEXT("Artists"), TEXT("/Game/UI/Icons/Artists.Artists")),
-        MakeDefinition(TEXT("Studio"), TEXT("/Game/UI/Icons/Studio.Studio")),
-        MakeDefinition(TEXT("Tours"), TEXT("/Game/UI/Icons/Tours.Tours")),
-        MakeDefinition(TEXT("Genre Tree"), TEXT("/Game/UI/Icons/GenreTree.GenreTree")),
-        MakeDefinition(TEXT("Radio"), TEXT("/Game/UI/Icons/Radio.Radio")),
-        MakeDefinition(TEXT("Charts"), TEXT("/Game/UI/Icons/Charts.Charts")),
-        MakeDefinition(TEXT("Financials"), TEXT("/Game/UI/Icons/Financials.Financials")),
-        MakeDefinition(TEXT("Marketing"), TEXT("/Game/UI/Icons/Marketing.Marketing")),
-        MakeDefinition(TEXT("Contracts"), TEXT("/Game/UI/Icons/Contracts.Contracts"))
+        MakeDefinition(TEXT("Artists"), TEXT("/Game/GUI/Icons/Artists.Artists")),
+        MakeDefinition(TEXT("Studio"), TEXT("/Game/GUI/Icons/Studio.Studio")),
+        MakeDefinition(TEXT("Tours"), TEXT("/Game/GUI/Icons/Tours.Tours")),
+        MakeDefinition(TEXT("Genre Tree"), TEXT("/Game/GUI/Icons/GenreTree.GenreTree")),
+        MakeDefinition(TEXT("Radio"), TEXT("/Game/GUI/Icons/Radio.Radio")),
+        MakeDefinition(TEXT("Charts"), TEXT("/Game/GUI/Icons/Charts.Charts")),
+        MakeDefinition(TEXT("Financials"), TEXT("/Game/GUI/Icons/Financials.Financials")),
+        MakeDefinition(TEXT("Marketing"), TEXT("/Game/GUI/Icons/Marketing.Marketing")),
+        MakeDefinition(TEXT("Contracts"), TEXT("/Game/GUI/Icons/Contracts.Contracts"))
     };
 }
 
