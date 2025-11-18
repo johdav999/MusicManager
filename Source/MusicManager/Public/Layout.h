@@ -73,6 +73,8 @@ private:
     UFUNCTION()
     void HandleTickerClicked(UEventTickerWidget* ClickedTicker);
 
+    void ShowAuditionWidget_Internal();
+
     /** Cached subsystem pointer used to manage delegate bindings safely. */
     TWeakObjectPtr<UArtistManagerSubsystem> ArtistManagerSubsystemWeak;
 };

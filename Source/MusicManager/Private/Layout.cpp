@@ -255,28 +255,40 @@ void ULayout::HandleArtistSigned(const FArtistContract& SignedContract)
 
 void ULayout::ShowAuditionWidget()
 {
-    const TWeakObjectPtr<ULayout> WeakThis(this);
+    if (IsInGameThread())
+    {
+        ShowAuditionWidget_Internal();
+        return;
+    }
+
+    TWeakObjectPtr<ULayout> WeakThis(this);
     AsyncTask(ENamedThreads::GameThread, [WeakThis]()
     {
         if (ULayout* Self = WeakThis.Get())
         {
-            if (!IsValid(Self))
-            {
-                return;
-            }
-
-            if (!IsValid(Self->AuditionWidget))
-            {
-                return;
-            }
-
-			Self->AuditionWidget->CreateDummyAudition();
-            if (!Self->AuditionWidget->IsVisible())
-            {
-                Self->AuditionWidget->SetVisibility(ESlateVisibility::Visible);
-            }
+            Self->ShowAuditionWidget_Internal();
         }
     });
+}
+
+void ULayout::ShowAuditionWidget_Internal()
+{
+    if (!IsValid(this))
+    {
+        return;
+    }
+
+    if (!IsValid(AuditionWidget))
+    {
+        return;
+    }
+
+    AuditionWidget->CreateDummyAudition();
+
+    if (!AuditionWidget->IsVisible())
+    {
+        AuditionWidget->SetVisibility(ESlateVisibility::Visible);
+    }
 }
 
 UAuditionWidget* ULayout::GetAuditionWidget() const
