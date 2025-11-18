@@ -83,7 +83,7 @@ void UGameTimeSubsystem::StartTimer()
 
     if (UWorld* World = GetWorld())
     {
-        World->GetTimerManager().SetTimer(TimeAdvanceHandle, this, &UGameTimeSubsystem::AdvanceMonth, 10.0f, true);
+        World->GetTimerManager().SetTimer(TimeAdvanceHandle, this, &UGameTimeSubsystem::AdvanceMonth, 2.0f, true);
         bIsTimeRunning = true;
     }
 }
