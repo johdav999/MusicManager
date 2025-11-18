@@ -53,6 +53,6 @@ void UDateWidget::HandleMonthAdvanced(const FDateTime& NewDate)
         return;
     }
 
-    const FString MonthYear = NewDate.ToString(TEXT("%B %Y"));
+    const FString MonthYear = NewDate.ToString(TEXT("MMMM yyyy"));
     DateText->SetText(FText::FromString(MonthYear));
 }
