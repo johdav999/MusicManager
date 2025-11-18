@@ -52,7 +52,21 @@ void UDateWidget::HandleMonthAdvanced(const FDateTime& NewDate)
     {
         return;
     }
+    const int32 Year = NewDate.GetYear();
+    const int32 Month = NewDate.GetMonth(); // 1–12
 
-    const FString MonthYear = NewDate.ToString(TEXT("MMMM yyyy"));
-    DateText->SetText(FText::FromString(MonthYear));
+    static const FString MonthNames[12] = {
+        TEXT("January"), TEXT("February"), TEXT("March"),
+        TEXT("April"), TEXT("May"), TEXT("June"),
+        TEXT("July"), TEXT("August"), TEXT("September"),
+        TEXT("October"), TEXT("November"), TEXT("December")
+    };
+
+    // Safety check
+    const FString MonthString = (Month >= 1 && Month <= 12)
+        ? MonthNames[Month - 1]
+        : TEXT("Unknown");
+
+    DateText->SetText(FText::FromString(FString::Printf(TEXT("%s %d"), *MonthString, Year)));
+
 }
