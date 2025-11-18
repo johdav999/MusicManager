@@ -27,6 +27,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="Contracts")
     void AdvanceMonth();
 
+    UFUNCTION()
+    void HandleMonthAdvanced(const FDateTime& NewDate);
+
     void ProcessMonthlyContractFinancials(FArtistContract& Contract);
 
     UFUNCTION(BlueprintCallable, Category="Contracts")

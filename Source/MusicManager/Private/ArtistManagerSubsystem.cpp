@@ -1,6 +1,7 @@
 #include "ArtistManagerSubsystem.h"
 
 #include "Engine/Engine.h"
+#include "GameTimeSubsystem.h"
 
 void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -9,9 +10,13 @@ void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     ActiveContracts.Reset();
     ExpiredContracts.Reset();
 
-    if (!CurrentGameDate.GetTicks())
+    if (UGameInstance* GameInstance = GetGameInstance())
     {
-        CurrentGameDate = FDateTime::UtcNow();
+        if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
+        {
+            TimeSubsystem->OnMonthAdvanced.AddDynamic(this, &UArtistManagerSubsystem::HandleMonthAdvanced);
+            CurrentGameDate = TimeSubsystem->GetCurrentGameDate();
+        }
     }
 }
 
@@ -52,7 +57,7 @@ void UArtistManagerSubsystem::RejectArtist(const FString& ArtistId)
 
 void UArtistManagerSubsystem::AdvanceMonth()
 {
-    CurrentGameDate += FTimespan::FromDays(30.0);
+    check(IsInGameThread());
 
     TArray<FString> ContractsToExpire;
     for (FArtistContract& Contract : ActiveContracts)
@@ -73,6 +78,14 @@ void UArtistManagerSubsystem::AdvanceMonth()
     }
 
     OnMonthlyFinancialUpdate.Broadcast(ActiveContracts);
+}
+
+void UArtistManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
+{
+    check(IsInGameThread());
+
+    CurrentGameDate = NewDate;
+    AdvanceMonth();
 }
 
 void UArtistManagerSubsystem::ProcessMonthlyContractFinancials(FArtistContract& Contract)
