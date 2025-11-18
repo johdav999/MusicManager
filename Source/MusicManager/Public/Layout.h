@@ -57,7 +57,7 @@ protected:
     UPROPERTY(meta=(BindWidgetOptional))
     UNewsFeedList* NewsFeedList;
 
-    UPROPERTY(meta = (BindWidgetOptional))
+    UPROPERTY(meta = (BindWidget))
     UAuditionWidget* AuditionWidget;
 
     UPROPERTY(meta = (BindWidgetOptional))
