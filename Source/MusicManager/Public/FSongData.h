@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-
-class USoundWave;
+#include "Sound/SoundWave.h" // REQUIRED for USTRUCT member TObjectPtr<USoundWave>
+#include "FSongData.generated.h"
 
 /**
  * Describes a single song entry within the music management simulation.
