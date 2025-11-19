@@ -31,6 +31,9 @@ public:
         , CurrentPopularity(0.f)
         , ChartWeeks(0)
         , SoundWave(nullptr)
+        , ReleaseYear(0)
+        , ReleaseMonth(0)
+        , bIsReleased(false)
     {
     }
 
@@ -111,4 +114,18 @@ public:
     /** Optional sound data associated with this song. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
     TObjectPtr<USoundWave> SoundWave;
+
+    // --- Release Metadata ---
+
+    /** Calendar year when the song officially released. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Release")
+    int32 ReleaseYear;
+
+    /** Calendar month when the song officially released. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Release")
+    int32 ReleaseMonth;
+
+    /** Flag indicating if the song has been released to the public. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Release")
+    bool bIsReleased;
 };
