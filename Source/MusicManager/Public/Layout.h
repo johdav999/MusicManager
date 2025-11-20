@@ -12,6 +12,7 @@ class UNewsFeedList;
 class UUserWidget;
 class UAuditionWidget;
 class UArtistManagerSubsystem;
+class UUIManagerSubsystem;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
@@ -79,6 +80,11 @@ private:
 
     void ShowAuditionWidget_Internal();
 
+    UUIManagerSubsystem* GetUIManagerSubsystem() const;
+
     /** Cached subsystem pointer used to manage delegate bindings safely. */
     TWeakObjectPtr<UArtistManagerSubsystem> ArtistManagerSubsystemWeak;
+
+    /** Prevent recursive routing when delegating to the UI manager. */
+    bool bIsRoutingThroughUIManager = false;
 };
