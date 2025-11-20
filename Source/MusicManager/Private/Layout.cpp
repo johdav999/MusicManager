@@ -11,6 +11,8 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "ArtistManagerSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "UIManagerSubsystem.h"
+#include "Templates/UnrealTemplate.h"
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -20,6 +22,14 @@ ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
 void ULayout::NativeConstruct()
 {
     Super::NativeConstruct();
+
+    if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
+    {
+        if (IsValid(UIManager))
+        {
+            UIManager->RegisterLayout(this);
+        }
+    }
 
     // Ensure our UI is listening for contract updates as soon as it is ready.
     InitializeContractSubscriptions();
@@ -219,7 +229,13 @@ void ULayout::HandleTickerClicked(UEventTickerWidget* ClickedTicker)
 
     if (IsValid(ClickedTicker))
     {
-        OnNewsCardSelected.Broadcast(ClickedTicker);
+        if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
+        {
+            if (IsValid(UIManager))
+            {
+                UIManager->HandleNewsCardSelected(ClickedTicker->NewsEvent);
+            }
+        }
     }
 }
 
@@ -268,6 +284,19 @@ void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
         return;
     }
 
+    if (!bIsRoutingThroughUIManager)
+    {
+        if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
+        {
+            if (IsValid(UIManager))
+            {
+                const TGuardValue<bool> SubsystemGuard(bIsRoutingThroughUIManager, true);
+                UIManager->ShowAudition(EventData);
+                return;
+            }
+        }
+    }
+
     if (!IsValid(this))
     {
         return;
@@ -288,9 +317,35 @@ void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
 
 void ULayout::ShowAuditionWidget()
 {
+    auto ExecuteShow = [this]()
+    {
+        if (!IsValid(this) || !IsValid(AuditionWidget))
+        {
+            return;
+        }
+
+        AuditionWidget->CreateDummyAudition();
+        const FAuditionEvent EventData = AuditionWidget->AuditionData;
+
+        if (!bIsRoutingThroughUIManager)
+        {
+            if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
+            {
+                if (IsValid(UIManager))
+                {
+                    const TGuardValue<bool> SubsystemGuard(bIsRoutingThroughUIManager, true);
+                    UIManager->ShowAudition(EventData);
+                    return;
+                }
+            }
+        }
+
+        ShowAuditionWidget_Internal();
+    };
+
     if (IsInGameThread())
     {
-        ShowAuditionWidget_Internal();
+        ExecuteShow();
         return;
     }
 
@@ -299,7 +354,7 @@ void ULayout::ShowAuditionWidget()
     {
         if (ULayout* Self = WeakThis.Get())
         {
-            Self->ShowAuditionWidget_Internal();
+            Self->ShowAuditionWidget();
         }
     });
 }
@@ -328,4 +383,14 @@ UAuditionWidget* ULayout::GetAuditionWidget() const
 {
     // The layout owns the widget through the blueprint hierarchy, so no extra validation is required here.
     return AuditionWidget;
+}
+
+UUIManagerSubsystem* ULayout::GetUIManagerSubsystem() const
+{
+    if (!IsValid(GetGameInstance()))
+    {
+        return nullptr;
+    }
+
+    return GetGameInstance()->GetSubsystem<UUIManagerSubsystem>();
 }
