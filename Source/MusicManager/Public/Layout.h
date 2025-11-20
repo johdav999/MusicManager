@@ -50,6 +50,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="Layout")
     void ShowAuditionWidget();
 
+    /** Show the audition widget and populate it with real audition data from an FAuditionEvent. */
+    UFUNCTION(BlueprintCallable, Category = "Audition")
+    void ShowAuditionWidget(const FAuditionEvent& EventData);
+
     UFUNCTION(BlueprintCallable, Category="Layout")
     UAuditionWidget* GetAuditionWidget() const;
 
