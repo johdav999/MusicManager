@@ -63,7 +63,7 @@ void UUIManagerSubsystem::ShowAudition(const FAuditionEvent& EventData)
             return;
         }
 
-        LayoutPtr->ShowAuditionWidget(EventData);
+        LayoutPtr->ShowAuditionWidgetWithData(EventData);
     });
 }
 

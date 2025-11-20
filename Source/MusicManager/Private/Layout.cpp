@@ -253,7 +253,7 @@ void ULayout::HandleArtistSigned(const FArtistContract& SignedContract)
     }
 }
 
-void ULayout::ShowAuditionWidget(const FAuditionEvent& EventData)
+void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
 {
     if (!IsInGameThread())
     {
@@ -262,7 +262,7 @@ void ULayout::ShowAuditionWidget(const FAuditionEvent& EventData)
         {
             if (ULayout* Self = WeakThis.Get())
             {
-                Self->ShowAuditionWidget(EventData);
+                Self->ShowAuditionWidgetWithData(EventData);
             }
         });
         return;
