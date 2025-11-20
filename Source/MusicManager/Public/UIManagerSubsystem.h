@@ -31,10 +31,10 @@ public:
     /** Returns the registered layout if it is still valid. */
     ULayout* GetLayout() const;
 
-    /**
-     * Helper to ensure UI work is executed on the game thread.
-     * Usage: ExecuteOnGameThread([this](){ /* game thread UI work */ });
-     */
+    ///**
+    // * Helper to ensure UI work is executed on the game thread.
+    // * Usage: ExecuteOnGameThread([this](){ /* game thread UI work */ });
+    // */
     template<typename Func>
     void ExecuteOnGameThread(Func&& Lambda)
     {
