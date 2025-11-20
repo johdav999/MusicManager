@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Engine/GameInstance.h"
 #include "AuditionTypes.h"
 #include "AuditionWidget.h"
 #include "AuditionEventActor.generated.h"

@@ -33,7 +33,7 @@ void AAuditionEventActor::StartAudition()
     }
 
     UGameInstance* GameInstance = World->GetGameInstance();
-    if (!IsValid(GameInstance))
+    if (GameInstance == nullptr)
     {
         return;
     }

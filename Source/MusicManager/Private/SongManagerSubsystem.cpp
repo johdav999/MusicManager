@@ -163,10 +163,10 @@ TArray<USong*> USongManagerSubsystem::GetTopSongs(int32 Count) const
         }
     }
 
-    SortedSongs.Sort([](const USong* A, const USong* B)
-    {
-        return A && B ? A->Data.CurrentPopularity > B->Data.CurrentPopularity : false;
-    });
+    SortedSongs.Sort([](const USong& A, const USong& B)
+        {
+            return A.Data.CurrentPopularity > B.Data.CurrentPopularity;
+        });
 
     if (Count <= 0)
     {
