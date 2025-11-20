@@ -253,6 +253,39 @@ void ULayout::HandleArtistSigned(const FArtistContract& SignedContract)
     }
 }
 
+void ULayout::ShowAuditionWidget(const FAuditionEvent& EventData)
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, EventData]()
+        {
+            if (ULayout* Self = WeakThis.Get())
+            {
+                Self->ShowAuditionWidget(EventData);
+            }
+        });
+        return;
+    }
+
+    if (!IsValid(this))
+    {
+        return;
+    }
+
+    if (!IsValid(AuditionWidget))
+    {
+        return;
+    }
+
+    AuditionWidget->AuditionData = EventData;
+
+    if (!AuditionWidget->IsVisible())
+    {
+        AuditionWidget->SetVisibility(ESlateVisibility::Visible);
+    }
+}
+
 void ULayout::ShowAuditionWidget()
 {
     if (IsInGameThread())
