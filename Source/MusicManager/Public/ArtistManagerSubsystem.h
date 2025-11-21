@@ -10,6 +10,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArtistRejected, const FString&, A
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnContractExpired, const FArtistContract&, ExpiredContract);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnContractsUpdated, const TArray<FArtistContract>&, UpdatedContracts);
 
+class UMusicSaveGame;
+
 UCLASS()
 class UArtistManagerSubsystem : public UGameInstanceSubsystem
 {
@@ -36,6 +38,9 @@ public:
     void ExpireContract(const FString& ArtistId);
 
     const FArtistContract* GetContractByArtistId(const FString& ArtistId) const;
+
+    void SaveState(class UMusicSaveGame* SaveObject);
+    void LoadState(const class UMusicSaveGame* SaveObject);
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contracts")
     TArray<FArtistContract> ActiveContracts;

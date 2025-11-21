@@ -36,6 +36,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI")
     void ShowAudition(const FAuditionEvent& EventData);
 
+    /** Rebuilds the UI layout after a load to avoid stale references. */
+    UFUNCTION(BlueprintCallable, Category="UI")
+    void RebuildUI();
+
     /** Raised when a news card is selected anywhere in the UI. */
     FOnNewsSelected OnNewsSelected;
 
@@ -45,6 +49,9 @@ public:
     void HandleArtistSigned(const FArtistContract& Contract);
 
 private:
+    UPROPERTY(EditAnywhere, Category="UI")
+    TSubclassOf<ULayout> LayoutClass;
+
     /** Weak pointer to the active layout to avoid ownership over widgets. */
     TWeakObjectPtr<ULayout> ActiveLayout;
 

@@ -2,6 +2,7 @@
 
 #include "Engine/Engine.h"
 #include "GameTimeSubsystem.h"
+#include "MusicSaveGame.h"
 
 void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -153,4 +154,30 @@ const FArtistContract* UArtistManagerSubsystem::GetContractByArtistId(const FStr
 int32 UArtistManagerSubsystem::CalculateContractDurationMonths(const FArtistDealTerms& Deal) const
 {
     return FMath::Max(Deal.ContractYears * 12, 0);
+}
+
+void UArtistManagerSubsystem::SaveState(UMusicSaveGame* SaveObject)
+{
+    ensure(IsInGameThread());
+
+    if (!SaveObject)
+    {
+        return;
+    }
+
+    SaveObject->SavedContracts = ActiveContracts;
+}
+
+void UArtistManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
+{
+    ensure(IsInGameThread());
+
+    if (!SaveObject)
+    {
+        return;
+    }
+
+    ActiveContracts = SaveObject->SavedContracts;
+    ExpiredContracts.Reset();
+    OnMonthlyFinancialUpdate.Broadcast(ActiveContracts);
 }
