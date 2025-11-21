@@ -32,6 +32,14 @@ void UUIManagerSubsystem::RegisterLayout(ULayout* InLayout)
     ActiveLayout = InLayout;
 }
 
+void UUIManagerSubsystem::UnregisterLayout(ULayout* Layout)
+{
+    if (ActiveLayout.Get() == Layout)
+    {
+        ActiveLayout.Reset();
+    }
+}
+
 void UUIManagerSubsystem::ShowAudition(const FAuditionEvent& EventData)
 {
     if (ULayout* Layout = ActiveLayout.Get())

@@ -11,7 +11,6 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "Engine/GameInstance.h"
 #include "UIManagerSubsystem.h"
-#include "Templates/UnrealTemplate.h"
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -33,13 +32,20 @@ void ULayout::NativeConstruct()
 
 void ULayout::NativeDestruct()
 {
+    if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
+    {
+        if (IsValid(UIManager))
+        {
+            UIManager->UnregisterLayout(this);
+        }
+    }
+
     Super::NativeDestruct();
 }
 
 UUserWidget* ULayout::GetChildByNameOrClass(FName WidgetName, TSubclassOf<UUserWidget> WidgetClass) const
 {
     check(IsInGameThread());
-    ensureMsgf(IsInGameThread(), TEXT("UI access must be on game thread"));
 
     if (!WidgetTree)
     {
@@ -269,10 +275,11 @@ UAuditionWidget* ULayout::GetAuditionWidget() const
 
 UUIManagerSubsystem* ULayout::GetUIManagerSubsystem() const
 {
-    if (!IsValid(GetGameInstance()))
+    UGameInstance* GI = GetGameInstance();
+    if (!GI)
     {
         return nullptr;
     }
 
-    return GetGameInstance()->GetSubsystem<UUIManagerSubsystem>();
+    return GI->GetSubsystem<UUIManagerSubsystem>();
 }

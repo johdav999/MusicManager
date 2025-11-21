@@ -29,6 +29,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI")
     void RegisterLayout(ULayout* InLayout);
 
+    /** Unregister the current layout when it's no longer active. */
+    void UnregisterLayout(ULayout* Layout);
+
     /** Displays the audition window for the supplied event data. */
     UFUNCTION(BlueprintCallable, Category="UI")
     void ShowAudition(const FAuditionEvent& EventData);
