@@ -7,6 +7,8 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthAdvanced, const FDateTime&, NewDate);
 
+class UMusicSaveGame;
+
 /**
  * Centralized time simulation subsystem that controls the passage of in-game months.
  */
@@ -38,6 +40,9 @@ public:
      */
     UFUNCTION(BlueprintPure, Category="Time")
     FDateTime GetCurrentGameDate() const { return CurrentGameDate; }
+
+    void SaveState(class UMusicSaveGame* SaveObject);
+    void LoadState(const class UMusicSaveGame* SaveObject);
 
     /**
      * Fired each time the subsystem successfully advances one month.

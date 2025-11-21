@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "FSongData.h"
 #include "GameTimeSubsystem.h"
+#include "MusicSaveGame.h"
 #include "Math/UnrealMathUtility.h"
 #include "Misc/DateTime.h"
 #include "Song.h"
@@ -211,6 +212,72 @@ TArray<USong*> USongManagerSubsystem::GetSongsByArtist(const FString& ArtistId) 
     Collect(ArchivedSongs);
 
     return Result;
+}
+
+void USongManagerSubsystem::SaveState(UMusicSaveGame* SaveObject)
+{
+    ensure(IsInGameThread());
+
+    if (!SaveObject)
+    {
+        return;
+    }
+
+    const auto AppendSongs = [&SaveObject](const TArray<TObjectPtr<USong>>& Source)
+    {
+        for (const TObjectPtr<USong>& SongPtr : Source)
+        {
+            if (USong* Song = SongPtr.Get())
+            {
+                FSavedSong SavedSong;
+                SavedSong.SongId = Song->SongId;
+                SavedSong.ArtistId = Song->ArtistId;
+                SavedSong.Data = Song->Data;
+                SaveObject->SavedSongs.Add(SavedSong);
+            }
+        }
+    };
+
+    AppendSongs(ActiveSongs);
+    AppendSongs(ArchivedSongs);
+}
+
+void USongManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
+{
+    ensure(IsInGameThread());
+
+    if (!SaveObject)
+    {
+        return;
+    }
+
+    ActiveSongs.Reset();
+    ArchivedSongs.Reset();
+
+    for (const FSavedSong& SavedSong : SaveObject->SavedSongs)
+    {
+        UGameInstance* GameInstance = GetGameInstance();
+        UObject* Outer = GameInstance ? static_cast<UObject*>(GameInstance) : GetTransientPackage();
+
+        USong* NewSong = NewObject<USong>(Outer);
+        if (!NewSong)
+        {
+            continue;
+        }
+
+        NewSong->Initialize(SavedSong.ArtistId, SavedSong.Data);
+        NewSong->SongId = SavedSong.SongId;
+        NewSong->Data = SavedSong.Data;
+
+        if (NewSong->Data.CurrentPopularity < 5.f)
+        {
+            ArchivedSongs.Add(NewSong);
+        }
+        else
+        {
+            ActiveSongs.Add(NewSong);
+        }
+    }
 }
 
 void USongManagerSubsystem::UpdateSongForNewMonth(USong* Song)

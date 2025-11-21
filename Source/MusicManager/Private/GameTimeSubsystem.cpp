@@ -1,6 +1,7 @@
 #include "GameTimeSubsystem.h"
 
 #include "Engine/World.h"
+#include "MusicSaveGame.h"
 
 UGameTimeSubsystem::UGameTimeSubsystem()
     : CurrentGameDate(1955, 1, 1)
@@ -106,4 +107,30 @@ bool UGameTimeSubsystem::HasSimulationEnded() const
     }
 
     return CurrentGameDate.GetYear() > 2026;
+}
+
+void UGameTimeSubsystem::SaveState(UMusicSaveGame* SaveObject)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        return;
+    }
+
+    if (SaveObject)
+    {
+        SaveObject->SavedGameDate = CurrentGameDate;
+    }
+}
+
+void UGameTimeSubsystem::LoadState(const UMusicSaveGame* SaveObject)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        return;
+    }
+
+    if (SaveObject)
+    {
+        CurrentGameDate = SaveObject->SavedGameDate;
+    }
 }

@@ -5,6 +5,7 @@
 #include "SongManagerSubsystem.generated.h"
 
 class USong;
+class UMusicSaveGame;
 
 /**
  * Subsystem that owns and simulates all song instances for the project.
@@ -37,6 +38,10 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Songs")
     TArray<USong*> GetSongsByArtist(const FString& ArtistId) const;
+
+    // Serialization helpers
+    void SaveState(UMusicSaveGame* SaveObject);
+    void LoadState(const UMusicSaveGame* SaveObject);
 
     // Access to all active songs (read-only).
     const TArray<TObjectPtr<USong>>& GetAllActiveSongs() const
