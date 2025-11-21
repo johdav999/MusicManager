@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "AuditionTypes.h"
 #include "EventSubsystem.h"
+#include "FArtistContract.h"
 #include "Async/Async.h"
 #include "Templates/UnrealTemplate.h"
 #include "UIManagerSubsystem.generated.h"
@@ -28,13 +29,22 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI")
     void RegisterLayout(ULayout* InLayout);
 
-    /** Returns the registered layout if it is still valid. */
-    ULayout* GetLayout() const;
+    /** Displays the audition window for the supplied event data. */
+    UFUNCTION(BlueprintCallable, Category="UI")
+    void ShowAudition(const FAuditionEvent& EventData);
 
-    ///**
-    // * Helper to ensure UI work is executed on the game thread.
-    // * Usage: ExecuteOnGameThread([this](){ /* game thread UI work */ });
-    // */
+    /** Raised when a news card is selected anywhere in the UI. */
+    FOnNewsSelected OnNewsSelected;
+
+    /** Handle selection events coming from news cards. */
+    void HandleNewsCardSelected(const FMusicNewsEvent& EventData);
+
+    void HandleArtistSigned(const FArtistContract& Contract);
+
+private:
+    /** Weak pointer to the active layout to avoid ownership over widgets. */
+    TWeakObjectPtr<ULayout> ActiveLayout;
+
     template<typename Func>
     void ExecuteOnGameThread(Func&& Lambda)
     {
@@ -49,19 +59,5 @@ public:
             CapturedLambda();
         });
     }
-
-    /** Displays the audition window for the supplied event data. */
-    UFUNCTION(BlueprintCallable, Category="UI")
-    void ShowAudition(const FAuditionEvent& EventData);
-
-    /** Raised when a news card is selected anywhere in the UI. */
-    FOnNewsSelected OnNewsSelected;
-
-    /** Handle selection events coming from news cards. */
-    void HandleNewsCardSelected(const FMusicNewsEvent& EventData);
-
-private:
-    /** Weak pointer to the active layout to avoid ownership over widgets. */
-    TWeakObjectPtr<ULayout> RegisteredLayout;
 };
 
