@@ -9,7 +9,6 @@
 #include "AuditionWidget.h"
 #include "Types/SlateEnums.h"
 #include "UObject/WeakObjectPtrTemplates.h"
-#include "ArtistManagerSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "UIManagerSubsystem.h"
 #include "Templates/UnrealTemplate.h"
@@ -30,76 +29,11 @@ void ULayout::NativeConstruct()
             UIManager->RegisterLayout(this);
         }
     }
-
-    // Ensure our UI is listening for contract updates as soon as it is ready.
-    InitializeContractSubscriptions();
 }
 
 void ULayout::NativeDestruct()
 {
-    // Clean up delegates before the widget is destroyed to prevent dangling callbacks.
-    CleanupContractSubscriptions();
-
     Super::NativeDestruct();
-}
-
-void ULayout::InitializeContractSubscriptions()
-{
-    if (!IsInGameThread())
-    {
-        // Re-run on the game thread to avoid touching UObjects from worker threads.
-        const TWeakObjectPtr<ULayout> WeakThis(this);
-        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
-        {
-            if (ULayout* StrongThis = WeakThis.Get())
-            {
-                StrongThis->InitializeContractSubscriptions();
-            }
-        });
-        return;
-    }
-
-    if (!IsValid(GetGameInstance()))
-    {
-        return;
-    }
-
-    if (UArtistManagerSubsystem* ArtistSubsystem = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
-    {
-        ArtistManagerSubsystemWeak = ArtistSubsystem;
-
-        if (!ArtistSubsystem->OnArtistSigned.IsAlreadyBound(this, &ULayout::HandleArtistSigned))
-        {
-            // Listen for new contract events so the UI can update automatically.
-            ArtistSubsystem->OnArtistSigned.AddDynamic(this, &ULayout::HandleArtistSigned);
-        }
-    }
-}
-
-void ULayout::CleanupContractSubscriptions()
-{
-    if (!IsInGameThread())
-    {
-        const TWeakObjectPtr<ULayout> WeakThis(this);
-        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
-        {
-            if (ULayout* StrongThis = WeakThis.Get())
-            {
-                StrongThis->CleanupContractSubscriptions();
-            }
-        });
-        return;
-    }
-
-    if (UArtistManagerSubsystem* ArtistSubsystem = ArtistManagerSubsystemWeak.Get())
-    {
-        if (ArtistSubsystem->OnArtistSigned.IsAlreadyBound(this, &ULayout::HandleArtistSigned))
-        {
-            ArtistSubsystem->OnArtistSigned.RemoveDynamic(this, &ULayout::HandleArtistSigned);
-        }
-    }
-
-    ArtistManagerSubsystemWeak.Reset();
 }
 
 UUserWidget* ULayout::GetChildByNameOrClass(FName WidgetName, TSubclassOf<UUserWidget> WidgetClass) const
@@ -214,7 +148,10 @@ void ULayout::HandleTickerClicked(UEventTickerWidget* ClickedTicker)
 {
     if (!IsInGameThread())
     {
-        AsyncTask(ENamedThreads::GameThread, [WeakThis = TWeakObjectPtr<ULayout>(this), WeakTicker = TWeakObjectPtr<UEventTickerWidget>(ClickedTicker)]()
+        TWeakObjectPtr<ULayout> WeakThis(this);
+        TWeakObjectPtr<UEventTickerWidget> WeakTicker(ClickedTicker);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakTicker]()
         {
             if (ULayout* Self = WeakThis.Get())
             {
@@ -227,45 +164,14 @@ void ULayout::HandleTickerClicked(UEventTickerWidget* ClickedTicker)
         return;
     }
 
-    if (IsValid(ClickedTicker))
+    if (!IsValid(ClickedTicker))
     {
-        if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
-        {
-            if (IsValid(UIManager))
-            {
-                UIManager->HandleNewsCardSelected(ClickedTicker->NewsEvent);
-            }
-        }
-    }
-}
-
-void ULayout::HandleArtistSigned(const FArtistContract& SignedContract)
-{
-    if (!IsInGameThread())
-    {
-        const TWeakObjectPtr<ULayout> WeakThis(this);
-        AsyncTask(ENamedThreads::GameThread, [WeakThis, SignedContract]()
-        {
-            if (ULayout* StrongThis = WeakThis.Get())
-            {
-                StrongThis->HandleArtistSigned(SignedContract);
-            }
-        });
         return;
     }
 
-    if (!IsValid(ContractWidget))
+    if (UUIManagerSubsystem* UI = GetUIManagerSubsystem())
     {
-        UE_LOG(LogTemp, Warning, TEXT("HandleArtistSigned: ContractWidget is not bound on layout %s."), *GetName());
-        return;
-    }
-
-    // Update the widget with the newly signed contract and ensure it is visible to the player.
-    ContractWidget->SetContractData(SignedContract);
-
-    if (!ContractWidget->IsVisible())
-    {
-        ContractWidget->SetVisibility(ESlateVisibility::Visible);
+        UI->HandleNewsCardSelected(ClickedTicker->NewsEvent);
     }
 }
 
@@ -273,7 +179,7 @@ void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
 {
     if (!IsInGameThread())
     {
-        const TWeakObjectPtr<ULayout> WeakThis(this);
+        TWeakObjectPtr<ULayout> WeakThis(this);
         AsyncTask(ENamedThreads::GameThread, [WeakThis, EventData]()
         {
             if (ULayout* Self = WeakThis.Get())
@@ -281,24 +187,6 @@ void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
                 Self->ShowAuditionWidgetWithData(EventData);
             }
         });
-        return;
-    }
-
-    if (!bIsRoutingThroughUIManager)
-    {
-        if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
-        {
-            if (IsValid(UIManager))
-            {
-                const TGuardValue<bool> SubsystemGuard(bIsRoutingThroughUIManager, true);
-                UIManager->ShowAudition(EventData);
-                return;
-            }
-        }
-    }
-
-    if (!IsValid(this))
-    {
         return;
     }
 
@@ -317,52 +205,16 @@ void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
 
 void ULayout::ShowAuditionWidget()
 {
-    auto ExecuteShow = [this]()
+    if (!IsInGameThread())
     {
-        if (!IsValid(this) || !IsValid(AuditionWidget))
+        TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
         {
-            return;
-        }
-
-        AuditionWidget->CreateDummyAudition();
-        const FAuditionEvent EventData = AuditionWidget->AuditionData;
-
-        if (!bIsRoutingThroughUIManager)
-        {
-            if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
+            if (ULayout* Self = WeakThis.Get())
             {
-                if (IsValid(UIManager))
-                {
-                    const TGuardValue<bool> SubsystemGuard(bIsRoutingThroughUIManager, true);
-                    UIManager->ShowAudition(EventData);
-                    return;
-                }
+                Self->ShowAuditionWidget();
             }
-        }
-
-        ShowAuditionWidget_Internal();
-    };
-
-    if (IsInGameThread())
-    {
-        ExecuteShow();
-        return;
-    }
-
-    TWeakObjectPtr<ULayout> WeakThis(this);
-    AsyncTask(ENamedThreads::GameThread, [WeakThis]()
-    {
-        if (ULayout* Self = WeakThis.Get())
-        {
-            Self->ShowAuditionWidget();
-        }
-    });
-}
-
-void ULayout::ShowAuditionWidget_Internal()
-{
-    if (!IsValid(this))
-    {
+        });
         return;
     }
 
@@ -372,10 +224,40 @@ void ULayout::ShowAuditionWidget_Internal()
     }
 
     AuditionWidget->CreateDummyAudition();
+    const FAuditionEvent EventData = AuditionWidget->AuditionData;
 
-    if (!AuditionWidget->IsVisible())
+    if (UUIManagerSubsystem* UI = GetUIManagerSubsystem())
     {
-        AuditionWidget->SetVisibility(ESlateVisibility::Visible);
+        UI->ShowAudition(EventData);
+    }
+}
+
+void ULayout::ShowContract(const FArtistContract& SignedContract)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, SignedContract]()
+        {
+            if (ULayout* Self = WeakThis.Get())
+            {
+                Self->ShowContract(SignedContract);
+            }
+        });
+        return;
+    }
+
+    if (!IsValid(ContractWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ShowContract: ContractWidget is not bound on layout %s."), *GetName());
+        return;
+    }
+
+    ContractWidget->SetContractData(SignedContract);
+
+    if (!ContractWidget->IsVisible())
+    {
+        ContractWidget->SetVisibility(ESlateVisibility::Visible);
     }
 }
 

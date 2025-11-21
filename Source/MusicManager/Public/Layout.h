@@ -11,7 +11,6 @@
 class UNewsFeedList;
 class UUserWidget;
 class UAuditionWidget;
-class UArtistManagerSubsystem;
 class UUIManagerSubsystem;
 
 /**
@@ -55,6 +54,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Audition")
     void ShowAuditionWidgetWithData(const FAuditionEvent& EventData);
 
+    UFUNCTION(BlueprintCallable, Category = "Contract")
+    void ShowContract(const FArtistContract& SignedContract);
+
     UFUNCTION(BlueprintCallable, Category="Layout")
     UAuditionWidget* GetAuditionWidget() const;
 
@@ -69,22 +71,8 @@ protected:
 	UContractWidget* ContractWidget;
 
 private:
-    void InitializeContractSubscriptions();
-    void CleanupContractSubscriptions();
-
-    UFUNCTION()
-    void HandleArtistSigned(const FArtistContract& SignedContract);
-
     UFUNCTION()
     void HandleTickerClicked(UEventTickerWidget* ClickedTicker);
 
-    void ShowAuditionWidget_Internal();
-
     UUIManagerSubsystem* GetUIManagerSubsystem() const;
-
-    /** Cached subsystem pointer used to manage delegate bindings safely. */
-    TWeakObjectPtr<UArtistManagerSubsystem> ArtistManagerSubsystemWeak;
-
-    /** Prevent recursive routing when delegating to the UI manager. */
-    bool bIsRoutingThroughUIManager = false;
 };
