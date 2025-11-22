@@ -55,6 +55,9 @@ public:
     UFUNCTION()
     void HandleArtistSigned(const FArtistContract& Contract);
 
+    UFUNCTION()
+    void HandleArtistListChanged();
+
     /**
      * Entry point for handling command actions from the command panel.
      * Ensures all logic executes on the game thread before interacting with UObjects.

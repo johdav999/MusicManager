@@ -15,6 +15,7 @@ void UUIManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     if (UArtistManagerSubsystem* Artist = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
     {
         Artist->OnArtistSigned.AddDynamic(this, &UUIManagerSubsystem::HandleArtistSigned);
+        Artist->OnArtistListChanged.AddDynamic(this, &UUIManagerSubsystem::HandleArtistListChanged);
     }
 }
 
@@ -23,6 +24,7 @@ void UUIManagerSubsystem::Deinitialize()
     if (UArtistManagerSubsystem* Artist = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
     {
         Artist->OnArtistSigned.RemoveDynamic(this, &UUIManagerSubsystem::HandleArtistSigned);
+        Artist->OnArtistListChanged.RemoveDynamic(this, &UUIManagerSubsystem::HandleArtistListChanged);
     }
 
     Super::Deinitialize();
@@ -123,12 +125,29 @@ void UUIManagerSubsystem::HandleNewsCardSelected(const FMusicNewsEvent& EventDat
 
 void UUIManagerSubsystem::HandleArtistSigned(const FArtistContract& Contract)
 {
-    RefreshSignedArtistPanel();
-
     if (ULayout* Layout = ActiveLayout.Get())
     {
         Layout->ShowContract(Contract);
     }
+}
+
+void UUIManagerSubsystem::HandleArtistListChanged()
+{
+    TArray<FArtistData> ArtistDataList;
+
+    if (UArtistManagerSubsystem* ArtistSub = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
+    {
+        ArtistSub->GetSignedArtistData(ArtistDataList);
+    }
+
+    const TWeakObjectPtr<ULayout> RegisteredLayoutWeakPtr = ActiveLayout;
+    AsyncTask(ENamedThreads::GameThread, [RegisteredLayoutWeakPtr, ArtistDataList]()
+    {
+        if (ULayout* Layout = RegisteredLayoutWeakPtr.Get())
+        {
+            Layout->RefreshSignedArtists(ArtistDataList);
+        }
+    });
 }
 
 void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
