@@ -9,6 +9,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArtistSigned, const FArtistContra
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArtistRejected, const FString&, ArtistId);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnContractExpired, const FArtistContract&, ExpiredContract);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnContractsUpdated, const TArray<FArtistContract>&, UpdatedContracts);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnArtistListChanged);
 
 class UMusicSaveGame;
 
@@ -66,6 +67,9 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category="Contracts")
     FOnContractsUpdated OnMonthlyFinancialUpdate;
+
+    UPROPERTY(BlueprintAssignable, Category="Contracts")
+    FOnArtistListChanged OnArtistListChanged;
 
 protected:
     int32 CalculateContractDurationMonths(const FArtistDealTerms& Deal) const;

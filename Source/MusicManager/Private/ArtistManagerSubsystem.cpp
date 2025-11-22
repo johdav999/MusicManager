@@ -49,6 +49,7 @@ void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal, const FAr
     ActiveContracts.Add(NewContract);
 
     OnArtistSigned.Broadcast(NewContract);
+    OnArtistListChanged.Broadcast();
 }
 
 void UArtistManagerSubsystem::RejectArtist(const FString& ArtistId)
@@ -140,6 +141,7 @@ void UArtistManagerSubsystem::ExpireContract(const FString& ArtistId)
         ExpiredContracts.Add(Contract);
 
         OnContractExpired.Broadcast(Contract);
+        OnArtistListChanged.Broadcast();
     }
 }
 
@@ -198,4 +200,5 @@ void UArtistManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
     ActiveContracts = SaveObject->SavedContracts;
     ExpiredContracts.Reset();
     OnMonthlyFinancialUpdate.Broadcast(ActiveContracts);
+    OnArtistListChanged.Broadcast();
 }
