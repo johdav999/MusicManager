@@ -6,6 +6,7 @@
 #include "Async/Async.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/Texture2D.h"
+#include "UIManagerSubsystem.h"
 
 #include "UObject/SoftObjectPath.h"
 
@@ -57,11 +58,24 @@ void UCommandPanelWidget::NativeDestruct()
 
 void UCommandPanelWidget::HandleCommandClicked(const FString& CommandName)
 {
-    // Fire Blueprint event on the game thread so BP logic can safely switch on names.
-    if (IsInGameThread())
+    if (!IsInGameThread())
     {
-        OnCommandClicked(CommandName);
+        return;
     }
+
+    UWorld* World = GetWorld();
+    if (World)
+    {
+        if (UGameInstance* GameInstance = World->GetGameInstance())
+        {
+            if (UUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+            {
+                UIManager->HandleCommandAction(CommandName);
+            }
+        }
+    }
+
+    OnCommandClicked(CommandName);
 }
 
 void UCommandPanelWidget::HandleChildCommandClicked(const FString& CommandName)

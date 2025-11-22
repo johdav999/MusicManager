@@ -70,6 +70,54 @@ void UUIManagerSubsystem::HandleArtistSigned(const FArtistContract& Contract)
     }
 }
 
+void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
+{
+    TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+
+    AsyncTask(ENamedThreads::GameThread, [WeakThis, CommandName]()
+    {
+        UUIManagerSubsystem* Self = WeakThis.Get();
+        if (!IsValid(Self))
+        {
+            return;
+        }
+
+        if (CommandName == TEXT("Contracts"))
+        {
+            UGameInstance* GameInstance = Self->GetGameInstance();
+            if (!IsValid(GameInstance))
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: GameInstance is invalid."));
+                return;
+            }
+
+            UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
+            if (!IsValid(ArtistSubsystem))
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: ArtistManagerSubsystem is unavailable."));
+                return;
+            }
+
+            if (ArtistSubsystem->ActiveContracts.Num() <= 0)
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: No active contracts to display."));
+                return;
+            }
+
+            const FArtistContract& Contract = ArtistSubsystem->ActiveContracts[0];
+
+            ULayout* Layout = Self->ActiveLayout.Get();
+            if (!IsValid(Layout))
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: No active layout registered to show contracts."));
+                return;
+            }
+
+            Layout->ShowContract(Contract);
+        }
+    });
+}
+
 void UUIManagerSubsystem::RebuildUI()
 {
     ExecuteOnGameThread([this]()

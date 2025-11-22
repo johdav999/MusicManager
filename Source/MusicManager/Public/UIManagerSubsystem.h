@@ -48,6 +48,12 @@ public:
 
     void HandleArtistSigned(const FArtistContract& Contract);
 
+    /**
+     * Entry point for handling command actions from the command panel.
+     * Ensures all logic executes on the game thread before interacting with UObjects.
+     */
+    void HandleCommandAction(const FString& CommandName);
+
 private:
     UPROPERTY(EditAnywhere, Category="UI")
     TSubclassOf<ULayout> LayoutClass;
