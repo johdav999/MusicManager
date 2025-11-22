@@ -5,6 +5,7 @@
 #include "EventSubsystem.h"
 #include "ContractWidget.h"
 #include "EventTickerWidget.h"
+#include "AuditionTypes.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "Layout.generated.h"
 
@@ -12,6 +13,7 @@ class UNewsFeedList;
 class UUserWidget;
 class UAuditionWidget;
 class UUIManagerSubsystem;
+class USignedArtistPanelWidget;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
@@ -57,6 +59,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Contract")
     void ShowContract(const FArtistContract& SignedContract);
 
+    UFUNCTION(BlueprintCallable, Category="Artist")
+    void RefreshSignedArtists(const TArray<FArtistData>& Artists);
+
     UFUNCTION(BlueprintCallable, Category="Layout")
     UAuditionWidget* GetAuditionWidget() const;
 
@@ -68,11 +73,17 @@ protected:
     UAuditionWidget* AuditionWidget;
 
     UPROPERTY(meta = (BindWidgetOptional))
-	UContractWidget* ContractWidget;
+        UContractWidget* ContractWidget;
+
+    UPROPERTY(meta=(BindWidget))
+    USignedArtistPanelWidget* SignedArtistsPanel;
 
 private:
     UFUNCTION()
     void HandleTickerClicked(UEventTickerWidget* ClickedTicker);
+
+    UFUNCTION()
+    void HandleArtistSelected(FString ArtistId);
 
     UUIManagerSubsystem* GetUIManagerSubsystem() const;
 };

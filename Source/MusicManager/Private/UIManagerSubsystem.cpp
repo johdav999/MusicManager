@@ -36,6 +36,8 @@ void UUIManagerSubsystem::RegisterLayout(ULayout* InLayout)
     {
         LayoutClass = InLayout->GetClass();
     }
+
+    RefreshSignedArtistPanel();
 }
 
 void UUIManagerSubsystem::UnregisterLayout(ULayout* Layout)
@@ -54,6 +56,63 @@ void UUIManagerSubsystem::ShowAudition(const FAuditionEvent& EventData)
     }
 }
 
+void UUIManagerSubsystem::RefreshSignedArtistPanel()
+{
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!IsValid(GameInstance))
+    {
+        return;
+    }
+
+    UArtistManagerSubsystem* ArtistManager = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
+    if (!IsValid(ArtistManager))
+    {
+        return;
+    }
+
+    TArray<FArtistData> ArtistData;
+    ArtistManager->GetSignedArtistData(ArtistData);
+
+    const TWeakObjectPtr<ULayout> LayoutWeak = ActiveLayout;
+    AsyncTask(ENamedThreads::GameThread, [LayoutWeak, ArtistData]()
+    {
+        if (ULayout* Layout = LayoutWeak.Get())
+        {
+            Layout->RefreshSignedArtists(ArtistData);
+        }
+    });
+}
+
+void UUIManagerSubsystem::ShowContractForArtist(const FString& ArtistName)
+{
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!IsValid(GameInstance))
+    {
+        return;
+    }
+
+    UArtistManagerSubsystem* ArtistManager = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
+    if (!IsValid(ArtistManager))
+    {
+        return;
+    }
+
+    const FArtistContract* Found = ArtistManager->FindContractByArtistName(ArtistName);
+    if (!Found)
+    {
+        return;
+    }
+
+    const TWeakObjectPtr<ULayout> LayoutWeak = ActiveLayout;
+    AsyncTask(ENamedThreads::GameThread, [LayoutWeak, FoundContract = *Found]()
+    {
+        if (ULayout* Layout = LayoutWeak.Get())
+        {
+            Layout->ShowContract(FoundContract);
+        }
+    });
+}
+
 void UUIManagerSubsystem::HandleNewsCardSelected(const FMusicNewsEvent& EventData)
 {
     ExecuteOnGameThread([this, EventData]()
@@ -64,6 +123,8 @@ void UUIManagerSubsystem::HandleNewsCardSelected(const FMusicNewsEvent& EventDat
 
 void UUIManagerSubsystem::HandleArtistSigned(const FArtistContract& Contract)
 {
+    RefreshSignedArtistPanel();
+
     if (ULayout* Layout = ActiveLayout.Get())
     {
         Layout->ShowContract(Contract);

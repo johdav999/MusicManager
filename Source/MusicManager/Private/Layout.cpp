@@ -11,6 +11,7 @@
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "Engine/GameInstance.h"
 #include "UIManagerSubsystem.h"
+#include "UI/SignedArtistPanelWidget.h"
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -28,10 +29,20 @@ void ULayout::NativeConstruct()
             UIManager->RegisterLayout(this);
         }
     }
+
+    if (IsValid(SignedArtistsPanel))
+    {
+        SignedArtistsPanel->OnArtistSelected.AddDynamic(this, &ULayout::HandleArtistSelected);
+    }
 }
 
 void ULayout::NativeDestruct()
 {
+    if (IsValid(SignedArtistsPanel))
+    {
+        SignedArtistsPanel->OnArtistSelected.RemoveDynamic(this, &ULayout::HandleArtistSelected);
+    }
+
     if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
     {
         if (IsValid(UIManager))
@@ -238,6 +249,16 @@ void ULayout::ShowAuditionWidget()
     }
 }
 
+void ULayout::RefreshSignedArtists(const TArray<FArtistData>& Artists)
+{
+    if (!IsValid(SignedArtistsPanel))
+    {
+        return;
+    }
+
+    SignedArtistsPanel->PopulateArtistList(Artists);
+}
+
 void ULayout::ShowContract(const FArtistContract& SignedContract)
 {
     if (!IsInGameThread())
@@ -271,6 +292,27 @@ UAuditionWidget* ULayout::GetAuditionWidget() const
 {
     // The layout owns the widget through the blueprint hierarchy, so no extra validation is required here.
     return AuditionWidget;
+}
+
+void ULayout::HandleArtistSelected(FString ArtistId)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId]()
+        {
+            if (ULayout* Self = WeakThis.Get())
+            {
+                Self->HandleArtistSelected(ArtistId);
+            }
+        });
+        return;
+    }
+
+    if (UUIManagerSubsystem* UI = GetUIManagerSubsystem())
+    {
+        UI->ShowContractForArtist(ArtistId);
+    }
 }
 
 UUIManagerSubsystem* ULayout::GetUIManagerSubsystem() const
