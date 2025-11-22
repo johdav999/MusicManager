@@ -72,6 +72,7 @@ void UUIManagerSubsystem::HandleArtistSigned(const FArtistContract& Contract)
 
 void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
 {
+    UE_LOG(LogTemp, Display, TEXT("Handle Command"));
     TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
 
     AsyncTask(ENamedThreads::GameThread, [WeakThis, CommandName]()
@@ -79,6 +80,7 @@ void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
         UUIManagerSubsystem* Self = WeakThis.Get();
         if (!IsValid(Self))
         {
+            UE_LOG(LogTemp, Display, TEXT("Self not valid"));
             return;
         }
 
@@ -112,7 +114,7 @@ void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
                 UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: No active layout registered to show contracts."));
                 return;
             }
-
+            UE_LOG(LogTemp, Display, TEXT("Show Contract"));
             Layout->ShowContract(Contract);
         }
     });

@@ -44,8 +44,11 @@ public:
     FOnNewsSelected OnNewsSelected;
 
     /** Handle selection events coming from news cards. */
+
+    UFUNCTION()
     void HandleNewsCardSelected(const FMusicNewsEvent& EventData);
 
+    UFUNCTION()
     void HandleArtistSigned(const FArtistContract& Contract);
 
     /**
