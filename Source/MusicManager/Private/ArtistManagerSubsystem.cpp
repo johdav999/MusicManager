@@ -151,6 +151,24 @@ const FArtistContract* UArtistManagerSubsystem::GetContractByArtistId(const FStr
     });
 }
 
+void UArtistManagerSubsystem::GetSignedArtistData(TArray<FArtistData>& OutArtistData) const
+{
+    OutArtistData.Reset();
+
+    for (const FArtistContract& Contract : ActiveContracts)
+    {
+        OutArtistData.Add(Contract.ArtistData);
+    }
+}
+
+const FArtistContract* UArtistManagerSubsystem::FindContractByArtistName(const FString& ArtistName) const
+{
+    return ActiveContracts.FindByPredicate([&ArtistName](const FArtistContract& Contract)
+    {
+        return Contract.ArtistData.ArtistName == ArtistName;
+    });
+}
+
 int32 UArtistManagerSubsystem::CalculateContractDurationMonths(const FArtistDealTerms& Deal) const
 {
     return FMath::Max(Deal.ContractYears * 12, 0);

@@ -39,6 +39,10 @@ public:
 
     const FArtistContract* GetContractByArtistId(const FString& ArtistId) const;
 
+    void GetSignedArtistData(TArray<FArtistData>& OutArtistData) const;
+
+    const FArtistContract* FindContractByArtistName(const FString& ArtistName) const;
+
     void SaveState(class UMusicSaveGame* SaveObject);
     void LoadState(const class UMusicSaveGame* SaveObject);
 

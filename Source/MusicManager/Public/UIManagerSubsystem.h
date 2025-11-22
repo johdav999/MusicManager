@@ -40,6 +40,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI")
     void RebuildUI();
 
+    void RefreshSignedArtistPanel();
+
+    void ShowContractForArtist(const FString& ArtistName);
+
     /** Raised when a news card is selected anywhere in the UI. */
     FOnNewsSelected OnNewsSelected;
 
