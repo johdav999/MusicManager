@@ -11,6 +11,8 @@ void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     ActiveContracts.Reset();
     ExpiredContracts.Reset();
 
+    LoadArtistsFromDataTable();
+
     if (UGameInstance* GameInstance = GetGameInstance())
     {
         if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
@@ -19,6 +21,35 @@ void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
             CurrentGameDate = TimeSubsystem->GetCurrentGameDate();
         }
     }
+}
+
+void UArtistManagerSubsystem::GetUnsignedArtists(TArray<FArtistData>& OutArtists) const
+{
+    OutArtists = UnsignedArtists;
+}
+
+void UArtistManagerSubsystem::LoadArtistsFromDataTable()
+{
+    UnsignedArtists.Empty();
+
+    if (!ArtistDataTable)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ArtistManagerSubsystem: No ArtistDataTable assigned."));
+        return;
+    }
+
+    static const FString ContextString(TEXT("Artist Data Table"));
+
+    TArray<FName> RowNames = ArtistDataTable->GetRowNames();
+    for (const FName& RowName : RowNames)
+    {
+        if (FArtistData* Row = ArtistDataTable->FindRow<FArtistData>(RowName, ContextString))
+        {
+            UnsignedArtists.Add(*Row);
+        }
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("Loaded %d unsigned artists from DataTable."), UnsignedArtists.Num());
 }
 
 void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal, const FArtistData& ArtistInfo)
@@ -47,6 +78,11 @@ void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal, const FAr
     NewContract.MonthsActive = 0;
 
     ActiveContracts.Add(NewContract);
+
+    UnsignedArtists.RemoveAll([&ArtistInfo](const FArtistData& Artist)
+    {
+        return Artist.ArtistName == ArtistInfo.ArtistName;
+    });
 
     OnArtistSigned.Broadcast(NewContract);
     OnArtistListChanged.Broadcast();
