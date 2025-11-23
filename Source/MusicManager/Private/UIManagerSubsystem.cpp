@@ -143,9 +143,12 @@ void UUIManagerSubsystem::HandleArtistListChanged()
     const TWeakObjectPtr<ULayout> RegisteredLayoutWeakPtr = ActiveLayout;
     AsyncTask(ENamedThreads::GameThread, [RegisteredLayoutWeakPtr, ArtistDataList]()
     {
+            UE_LOG(LogTemp, Display, TEXT("Refresh panel started"));
         if (ULayout* Layout = RegisteredLayoutWeakPtr.Get())
         {
+         
             Layout->RefreshSignedArtists(ArtistDataList);
+            UE_LOG(LogTemp, Display, TEXT("Refresh panel Done"));
         }
     });
 }
