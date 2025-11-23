@@ -60,7 +60,7 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contracts")
     TArray<FArtistContract> ExpiredContracts;
 
-    UPROPERTY(EditAnywhere, Category="Artists")
+    UPROPERTY(EditAnywhere,BlueprintReadWrite, Category="Artists")
     UDataTable* ArtistDataTable;
 
     UPROPERTY(VisibleAnywhere, Category="Artists")
