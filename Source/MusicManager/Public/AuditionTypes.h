@@ -1,10 +1,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/DataTable.h"
 #include "AuditionTypes.generated.h"
 
 USTRUCT(BlueprintType)
-struct FArtistData
+struct FArtistData : public FTableRowBase
 {
     GENERATED_BODY()
 

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "FArtistContract.h"
+#include "Engine/DataTable.h"
 #include "ArtistManagerSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArtistSigned, const FArtistContract&, SignedContract);
@@ -20,6 +21,12 @@ class UArtistManagerSubsystem : public UGameInstanceSubsystem
 
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+
+    UFUNCTION(BlueprintCallable, Category="Artists")
+    void GetUnsignedArtists(TArray<FArtistData>& OutArtists) const;
+
+    UFUNCTION(BlueprintCallable, Category="Artists")
+    void LoadArtistsFromDataTable();
 
     UFUNCTION(BlueprintCallable, Category="Contracts")
     void SignArtist(const FArtistDealTerms& Deal, const FArtistData& ArtistInfo);
@@ -52,6 +59,12 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contracts")
     TArray<FArtistContract> ExpiredContracts;
+
+    UPROPERTY(EditAnywhere, Category="Artists")
+    UDataTable* ArtistDataTable;
+
+    UPROPERTY(VisibleAnywhere, Category="Artists")
+    TArray<FArtistData> UnsignedArtists;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contracts")
     FDateTime CurrentGameDate = FDateTime();
