@@ -215,7 +215,7 @@ void UAuditionWidget::HandleSignArtistClicked()
     {
         if (UArtistManagerSubsystem* Subsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
         {
-            Subsystem->SignArtist(Deal, AuditionData.ArtistData);
+            Subsystem->SignArtist(Deal);
         }
     }
 

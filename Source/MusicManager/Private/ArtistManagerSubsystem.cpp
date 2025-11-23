@@ -52,10 +52,18 @@ void UArtistManagerSubsystem::LoadArtistsFromDataTable()
     UE_LOG(LogTemp, Log, TEXT("Loaded %d unsigned artists from DataTable."), UnsignedArtists.Num());
 }
 
-void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal, const FArtistData& ArtistInfo)
+void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal)
 {
+    if (UnsignedArtists.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SignArtist: No unsigned artists available."));
+        return;
+    }
+
+    const FArtistData ArtistInfo = UnsignedArtists[0];
+
     FArtistContract NewContract;
-    NewContract.ArtistId = Deal.ArtistId;
+    NewContract.ArtistId = ArtistInfo.ArtistName;
     NewContract.ArtistData = ArtistInfo;
     NewContract.Terms = Deal;
 
@@ -79,10 +87,7 @@ void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal, const FAr
 
     ActiveContracts.Add(NewContract);
 
-    UnsignedArtists.RemoveAll([&ArtistInfo](const FArtistData& Artist)
-    {
-        return Artist.ArtistName == ArtistInfo.ArtistName;
-    });
+    UnsignedArtists.RemoveAt(0);
 
     OnArtistSigned.Broadcast(NewContract);
     OnArtistListChanged.Broadcast();

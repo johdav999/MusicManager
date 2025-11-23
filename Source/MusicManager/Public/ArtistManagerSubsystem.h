@@ -29,7 +29,7 @@ public:
     void LoadArtistsFromDataTable();
 
     UFUNCTION(BlueprintCallable, Category="Contracts")
-    void SignArtist(const FArtistDealTerms& Deal, const FArtistData& ArtistInfo);
+    void SignArtist(const FArtistDealTerms& Deal);
 
     UFUNCTION(BlueprintCallable, Category="Contracts")
     void RejectArtist(const FString& ArtistId);
