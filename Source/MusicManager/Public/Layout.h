@@ -14,6 +14,7 @@ class UUserWidget;
 class UAuditionWidget;
 class UUIManagerSubsystem;
 class USignedArtistPanelWidget;
+class UArtistManagerSubsystem;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
@@ -86,4 +87,5 @@ private:
     void HandleArtistSelected(FString ArtistId);
 
     UUIManagerSubsystem* GetUIManagerSubsystem() const;
+    UArtistManagerSubsystem* GetArtistManagerSubsystem() const;
 };

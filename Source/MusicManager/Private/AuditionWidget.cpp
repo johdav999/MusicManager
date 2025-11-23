@@ -61,35 +61,27 @@ void UAuditionWidget::NativeConstruct()
     }
 }
 
-void UAuditionWidget::CreateDummyAudition()
+void UAuditionWidget::CreateAuditionFromArtist(const FArtistData& Artist)
 {
+    AuditionData.ArtistData = Artist;
+    AuditionData.DealData.ArtistName = Artist.ArtistName;
 
+    AuditionData.DealData.SignUpBonus = 5000.f + Artist.PerformanceScore * 7500.f;
+    AuditionData.DealData.NumOfRecords = 3;
+    AuditionData.DealData.RoyaltyRate = FMath::Clamp(0.1f + Artist.StagePresence * 0.1f, 0.05f, 0.3f);
+    AuditionData.DealData.ContractYears = 3;
 
-
-
-    if (!bHasInitializedTestData && !IsDesignTime())
+    if (AuditionData.VenueName.IsEmpty())
     {
-        bHasInitializedTestData = true;
-
-        FArtistData DummyArtistData;
-        DummyArtistData.ArtistName = TEXT("Test Artist");
-        DummyArtistData.PerformanceScore = 0.85f;
-        DummyArtistData.StagePresence = 0.75f;
-        DummyArtistData.AudienceEngagement = 0.9f;
-        DummyArtistData.VocalQuality = 0.8f;
-        DummyArtistData.SongwritingQuality = 0.7f;
-        DummyArtistData.Genre = TEXT("Pop");
-
-        AuditionData.ArtistData = DummyArtistData; 
-        AuditionData.VenueName = TEXT("Test Venue");
-        AuditionData.City = TEXT("Test City");
-        AuditionData.DealData.SignUpBonus = 10000.f;
-        AuditionData.DealData.NumOfRecords = 3;
-        AuditionData.DealData.RoyaltyRate = 0.15f;
-        AuditionData.DealData.ContractYears = 4;
-
-        RefreshDisplay();
+        AuditionData.VenueName = TEXT("Local Venue");
     }
+
+    if (AuditionData.City.IsEmpty())
+    {
+        AuditionData.City = TEXT("Local City");
+    }
+
+    RefreshDisplay();
 }
 
 void UAuditionWidget::RefreshDisplay()

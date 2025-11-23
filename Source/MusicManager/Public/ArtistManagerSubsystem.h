@@ -26,6 +26,12 @@ public:
     void GetUnsignedArtists(TArray<FArtistData>& OutArtists) const;
 
     UFUNCTION(BlueprintCallable, Category="Artists")
+    bool GetNextUnsignedArtist(FArtistData& OutArtist) const;
+
+    UFUNCTION(BlueprintCallable, Category="Artists")
+    void RotateUnsignedArtist();
+
+    UFUNCTION(BlueprintCallable, Category="Artists")
     void LoadArtistsFromDataTable();
 
     UFUNCTION(BlueprintCallable, Category="Contracts")
