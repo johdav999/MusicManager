@@ -10,6 +10,7 @@
 #include "Types/SlateEnums.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "Engine/GameInstance.h"
+#include "ArtistManagerSubsystem.h"
 #include "UIManagerSubsystem.h"
 #include "UI/SignedArtistPanelWidget.h"
 
@@ -240,7 +241,20 @@ void ULayout::ShowAuditionWidget()
         return;
     }
 
-    AuditionWidget->CreateDummyAudition();
+    UArtistManagerSubsystem* ArtistSub = GetArtistManagerSubsystem();
+    if (!ArtistSub)
+    {
+        return;
+    }
+
+    FArtistData ArtistForAudition;
+    if (!ArtistSub->GetNextUnsignedArtist(ArtistForAudition))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No unsigned artists available for audition."));
+        return;
+    }
+
+    AuditionWidget->CreateAuditionFromArtist(ArtistForAudition);
     const FAuditionEvent EventData = AuditionWidget->AuditionData;
 
     if (UUIManagerSubsystem* UI = GetUIManagerSubsystem())
@@ -324,4 +338,15 @@ UUIManagerSubsystem* ULayout::GetUIManagerSubsystem() const
     }
 
     return GI->GetSubsystem<UUIManagerSubsystem>();
+}
+
+UArtistManagerSubsystem* ULayout::GetArtistManagerSubsystem() const
+{
+    UGameInstance* GI = GetGameInstance();
+    if (!GI)
+    {
+        return nullptr;
+    }
+
+    return GI->GetSubsystem<UArtistManagerSubsystem>();
 }

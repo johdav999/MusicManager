@@ -3,6 +3,7 @@
 #include "Async/Async.h"
 #include "EventSubsystem.h"
 #include "Layout.h"
+#include "UIManagerSubsystem.h"
 
 AAuditionEventActor::AAuditionEventActor()
 {
@@ -89,6 +90,17 @@ void AAuditionEventActor::FinalizeDeal(bool bAcceptDeal)
     {
         ActiveWidget->AuditionData = AuditionData;
         ActiveWidget->SetVisibility(ESlateVisibility::Hidden);
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UGameInstance* GameInstance = World->GetGameInstance())
+        {
+            if (UUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+            {
+                UIManager->HandleAuditionResult(bAcceptDeal);
+            }
+        }
     }
 
     OnNegotiationUpdated.Broadcast();

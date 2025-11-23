@@ -58,6 +58,26 @@ void UUIManagerSubsystem::ShowAudition(const FAuditionEvent& EventData)
     }
 }
 
+void UUIManagerSubsystem::HandleAuditionResult(bool bPassed)
+{
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!IsValid(GameInstance))
+    {
+        return;
+    }
+
+    UArtistManagerSubsystem* ArtistSub = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
+    if (!ArtistSub)
+    {
+        return;
+    }
+
+    if (!bPassed)
+    {
+        ArtistSub->RotateUnsignedArtist();
+    }
+}
+
 void UUIManagerSubsystem::RefreshSignedArtistPanel()
 {
     UGameInstance* GameInstance = GetGameInstance();

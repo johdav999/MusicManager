@@ -28,6 +28,27 @@ void UArtistManagerSubsystem::GetUnsignedArtists(TArray<FArtistData>& OutArtists
     OutArtists = UnsignedArtists;
 }
 
+bool UArtistManagerSubsystem::GetNextUnsignedArtist(FArtistData& OutArtist) const
+{
+    if (UnsignedArtists.Num() == 0)
+    {
+        return false;
+    }
+
+    OutArtist = UnsignedArtists[0];
+    return true;
+}
+
+void UArtistManagerSubsystem::RotateUnsignedArtist()
+{
+    if (UnsignedArtists.Num() > 1)
+    {
+        const FArtistData Temp = UnsignedArtists[0];
+        UnsignedArtists.RemoveAt(0);
+        UnsignedArtists.Add(Temp);
+    }
+}
+
 void UArtistManagerSubsystem::LoadArtistsFromDataTable()
 {
     UnsignedArtists.Empty();

@@ -86,7 +86,7 @@ public:
     void RefreshDisplay();
 
     UFUNCTION(BlueprintCallable)
-    void CreateDummyAudition();
+    void CreateAuditionFromArtist(const FArtistData& Artist);
 
 protected:
     virtual void NativeConstruct() override;
@@ -116,5 +116,4 @@ protected:
     void OnNegotiationValueChanged();
 
 private:
-    bool bHasInitializedTestData = false;
 };

@@ -36,6 +36,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI")
     void ShowAudition(const FAuditionEvent& EventData);
 
+    /** Handle outcomes from audition flow to keep unsigned roster in sync. */
+    UFUNCTION()
+    void HandleAuditionResult(bool bPassed);
+
     /** Rebuilds the UI layout after a load to avoid stale references. */
     UFUNCTION(BlueprintCallable, Category="UI")
     void RebuildUI();
