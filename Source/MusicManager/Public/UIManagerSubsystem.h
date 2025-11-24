@@ -62,6 +62,9 @@ public:
     UFUNCTION()
     void HandleArtistListChanged();
 
+    UFUNCTION()
+    void HandleNewsEventGenerated(const FMusicNewsEvent& EventData);
+
     /**
      * Entry point for handling command actions from the command panel.
      * Ensures all logic executes on the game thread before interacting with UObjects.

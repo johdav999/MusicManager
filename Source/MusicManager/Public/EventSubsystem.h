@@ -4,12 +4,11 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "EventSubsystem.generated.h"
 
-class ULayout;
-class UUserWidget;
-class UWorld;
 class UGameTimeSubsystem;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogEventSubsystem, Log, All);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNewsEventGenerated, const FMusicNewsEvent&, Event);
 
 
 UENUM(BlueprintType)
@@ -107,31 +106,17 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
-    UFUNCTION(BlueprintCallable, Category="EventSubsystem")
-    void RegisterLayout(ULayout* InLayout);
+    UPROPERTY(BlueprintAssignable)
+    FOnNewsEventGenerated OnNewsEventGenerated;
 
-    UFUNCTION(BlueprintCallable, Category="EventSubsystem")
-    void UnregisterLayout(ULayout* InLayout);
-
-
-    void SendDummyNews();
     UFUNCTION()
     void HandleMonthAdvanced(const FDateTime& NewDate);
-    UUserWidget* ResolveChildWidget(ULayout& Layout);
-    bool IsSameGameInstanceWorld(const UWorld& World) const;
 
-    void ProcessMonthAdvanced(const FDateTime& NewDate);
     UGameTimeSubsystem* GetOrCreateGameTimeSubsystem();
 
-    UPROPERTY(EditAnywhere, Config)
-    FName ChildWidgetName = TEXT("EventTicker");
-
-    UPROPERTY(EditAnywhere,BlueprintReadWrite, Config)
-    TSubclassOf<UUserWidget> ChildWidgetClass;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TWeakObjectPtr<ULayout> LayoutWeak;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TWeakObjectPtr<UUserWidget> ChildWeak;
+private:
+    void ProcessMonthAdvanced(const FDateTime& NewDate);
+    FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
 
     TWeakObjectPtr<UGameTimeSubsystem> GameTimeSubsystem;
 };

@@ -2,7 +2,6 @@
 
 #include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
-#include "EventSubsystem.h"
 #include "Layout.h"
 
 AMusicManagerPlayerController::AMusicManagerPlayerController()
@@ -46,12 +45,6 @@ void AMusicManagerPlayerController::BeginPlay()
 
         LayoutInstance->AddToViewport();
 
-        if (UEventSubsystem* EventSubsystem = GameInstance->GetSubsystem<UEventSubsystem>())
-        {
-            EventSubsystem->RegisterLayout(LayoutInstance);
-			//EventSubsystem->SendDummyNews();
-        }
-        
         FInputModeGameAndUI InputMode;
         InputMode.SetHideCursorDuringCapture(false);
         InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
