@@ -8,9 +8,6 @@ class UGameTimeSubsystem;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogEventSubsystem, Log, All);
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNewsEventGenerated, const FMusicNewsEvent&, Event);
-
-
 UENUM(BlueprintType)
 enum class EMusicNewsType : uint8
 {
@@ -92,6 +89,8 @@ struct FMusicNewsEvent
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TMap<FString, FString> Metadata;
 };
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNewsEventGenerated, const FMusicNewsEvent&, Event);
 
 
 /**
