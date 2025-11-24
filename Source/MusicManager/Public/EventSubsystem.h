@@ -5,6 +5,8 @@
 #include "EventSubsystem.generated.h"
 
 class UGameTimeSubsystem;
+class ULayout;
+class AAuditionEventActor;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogEventSubsystem, Log, All);
 
@@ -113,9 +115,15 @@ public:
 
     UGameTimeSubsystem* GetOrCreateGameTimeSubsystem();
 
+    void RegisterLayout(ULayout* InLayout);
+    void UnregisterLayout(ULayout* InLayout);
+
 private:
     void ProcessMonthAdvanced(const FDateTime& NewDate);
     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
 
+    TWeakObjectPtr<ULayout> LayoutWeak;
     TWeakObjectPtr<UGameTimeSubsystem> GameTimeSubsystem;
+
+    friend class AAuditionEventActor;
 };

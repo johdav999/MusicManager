@@ -44,6 +44,11 @@ void UUIManagerSubsystem::RegisterLayout(ULayout* InLayout)
 {
     ActiveLayout = InLayout;
 
+    if (UEventSubsystem* EventSubsystem = GetGameInstance()->GetSubsystem<UEventSubsystem>())
+    {
+        EventSubsystem->RegisterLayout(InLayout);
+    }
+
     if (InLayout && (!LayoutClass || LayoutClass->HasAnyClassFlags(CLASS_Abstract)))
     {
         LayoutClass = InLayout->GetClass();
@@ -57,6 +62,11 @@ void UUIManagerSubsystem::UnregisterLayout(ULayout* Layout)
     if (ActiveLayout.Get() == Layout)
     {
         ActiveLayout.Reset();
+    }
+
+    if (UEventSubsystem* EventSubsystem = GetGameInstance()->GetSubsystem<UEventSubsystem>())
+    {
+        EventSubsystem->UnregisterLayout(Layout);
     }
 }
 
