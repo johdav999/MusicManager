@@ -65,7 +65,8 @@ void UEventSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::Initia
 
     GameTimeSubsystem = TimeSubsystem;
 
-    TimeSubsystem->OnMonthAdvanced.AddUObject(this, &UEventSubsystem::HandleMonthAdvanced);
+   /* TimeSubsystem->OnMonthAdvanced.AddUObject(this, &UEventSubsystem::HandleMonthAdvanced);*/
+    TimeSubsystem->OnMonthAdvanced.RemoveDynamic(this, &UEventSubsystem::HandleMonthAdvanced);
     ProcessMonthAdvanced(TimeSubsystem->GetCurrentGameDate());
 }
 

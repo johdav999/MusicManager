@@ -97,6 +97,7 @@ UUserWidget* ULayout::GetChildByNameOrClass(FName WidgetName, TSubclassOf<UUserW
 
 void ULayout::AddNewsCardToFeed(const FMusicNewsEvent& Event)
 {
+    UE_LOG(LogTemp, Warning, TEXT("Trying to add NewsCard"));
     if (!ensure(IsInGameThread()))
     {
         UE_LOG(LogTemp, Warning, TEXT("AddNewsCardToFeed called off the game thread."));
@@ -147,6 +148,7 @@ void ULayout::RemoveNewsCardFromFeed(UEventTickerWidget* Card)
 
 void ULayout::BindTickerEvents(UEventTickerWidget* NewTicker)
 {
+    UE_LOG(LogTemp, Display, TEXT("Bind ticker event!"));
     if (!ensure(IsInGameThread()))
     {
         return;

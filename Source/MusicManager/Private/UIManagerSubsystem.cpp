@@ -201,8 +201,10 @@ void UUIManagerSubsystem::HandleNewsEventGenerated(const FMusicNewsEvent& EventD
     {
         if (UUIManagerSubsystem* Self = WeakThis.Get())
         {
+            UE_LOG(LogTemp, Display, TEXT("Get UUIManagerSubsystem success!"));
             if (ULayout* Layout = Self->ActiveLayout.Get())
             {
+                UE_LOG(LogTemp, Display, TEXT("Get Layout success!"));
                 Layout->AddNewsCardToFeed(EventData);
             }
         }
