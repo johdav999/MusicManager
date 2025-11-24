@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Engine/World.h"
 
 #include "EventSubsystem.generated.h"
 
@@ -120,6 +121,9 @@ public:
     void UnregisterLayout(ULayout* InLayout);
 
 private:
+    UFUNCTION()
+    void HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS);
+
     void ProcessMonthAdvanced(const FDateTime& NewDate);
     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
     UPROPERTY()

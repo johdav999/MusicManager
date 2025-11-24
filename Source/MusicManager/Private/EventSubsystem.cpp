@@ -3,8 +3,8 @@
 #include "Layout.h"
 #include "Async/Async.h"
 #include "Engine/GameInstance.h"
+#include "Engine/World.h"
 #include "GameTimeSubsystem.h"
-#include "Layout.h"
 
 DEFINE_LOG_CATEGORY(LogEventSubsystem);
 
@@ -12,28 +12,61 @@ void UEventSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    if (UGameTimeSubsystem* GameTime = GetOrCreateGameTimeSubsystem())
-    {
-        GameTime->OnMonthAdvanced.AddDynamic(this, &UEventSubsystem::HandleMonthAdvanced);
-        UE_LOG(LogEventSubsystem, Display, TEXT("Subscribed to OnMonthAdvanced from UGameTimeSubsystem."));
-
-        ProcessMonthAdvanced(GameTime->GetCurrentGameDate());
-    }
-    else
-    {
-        UE_LOG(LogEventSubsystem, Warning, TEXT("Unable to subscribe to UGameTimeSubsystem; event updates will be inactive."));
-    }
+    FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
+    FWorldDelegates::OnPostWorldInitialization.AddUObject(this, &UEventSubsystem::HandleWorldInitialized);
 }
 
 void UEventSubsystem::Deinitialize()
 {
+    FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
+
     if (UGameTimeSubsystem* GameTime = GameTimeSubsystem.Get())
     {
-        GameTime->OnMonthAdvanced.RemoveDynamic(this, &UEventSubsystem::HandleMonthAdvanced);
+        GameTime->OnMonthAdvanced.RemoveAll(this);
     }
     GameTimeSubsystem.Reset();
 
     Super::Deinitialize();
+}
+
+void UEventSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS)
+{
+    if (!IsInGameThread() || !IsValid(World))
+    {
+        return;
+    }
+
+    UGameInstance* GameInstance = World->GetGameInstance();
+    if (!IsValid(GameInstance))
+    {
+        UE_LOG(LogEventSubsystem, Warning, TEXT("HandleWorldInitialized: GameInstance is invalid."));
+        return;
+    }
+
+    UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>();
+    UE_LOG(LogEventSubsystem, Display, TEXT("HandleWorldInitialized: UGameTimeSubsystem = %s (%p)"),
+        TimeSubsystem ? TEXT("VALID") : TEXT("NULL"),
+        TimeSubsystem);
+
+    if (!IsValid(TimeSubsystem))
+    {
+        return;
+    }
+
+    if (UGameTimeSubsystem* Existing = GameTimeSubsystem.Get())
+    {
+        if (Existing == TimeSubsystem)
+        {
+            return;
+        }
+
+        Existing->OnMonthAdvanced.RemoveAll(this);
+    }
+
+    GameTimeSubsystem = TimeSubsystem;
+
+    TimeSubsystem->OnMonthAdvanced.AddUObject(this, &UEventSubsystem::HandleMonthAdvanced);
+    ProcessMonthAdvanced(TimeSubsystem->GetCurrentGameDate());
 }
 
 void UEventSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
@@ -92,18 +125,22 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
 
 UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
 {
-    UE_LOG(LogTemp, Display, TEXT("Try to Get GameTimeSubsysten"));
-
     if (UGameTimeSubsystem* Existing = GameTimeSubsystem.Get())
     {
         return Existing;
     }
-    UE_LOG(LogTemp, Display, TEXT("Try to create GameTimeSubsysten"));
-    if (UGameInstance* GameInstance = GetGameInstance())
+
+    if (UWorld* World = GetWorld())
     {
-        UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>();
-        GameTimeSubsystem = TimeSubsystem;
-        return TimeSubsystem;
+        if (UGameInstance* GameInstance = World->GetGameInstance())
+        {
+            UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>();
+            if (IsValid(TimeSubsystem))
+            {
+                GameTimeSubsystem = TimeSubsystem;
+                return TimeSubsystem;
+            }
+        }
     }
 
     return nullptr;
