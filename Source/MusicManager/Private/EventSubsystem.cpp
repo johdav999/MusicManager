@@ -4,6 +4,7 @@
 #include "Async/Async.h"
 #include "Engine/GameInstance.h"
 #include "GameTimeSubsystem.h"
+#include "Layout.h"
 
 DEFINE_LOG_CATEGORY(LogEventSubsystem);
 
