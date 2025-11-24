@@ -40,21 +40,35 @@ void UUIManagerSubsystem::Deinitialize()
     Super::Deinitialize();
 }
 
-void UUIManagerSubsystem::RegisterLayout(ULayout* InLayout)
+void UUIManagerSubsystem::RegisterLayout(ULayout* Layout)
 {
-    ActiveLayout = InLayout;
-
-    if (UEventSubsystem* EventSubsystem = GetGameInstance()->GetSubsystem<UEventSubsystem>())
+    if (!IsInGameThread())
     {
-        EventSubsystem->RegisterLayout(InLayout);
+        const TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+        TWeakObjectPtr<ULayout> WeakLayout(Layout);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakLayout]()
+        {
+            if (UUIManagerSubsystem* Self = WeakThis.Get())
+            {
+                if (ULayout* StrongLayout = WeakLayout.Get())
+                {
+                    Self->RegisterLayout(StrongLayout);
+                }
+            }
+        });
+        return;
     }
 
-    if (InLayout && (!LayoutClass || LayoutClass->HasAnyClassFlags(CLASS_Abstract)))
+    ActiveLayout = Layout;
+
+    // Flush any pending news events
+    for (const FMusicNewsEvent& Event : PendingNewsEvents)
     {
-        LayoutClass = InLayout->GetClass();
+        Layout->AddNewsCardToFeed(Event);
     }
 
-    RefreshSignedArtistPanel();
+    PendingNewsEvents.Empty();
 }
 
 void UUIManagerSubsystem::UnregisterLayout(ULayout* Layout)
@@ -62,11 +76,6 @@ void UUIManagerSubsystem::UnregisterLayout(ULayout* Layout)
     if (ActiveLayout.Get() == Layout)
     {
         ActiveLayout.Reset();
-    }
-
-    if (UEventSubsystem* EventSubsystem = GetGameInstance()->GetSubsystem<UEventSubsystem>())
-    {
-        EventSubsystem->UnregisterLayout(Layout);
     }
 }
 
@@ -193,22 +202,35 @@ void UUIManagerSubsystem::HandleArtistListChanged()
     });
 }
 
+void UUIManagerSubsystem::HandleNewsEvent(const FMusicNewsEvent& EventData)
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, EventData]()
+        {
+            if (UUIManagerSubsystem* Self = WeakThis.Get())
+            {
+                Self->HandleNewsEvent(EventData);
+            }
+        });
+        return;
+    }
+
+    if (ULayout* Layout = ActiveLayout.Get())
+    {
+        Layout->AddNewsCardToFeed(EventData);
+    }
+    else
+    {
+        PendingNewsEvents.Add(EventData);
+    }
+}
+
 void UUIManagerSubsystem::HandleNewsEventGenerated(const FMusicNewsEvent& EventData)
 {
-    const TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
-
-    AsyncTask(ENamedThreads::GameThread, [WeakThis, EventData]()
-    {
-        if (UUIManagerSubsystem* Self = WeakThis.Get())
-        {
-            UE_LOG(LogTemp, Display, TEXT("Get UUIManagerSubsystem success!"));
-            if (ULayout* Layout = Self->ActiveLayout.Get())
-            {
-                UE_LOG(LogTemp, Display, TEXT("Get Layout success!"));
-                Layout->AddNewsCardToFeed(EventData);
-            }
-        }
-    });
+    HandleNewsEvent(EventData);
 }
 
 void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
