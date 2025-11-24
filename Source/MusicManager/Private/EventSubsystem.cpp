@@ -1,6 +1,6 @@
 // File: Private/EventSubsystem.cpp
 #include "EventSubsystem.h"
-
+#include "Layout.h"
 #include "Async/Async.h"
 #include "Engine/GameInstance.h"
 #include "GameTimeSubsystem.h"
@@ -91,13 +91,13 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
 
 UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
 {
-    UE_LOG(LogTemp, Display, TEXT("Get GameTimeSubsyste"));
+    UE_LOG(LogTemp, Display, TEXT("Try to Get GameTimeSubsysten"));
 
     if (UGameTimeSubsystem* Existing = GameTimeSubsystem.Get())
     {
         return Existing;
     }
-
+    UE_LOG(LogTemp, Display, TEXT("Try to create GameTimeSubsysten"));
     if (UGameInstance* GameInstance = GetGameInstance())
     {
         UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>();
