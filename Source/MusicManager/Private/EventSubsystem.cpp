@@ -99,11 +99,18 @@ UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
         return Existing;
     }
     UE_LOG(LogTemp, Display, TEXT("Try to create GameTimeSubsysten"));
-    if (UGameInstance* GameInstance = GetGameInstance())
+    UGameInstance* GameInstance = GetGameInstance();
+    if (GameInstance)
     {
         UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>();
+        UE_LOG(LogTemp, Warning, TEXT("TimeSubsystem pointer = %s"),
+            TimeSubsystem ? TEXT("VALID") : TEXT("NULL"));
         GameTimeSubsystem = TimeSubsystem;
         return TimeSubsystem;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("GameInstance=null"));
     }
 
     return nullptr;
