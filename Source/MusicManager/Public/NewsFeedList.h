@@ -3,7 +3,6 @@
 
 #include "Blueprint/UserWidget.h"
 #include "EventSubsystem.h"
-#include "GameTimeSubsystem.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "NewsFeedList.generated.h"
 
@@ -35,10 +34,6 @@ public:
     UFUNCTION(BlueprintCallable, Category="News")
     bool MoveNewsCardToTop(UEventTickerWidget* Card);
 
-    /** Responds to the centralized time system whenever a new month begins. */
-    UFUNCTION()
-    void HandleMonthAdvanced(const FDateTime& NewDate);
-
 protected:
     UPROPERTY(meta=(BindWidget))
     UVerticalBox* FeedContainer;
@@ -47,6 +42,4 @@ protected:
     TSubclassOf<class UEventTickerWidget> EventTickerWidgetClass;
 
 private:
-    /** Cached pointer to the time subsystem so we can safely unsubscribe on teardown. */
-    TWeakObjectPtr<UGameTimeSubsystem> TimeSubsystemWeak;
 };

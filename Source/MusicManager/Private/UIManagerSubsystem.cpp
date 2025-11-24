@@ -12,6 +12,11 @@ void UUIManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
+    if (UEventSubsystem* EventSubsystem = GetGameInstance()->GetSubsystem<UEventSubsystem>())
+    {
+        EventSubsystem->OnNewsEventGenerated.AddDynamic(this, &UUIManagerSubsystem::HandleNewsEventGenerated);
+    }
+
     if (UArtistManagerSubsystem* Artist = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
     {
         Artist->OnArtistSigned.AddDynamic(this, &UUIManagerSubsystem::HandleArtistSigned);
@@ -21,6 +26,11 @@ void UUIManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UUIManagerSubsystem::Deinitialize()
 {
+    if (UEventSubsystem* EventSubsystem = GetGameInstance()->GetSubsystem<UEventSubsystem>())
+    {
+        EventSubsystem->OnNewsEventGenerated.RemoveDynamic(this, &UUIManagerSubsystem::HandleNewsEventGenerated);
+    }
+
     if (UArtistManagerSubsystem* Artist = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
     {
         Artist->OnArtistSigned.RemoveDynamic(this, &UUIManagerSubsystem::HandleArtistSigned);
@@ -169,6 +179,22 @@ void UUIManagerSubsystem::HandleArtistListChanged()
          
             Layout->RefreshSignedArtists(ArtistDataList);
             UE_LOG(LogTemp, Display, TEXT("Refresh panel Done"));
+        }
+    });
+}
+
+void UUIManagerSubsystem::HandleNewsEventGenerated(const FMusicNewsEvent& EventData)
+{
+    const TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+
+    AsyncTask(ENamedThreads::GameThread, [WeakThis, EventData]()
+    {
+        if (UUIManagerSubsystem* Self = WeakThis.Get())
+        {
+            if (ULayout* Layout = Self->ActiveLayout.Get())
+            {
+                Layout->AddNewsCardToFeed(EventData);
+            }
         }
     });
 }
