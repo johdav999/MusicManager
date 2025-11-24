@@ -4,63 +4,39 @@
 #include "Blueprint/UserWidget.h"
 #include "EventTickerWidget.h"
 #include "Layout.h"
-#include "Engine/World.h"
-#include "Math/UnrealMathUtility.h"
-#include "TimerManager.h"
 #include "Async/Async.h"
+#include "Engine/World.h"
+#include "GameTimeSubsystem.h"
 
 DEFINE_LOG_CATEGORY(LogEventSubsystem);
-
-namespace
-{
-    constexpr float MinTickInterval = 0.1f;
-    constexpr float MaxTickInterval = 60.0f;
-}
 
 void UEventSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    if (!WorldInitHandle.IsValid())
+    if (UGameTimeSubsystem* GameTime = GetOrCreateGameTimeSubsystem())
     {
-        WorldInitHandle = FWorldDelegates::OnPostWorldInitialization.AddUObject(this, &UEventSubsystem::HandlePostWorldInit);
-        UE_LOG(LogEventSubsystem, Display, TEXT("Bound to OnPostWorldInitialization."));
-    }
+        GameTime->OnMonthAdvanced.AddDynamic(this, &UEventSubsystem::HandleMonthAdvanced);
+        UE_LOG(LogEventSubsystem, Display, TEXT("Subscribed to OnMonthAdvanced from UGameTimeSubsystem."));
 
-    if (!WorldCleanupHandle.IsValid())
-    {
-        WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(this, &UEventSubsystem::HandleWorldCleanup);
-        UE_LOG(LogEventSubsystem, Display, TEXT("Bound to OnWorldCleanup."));
+        ProcessMonthAdvanced(GameTime->GetCurrentGameDate());
     }
-
-    if (UWorld* CurrentWorld = GetWorld())
+    else
     {
-        if (CurrentWorld->IsGameWorld() && IsSameGameInstanceWorld(*CurrentWorld))
-        {
-            StartTimerForWorld(CurrentWorld);
-        }
+        UE_LOG(LogEventSubsystem, Warning, TEXT("Unable to subscribe to UGameTimeSubsystem; event updates will be inactive."));
     }
 }
 
 void UEventSubsystem::Deinitialize()
 {
-    StopTimer();
-
-    if (WorldInitHandle.IsValid())
+    if (UGameTimeSubsystem* GameTime = GameTimeSubsystem.Get())
     {
-        FWorldDelegates::OnPostWorldInitialization.Remove(WorldInitHandle);
-        WorldInitHandle = FDelegateHandle();
-    }
-
-    if (WorldCleanupHandle.IsValid())
-    {
-        FWorldDelegates::OnWorldCleanup.Remove(WorldCleanupHandle);
-        WorldCleanupHandle = FDelegateHandle();
+        GameTime->OnMonthAdvanced.RemoveDynamic(this, &UEventSubsystem::HandleMonthAdvanced);
     }
 
     LayoutWeak.Reset();
     ChildWeak.Reset();
-    CachedWorld.Reset();
+    GameTimeSubsystem.Reset();
 
     Super::Deinitialize();
 }
@@ -109,31 +85,6 @@ void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
     ChildWeak.Reset();
 }
 
-void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues IVS)
-{
-    (void)IVS;
-    if (!InWorld || !InWorld->IsGameWorld())
-    {
-        return;
-    }
-
-    if (!IsSameGameInstanceWorld(*InWorld))
-    {
-        return;
-    }
-
-    if (CachedWorld.IsValid() && CachedWorld.Get() != InWorld)
-    {
-        StopTimer();
-        CachedWorld.Reset();
-    }
-
-    UE_LOG(LogEventSubsystem, Verbose, TEXT("Post world initialization for %s."), *InWorld->GetName());
-
-    StartTimerForWorld(InWorld);
-    SendDummyNews();
-}
-
 void UEventSubsystem::SendDummyNews()
 {
 
@@ -141,7 +92,11 @@ void UEventSubsystem::SendDummyNews()
     {
         FMusicNewsEvent Dummy;
         Dummy.NewsId = FGuid::NewGuid();
-        Dummy.Timestamp = FDateTime::Now();
+        Dummy.Timestamp = FDateTime();
+        if (UGameTimeSubsystem* GameTime = GetOrCreateGameTimeSubsystem())
+        {
+            Dummy.Timestamp = GameTime->GetCurrentGameDate();
+        }
         Dummy.NewsType = EMusicNewsType::NewUpcomingArtistPerforming;
         Dummy.SourceName = TEXT("The Wild Beats");
         Dummy.SubjectName = TEXT("New Artist");
@@ -163,103 +118,45 @@ void UEventSubsystem::SendDummyNews()
     }
 }
 
-void UEventSubsystem::HandleWorldCleanup(UWorld* InWorld, bool /*bSessionEnded*/, bool /*bCleanupResources*/)
+void UEventSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 {
-    if (!InWorld || !InWorld->IsGameWorld())
+    if (!IsInGameThread())
     {
-        return;
-    }
-
-    if (!IsSameGameInstanceWorld(*InWorld))
-    {
-        return;
-    }
-
-    if (CachedWorld.IsValid() && CachedWorld.Get() == InWorld)
-    {
-        UE_LOG(LogEventSubsystem, Verbose, TEXT("World cleanup for %s."), *InWorld->GetName());
-        StopTimer();
-        CachedWorld.Reset();
-        ChildWeak.Reset();
-        LayoutWeak.Reset();
-    }
-}
-
-void UEventSubsystem::StartTimerForWorld(UWorld* InWorld)
-{
-    if (!InWorld || !InWorld->IsGameWorld())
-    {
-        return;
-    }
-
-    if (!IsSameGameInstanceWorld(*InWorld))
-    {
-        return;
-    }
-
-    const float ClampedInterval = FMath::Clamp(TickIntervalSeconds, MinTickInterval, MaxTickInterval);
-    if (!FMath::IsNearlyEqual(ClampedInterval, TickIntervalSeconds))
-    {
-        TickIntervalSeconds = ClampedInterval;
-    }
-
-    FTimerManager& TimerManager = InWorld->GetTimerManager();
-    TimerManager.SetTimer(EventTimerHandle, this, &UEventSubsystem::OnTimerTick, ClampedInterval, true);
-
-    CachedWorld = InWorld;
-
-    UE_LOG(LogEventSubsystem, Display, TEXT("Started timer for world %s (interval %.2f seconds)."), *InWorld->GetName(), ClampedInterval);
-}
-
-void UEventSubsystem::StopTimer()
-{
-    if (UWorld* World = CachedWorld.Get())
-    {
-        if (World->IsGameWorld())
-        {
-            FTimerManager& TimerManager = World->GetTimerManager();
-            if (TimerManager.TimerExists(EventTimerHandle) || TimerManager.IsTimerActive(EventTimerHandle))
+        const TWeakObjectPtr<UEventSubsystem> WeakThis = this;
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, NewDate]()
             {
-                TimerManager.ClearTimer(EventTimerHandle);
-                UE_LOG(LogEventSubsystem, Display, TEXT("Stopped timer for world %s."), *World->GetName());
-            }
-            else
-            {
-                TimerManager.ClearTimer(EventTimerHandle);
-            }
-        }
-    }
-
-    EventTimerHandle.Invalidate();
-}
-
-void UEventSubsystem::OnTimerTick()
-{
-    check(IsInGameThread());
-
-    UE_LOG(LogEventSubsystem, Verbose, TEXT("Event subsystem tick."));
-
-    UWorld* World = CachedWorld.Get();
-    if (!IsValid(World) || !World->IsGameWorld())
-    {
-        UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping tick due to invalid world."));
-        StopTimer();
-        CachedWorld.Reset();
-        ChildWeak.Reset();
+                if (UEventSubsystem* StrongThis = WeakThis.Get())
+                {
+                    StrongThis->ProcessMonthAdvanced(NewDate);
+                }
+            });
         return;
     }
+
+    ProcessMonthAdvanced(NewDate);
+}
+
+void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        return;
+    }
+
+    UE_LOG(LogEventSubsystem, Verbose, TEXT("Processing simulated date change to %s."), *NewDate.ToString());
 
     ULayout* Layout = LayoutWeak.Get();
     if (!IsValid(Layout))
     {
-        UE_LOG(LogEventSubsystem, Verbose, TEXT("No layout registered; skipping tick."));
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("No layout registered; skipping simulated date processing."));
         ChildWeak.Reset();
         return;
     }
 
-    if (Layout->GetWorld() != World)
+    UWorld* LayoutWorld = Layout->GetWorld();
+    if (!IsValid(LayoutWorld) || !LayoutWorld->IsGameWorld())
     {
-        UE_LOG(LogEventSubsystem, Verbose, TEXT("Layout world mismatch; skipping tick."));
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("Layout world invalid; skipping simulated date processing."));
         ChildWeak.Reset();
         return;
     }
@@ -277,8 +174,8 @@ void UEventSubsystem::OnTimerTick()
 
     if (UEventTickerWidget* Ticker = Cast<UEventTickerWidget>(Child))
     {
-        /*Ticker->OnEventSubsystemTick();
-        return;*/
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("Processed simulated date change for EventTickerWidget %s."), *Ticker->GetName());
+        return;
     }
 
     UE_LOG(LogEventSubsystem, Verbose, TEXT("Child widget %s is not an EventTickerWidget; skipping."), *Child->GetName());
@@ -306,4 +203,21 @@ UUserWidget* UEventSubsystem::ResolveChildWidget(ULayout& Layout)
 bool UEventSubsystem::IsSameGameInstanceWorld(const UWorld& World) const
 {
     return World.GetGameInstance() == GetGameInstance();
+}
+
+UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
+{
+    if (UGameTimeSubsystem* Existing = GameTimeSubsystem.Get())
+    {
+        return Existing;
+    }
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>();
+        GameTimeSubsystem = TimeSubsystem;
+        return TimeSubsystem;
+    }
+
+    return nullptr;
 }

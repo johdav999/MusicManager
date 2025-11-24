@@ -2,12 +2,12 @@
 #pragma once
 
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "TimerManager.h"
 #include "EventSubsystem.generated.h"
 
 class ULayout;
 class UUserWidget;
 class UWorld;
+class UGameTimeSubsystem;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogEventSubsystem, Log, All);
 
@@ -96,7 +96,7 @@ struct FMusicNewsEvent
 
 
 /**
- * Game-instance subsystem that periodically notifies a child widget on a registered layout widget.
+ * Game-instance subsystem that relays simulated time changes to a child widget on a registered layout widget.
  */
 UCLASS(Config=Game)
 class UEventSubsystem : public UGameInstanceSubsystem
@@ -114,22 +114,14 @@ public:
     void UnregisterLayout(ULayout* InLayout);
 
 
-    void HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues IVS);
     void SendDummyNews();
-    void HandleWorldCleanup(UWorld* InWorld, bool bSessionEnded, bool bCleanupResources);
-    void StartTimerForWorld(UWorld* InWorld);
-    void StopTimer();
-    void OnTimerTick();
+    UFUNCTION()
+    void HandleMonthAdvanced(const FDateTime& NewDate);
     UUserWidget* ResolveChildWidget(ULayout& Layout);
     bool IsSameGameInstanceWorld(const UWorld& World) const;
 
-    TWeakObjectPtr<UWorld> CachedWorld;
-    FTimerHandle EventTimerHandle;
-    FDelegateHandle WorldInitHandle;
-    FDelegateHandle WorldCleanupHandle;
-
-    UPROPERTY(EditAnywhere, Config, meta=(ClampMin="0.1", ClampMax="60.0"))
-    float TickIntervalSeconds = 5.0f;
+    void ProcessMonthAdvanced(const FDateTime& NewDate);
+    UGameTimeSubsystem* GetOrCreateGameTimeSubsystem();
 
     UPROPERTY(EditAnywhere, Config)
     FName ChildWidgetName = TEXT("EventTicker");
@@ -140,4 +132,6 @@ public:
     TWeakObjectPtr<ULayout> LayoutWeak;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TWeakObjectPtr<UUserWidget> ChildWeak;
+
+    TWeakObjectPtr<UGameTimeSubsystem> GameTimeSubsystem;
 };
