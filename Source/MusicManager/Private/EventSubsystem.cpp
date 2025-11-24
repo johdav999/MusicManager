@@ -85,30 +85,30 @@ void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
     ChildWeak.Reset();
 }
 
-void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues IVS)
-{
-    (void)IVS;
-    if (!InWorld || !InWorld->IsGameWorld())
-    {
-        return;
-    }
-
-    if (!IsSameGameInstanceWorld(*InWorld))
-    {
-        return;
-    }
-
-    if (CachedWorld.IsValid() && CachedWorld.Get() != InWorld)
-    {
-        StopTimer();
-        CachedWorld.Reset();
-    }
-
-    UE_LOG(LogEventSubsystem, Verbose, TEXT("Post world initialization for %s."), *InWorld->GetName());
-
-    StartTimerForWorld(InWorld);
-   // SendDummyNews();
-}
+//void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues IVS)
+//{
+//    (void)IVS;
+//    if (!InWorld || !InWorld->IsGameWorld())
+//    {
+//        return;
+//    }
+//
+//    if (!IsSameGameInstanceWorld(*InWorld))
+//    {
+//        return;
+//    }
+//
+//    if (CachedWorld.IsValid() && CachedWorld.Get() != InWorld)
+//    {
+//        StopTimer();
+//        CachedWorld.Reset();
+//    }
+//
+//    UE_LOG(LogEventSubsystem, Verbose, TEXT("Post world initialization for %s."), *InWorld->GetName());
+//
+//    StartTimerForWorld(InWorld);
+//   // SendDummyNews();
+//}
 
 //void UEventSubsystem::SendDummyNews()
 //{
