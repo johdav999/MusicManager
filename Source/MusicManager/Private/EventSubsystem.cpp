@@ -53,6 +53,29 @@ void UEventSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
     ProcessMonthAdvanced(NewDate);
 }
 
+void UEventSubsystem::RegisterLayout(ULayout* InLayout)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        return;
+    }
+
+    LayoutWeak = InLayout;
+}
+
+void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        return;
+    }
+
+    if (LayoutWeak.Get() == InLayout)
+    {
+        LayoutWeak.Reset();
+    }
+}
+
 void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
 {
     if (!ensure(IsInGameThread()))
