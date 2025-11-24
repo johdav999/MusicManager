@@ -121,7 +121,7 @@ public:
 private:
     void ProcessMonthAdvanced(const FDateTime& NewDate);
     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
-
+    UPROPERTY()
     TWeakObjectPtr<ULayout> LayoutWeak;
     TWeakObjectPtr<UGameTimeSubsystem> GameTimeSubsystem;
 

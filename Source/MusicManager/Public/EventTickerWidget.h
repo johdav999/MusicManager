@@ -78,5 +78,6 @@ private:
 
     EMusicNewsType CurrentNewsType = EMusicNewsType::None;
 
+    UPROPERTY()
     TWeakObjectPtr<ULayout> LayoutRef;
 };

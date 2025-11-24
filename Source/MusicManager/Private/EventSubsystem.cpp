@@ -91,6 +91,8 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
 
 UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
 {
+    UE_LOG(LogTemp, Display, TEXT("Get GameTimeSubsyste"));
+
     if (UGameTimeSubsystem* Existing = GameTimeSubsystem.Get())
     {
         return Existing;

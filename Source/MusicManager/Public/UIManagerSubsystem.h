@@ -76,6 +76,7 @@ private:
     TSubclassOf<ULayout> LayoutClass;
 
     /** Weak pointer to the active layout to avoid ownership over widgets. */
+    UPROPERTY()
     TWeakObjectPtr<ULayout> ActiveLayout;
 
     template<typename Func>
