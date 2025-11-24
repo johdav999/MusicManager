@@ -1,10 +1,10 @@
 // File: Private/EventSubsystem.cpp
 #include "EventSubsystem.h"
-#include "Layout.h"
 #include "Async/Async.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameTimeSubsystem.h"
+#include "UIManagerSubsystem.h"
 
 DEFINE_LOG_CATEGORY(LogEventSubsystem);
 
@@ -121,6 +121,13 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
     UE_LOG(LogEventSubsystem, Verbose, TEXT("Processing simulated date change to %s."), *NewDate.ToString());
 
     const FMusicNewsEvent NewEvent = BuildMonthlyNews(NewDate);
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+        {
+            UI->HandleNewsEvent(NewEvent);
+        }
+    }
     OnNewsEventGenerated.Broadcast(NewEvent);
 }
 

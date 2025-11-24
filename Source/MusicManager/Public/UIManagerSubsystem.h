@@ -27,10 +27,15 @@ public:
 
     /** Register the currently active layout so UI actions can be routed appropriately. */
     UFUNCTION(BlueprintCallable, Category="UI")
-    void RegisterLayout(ULayout* InLayout);
+    void RegisterLayout(ULayout* Layout);
 
     /** Unregister the current layout when it's no longer active. */
     void UnregisterLayout(ULayout* Layout);
+
+    /** Route or buffer news events until the layout is ready. */
+    void HandleNewsEvent(const FMusicNewsEvent& EventData);
+
+    bool IsLayoutAvailable() const { return ActiveLayout.IsValid(); }
 
     /** Displays the audition window for the supplied event data. */
     UFUNCTION(BlueprintCallable, Category="UI")
@@ -78,6 +83,10 @@ private:
     /** Weak pointer to the active layout to avoid ownership over widgets. */
     UPROPERTY()
     TWeakObjectPtr<ULayout> ActiveLayout;
+
+    /** News events received before the layout exists */
+    UPROPERTY()
+    TArray<FMusicNewsEvent> PendingNewsEvents;
 
     template<typename Func>
     void ExecuteOnGameThread(Func&& Lambda)
