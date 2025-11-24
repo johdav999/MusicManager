@@ -141,6 +141,10 @@ UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
                 return TimeSubsystem;
             }
         }
+  }
+    else
+    {
+        UE_LOG(LogTemp, Display, TEXT("GameInstance=null"));
     }
 
     return nullptr;
