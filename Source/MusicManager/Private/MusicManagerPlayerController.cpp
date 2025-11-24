@@ -49,7 +49,7 @@ void AMusicManagerPlayerController::BeginPlay()
         if (UEventSubsystem* EventSubsystem = GameInstance->GetSubsystem<UEventSubsystem>())
         {
             EventSubsystem->RegisterLayout(LayoutInstance);
-			EventSubsystem->SendDummyNews();
+			//EventSubsystem->SendDummyNews();
         }
         
         FInputModeGameAndUI InputMode;

@@ -85,38 +85,59 @@ void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
     ChildWeak.Reset();
 }
 
-void UEventSubsystem::SendDummyNews()
+void UEventSubsystem::HandlePostWorldInit(UWorld* InWorld, const UWorld::InitializationValues IVS)
 {
-
-    if (LayoutWeak.IsValid())
+    (void)IVS;
+    if (!InWorld || !InWorld->IsGameWorld())
     {
-        FMusicNewsEvent Dummy;
-        Dummy.NewsId = FGuid::NewGuid();
-        Dummy.Timestamp = FDateTime();
-        if (UGameTimeSubsystem* GameTime = GetOrCreateGameTimeSubsystem())
-        {
-            Dummy.Timestamp = GameTime->GetCurrentGameDate();
-        }
-        Dummy.NewsType = EMusicNewsType::NewUpcomingArtistPerforming;
-        Dummy.SourceName = TEXT("The Wild Beats");
-        Dummy.SubjectName = TEXT("New Artist");
-        Dummy.Headline = TEXT("New artist on the block!");
-        Dummy.BodyText = TEXT("Johnny Rocker performs at the Mug");
-        Dummy.Tags = { TEXT("Live"), TEXT("Rockabilly"), TEXT("Performance") };
-
-        const TWeakObjectPtr<ULayout> LocalLayoutWeak = LayoutWeak;
-        AsyncTask(ENamedThreads::GameThread, [LocalLayoutWeak, Dummy]()
-            {
-                if (ULayout* LayoutPtr = LocalLayoutWeak.Get())
-                {
-                    if (IsValid(LayoutPtr))
-                    {
-                        LayoutPtr->AddNewsCardToFeed(Dummy);
-                    }
-                }
-            });
+        return;
     }
+
+    if (!IsSameGameInstanceWorld(*InWorld))
+    {
+        return;
+    }
+
+    if (CachedWorld.IsValid() && CachedWorld.Get() != InWorld)
+    {
+        StopTimer();
+        CachedWorld.Reset();
+    }
+
+    UE_LOG(LogEventSubsystem, Verbose, TEXT("Post world initialization for %s."), *InWorld->GetName());
+
+    StartTimerForWorld(InWorld);
+   // SendDummyNews();
 }
+
+//void UEventSubsystem::SendDummyNews()
+//{
+//
+//    if (LayoutWeak.IsValid())
+//    {
+//        FMusicNewsEvent Dummy;
+//        Dummy.NewsId = FGuid::NewGuid();
+//        Dummy.Timestamp = FDateTime::Now();
+//        Dummy.NewsType = EMusicNewsType::NewUpcomingArtistPerforming;
+//        Dummy.SourceName = TEXT("The Wild Beats");
+//        Dummy.SubjectName = TEXT("New Artist");
+//        Dummy.Headline = TEXT("New artist on the block!");
+//        Dummy.BodyText = TEXT("Johnny Rocker performs at the Mug");
+//        Dummy.Tags = { TEXT("Live"), TEXT("Rockabilly"), TEXT("Performance") };
+//
+//        const TWeakObjectPtr<ULayout> LocalLayoutWeak = LayoutWeak;
+//        AsyncTask(ENamedThreads::GameThread, [LocalLayoutWeak, Dummy]()
+//            {
+//                if (ULayout* LayoutPtr = LocalLayoutWeak.Get())
+//                {
+//                    if (IsValid(LayoutPtr))
+//                    {
+//                        LayoutPtr->AddNewsCardToFeed(Dummy);
+//                    }
+//                }
+//            });
+//    }
+//}
 
 void UEventSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 {
