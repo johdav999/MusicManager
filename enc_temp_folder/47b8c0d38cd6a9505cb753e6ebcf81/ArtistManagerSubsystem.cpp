@@ -10,19 +10,7 @@ void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     ActiveContracts.Reset();
     ExpiredContracts.Reset();
-    static ConstructorHelpers::FObjectFinder<UDataTable> ArtistDataObj(
-        TEXT("/Game/Data/ArtistData.ArtistData")
-    );
 
-    if (ArtistDataObj.Succeeded())
-    {
-        ArtistDataTable = ArtistDataObj.Object;
-    }
-    else
-    {
-        ArtistDataTable = nullptr;
-        UE_LOG(LogTemp, Error, TEXT("Could not load ArtistData datatable at /Game/Data/ArtistData.ArtistData"));
-    }
     LoadArtistsFromDataTable();
 
     if (UGameInstance* GameInstance = GetGameInstance())
