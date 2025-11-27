@@ -174,8 +174,23 @@ void UUIManagerSubsystem::HandleNewsCardSelected(const FMusicNewsEvent& EventDat
 
 void UUIManagerSubsystem::HandleArtistSigned(const FArtistContract& Contract)
 {
+    const TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+
+    if (!IsInGameThread())
+    {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, Contract]()
+        {
+            if (UUIManagerSubsystem* Strong = WeakThis.Get())
+            {
+                Strong->HandleArtistSigned(Contract);
+            }
+        });
+        return;
+    }
+
     if (ULayout* Layout = ActiveLayout.Get())
     {
+        Layout->CloseAuditionWidget();
         Layout->ShowContract(Contract);
     }
 }

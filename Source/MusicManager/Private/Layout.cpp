@@ -265,6 +265,30 @@ void ULayout::ShowAuditionWidget()
     }
 }
 
+void ULayout::CloseAuditionWidget()
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (ULayout* Strong = WeakThis.Get())
+            {
+                Strong->CloseAuditionWidget();
+            }
+        });
+        return;
+    }
+
+    if (IsValid(AuditionWidget))
+    {
+        if (AuditionWidget->IsVisible())
+        {
+            AuditionWidget->SetVisibility(ESlateVisibility::Collapsed);
+        }
+    }
+}
+
 void ULayout::RefreshSignedArtists(const TArray<FArtistData>& Artists)
 {
     if (!IsValid(SignedArtistsPanel))
