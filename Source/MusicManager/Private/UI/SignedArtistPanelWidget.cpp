@@ -60,8 +60,8 @@ void USignedArtistPanelWidget::PopulateArtistList(const TArray<FArtistData>& Sig
 
         if (!Data.ImageAssetRef.IsEmpty())
         {
-            const FStringAssetReference Ref(Data.ImageAssetRef);
-            UObject* RawObj = Ref.TryLoad();
+            FSoftObjectPath SoftPath(Data.ImageAssetRef);
+            UObject* RawObj = SoftPath.TryLoad();
             LoadedTexture = Cast<UTexture2D>(RawObj);
         }
 
