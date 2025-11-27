@@ -20,6 +20,7 @@ class UArtistManagerSubsystem : public UGameInstanceSubsystem
     GENERATED_BODY()
 
 public:
+    UArtistManagerSubsystem();
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
     UFUNCTION(BlueprintCallable, Category="Artists")
