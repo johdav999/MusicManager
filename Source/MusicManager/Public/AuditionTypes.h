@@ -29,6 +29,9 @@ struct FArtistData : public FTableRowBase
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FString Genre = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ImageAssetRef = TEXT("");
 };
 
 USTRUCT(BlueprintType)
