@@ -7,6 +7,8 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSignedArtistClicked, FString, ArtistId);
 
+class UTexture2D;
+
 UCLASS()
 class MUSICMANAGER_API USignedArtistItemWidget : public UUserWidget
 {

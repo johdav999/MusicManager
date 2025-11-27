@@ -2,6 +2,8 @@
 
 #include "Async/Async.h"
 #include "Components/ScrollBox.h"
+#include "Engine/Texture2D.h"
+#include "UObject/SoftObjectPath.h"
 #include "UI/SignedArtistItemWidget.h"
 
 void USignedArtistPanelWidget::NativeConstruct()
@@ -54,7 +56,16 @@ void USignedArtistPanelWidget::PopulateArtistList(const TArray<FArtistData>& Sig
         USignedArtistItemWidget* Item = CreateWidget<USignedArtistItemWidget>(World, ItemClass);
         if (!IsValid(Item)) continue;
 
-        Item->SetupItem(Data, nullptr);
+        UTexture2D* LoadedTexture = nullptr;
+
+        if (!Data.ImageAssetRef.IsEmpty())
+        {
+            const FStringAssetReference Ref(Data.ImageAssetRef);
+            UObject* RawObj = Ref.TryLoad();
+            LoadedTexture = Cast<UTexture2D>(RawObj);
+        }
+
+        Item->SetupItem(Data, LoadedTexture);
 
         Item->OnArtistClicked.AddDynamic(this, &USignedArtistPanelWidget::HandleArtistItemClicked);
 

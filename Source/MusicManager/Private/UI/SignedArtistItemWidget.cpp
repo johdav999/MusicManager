@@ -3,6 +3,7 @@
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "Engine/Texture2D.h"
 
 void USignedArtistItemWidget::NativeConstruct()
 {
@@ -40,10 +41,14 @@ void USignedArtistItemWidget::SetupItem(const FArtistData& InData, UTexture2D* P
 
     if (IsValid(PortraitImage))
     {
-        FSlateBrush Brush;
-        Brush.SetResourceObject(PortraitTexture);
-        Brush.ImageSize = FVector2D(96.f, 96.f);
-        PortraitImage->SetBrush(Brush);
+        if (PortraitTexture)
+        {
+            PortraitImage->SetBrushFromTexture(PortraitTexture, true);
+        }
+        else
+        {
+            PortraitImage->SetBrushFromTexture(nullptr, true);
+        }
     }
 }
 
