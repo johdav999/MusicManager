@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/DataTable.h"
 #include "Sound/SoundWave.h" // REQUIRED for USTRUCT member TObjectPtr<USoundWave>
 #include "FSongData.generated.h"
 
@@ -8,7 +9,7 @@
  * Describes a single song entry within the music management simulation.
  */
 USTRUCT(BlueprintType)
-struct FSongData
+struct FSongData : public FTableRowBase
 {
     GENERATED_BODY()
 
@@ -34,6 +35,7 @@ public:
         , ReleaseYear(0)
         , ReleaseMonth(0)
         , bIsReleased(false)
+        , AssetRef(TEXT(""))
     {
     }
 
@@ -128,4 +130,8 @@ public:
     /** Flag indicating if the song has been released to the public. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Release")
     bool bIsReleased;
+
+    /** Optional asset reference used for loading sound, visuals, or metadata from soft references in data tables */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Assets")
+    FString AssetRef;
 };
