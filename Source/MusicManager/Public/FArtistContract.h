@@ -54,4 +54,8 @@ struct FArtistContract
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contract")
     float ProductionProgress = 0.f;
+
+    /** Persistent list of song identifiers authored by this artist. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contract")
+    TArray<FString> SongIds;
 };

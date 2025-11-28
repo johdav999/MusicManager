@@ -1,14 +1,19 @@
 #pragma once
 
+#include "AuditionTypes.h"
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "TimerManager.h"
 #include "MusicPlayerComponent.generated.h"
 
+class USong;
 class USoundBase;
 class UAudioComponent;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPerformanceFinished);
+
 /**
- * Actor component that manages a dedicated audio component so that Blueprints can easily play sounds on an actor.
+ * Actor component that can play a song (real or simulated) for auditions and performances.
  */
 UCLASS(ClassGroup = (Audio), meta = (BlueprintSpawnableComponent))
 class MUSICMANAGER_API UMusicPlayerComponent : public UActorComponent
@@ -20,48 +25,28 @@ public:
 
     virtual void BeginPlay() override;
 
-    /** Plays the assigned sound (or a sound set via SetSound) using the managed audio component. */
-    UFUNCTION(BlueprintCallable, Category = "Audio")
-    void Play();
+    UFUNCTION(BlueprintCallable, Category = "Music")
+    void PlaySong(USong* Song, const FArtistData& Artist);
 
-    /** Stops any sound currently playing on the managed audio component. */
-    UFUNCTION(BlueprintCallable, Category = "Audio")
+    UFUNCTION(BlueprintCallable, Category = "Music")
+    void PlayImprovisedPerformance(const FArtistData& Artist);
+
+    UFUNCTION(BlueprintCallable, Category = "Music")
     void Stop();
 
-    /** Assigns a new sound to play. The sound will automatically be used for future Play calls. */
-    UFUNCTION(BlueprintCallable, Category = "Audio")
-    void SetSound(USoundBase* InSound);
-
-    /** Returns true when the managed audio component is actively playing a sound. */
-    UFUNCTION(BlueprintPure, Category = "Audio")
+    UFUNCTION(BlueprintPure, Category = "Music")
     bool IsPlaying() const;
 
-    /** Provides access to the managed audio component for advanced Blueprint use cases. */
-    UFUNCTION(BlueprintPure, Category = "Audio")
-    UAudioComponent* GetAudioComponent() const { return AudioComponent; }
-
-    /** Sound that will be played when calling Play or automatically at BeginPlay if enabled. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
-    USoundBase* Sound;
-
-    /** When enabled, the component will start playing the assigned sound as soon as BeginPlay runs. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio")
-    bool bPlayOnBeginPlay;
-
-    /** Volume multiplier applied to the managed audio component. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (ClampMin = "0.0"))
-    float VolumeMultiplier;
-
-    /** Pitch multiplier applied to the managed audio component. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audio", meta = (ClampMin = "0.0"))
-    float PitchMultiplier;
+    UPROPERTY(BlueprintAssignable, Category = "Music")
+    FOnPerformanceFinished OnPerformanceFinished;
 
 protected:
-    /** Ensures that an audio component exists and is registered with the owning actor. */
     void InitializeAudioComponent();
+    void HandlePlayFinished();
 
 private:
-    /** Audio component used to actually play the requested sound. */
-    UPROPERTY(Transient)
+    UPROPERTY()
     UAudioComponent* AudioComponent;
+
+    FTimerHandle SimulatedPlaybackHandle;
 };

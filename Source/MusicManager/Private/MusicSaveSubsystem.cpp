@@ -43,7 +43,7 @@ void UMusicSaveSubsystem::SaveGame(const FString& SlotName)
     {
         if (USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>())
         {
-            SongManager->SaveState(SaveObject);
+            SongManager->SerializeForSave(SaveObject->SavedSongs);
         }
 
         if (UArtistManagerSubsystem* ArtistManager = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
@@ -96,7 +96,7 @@ void UMusicSaveSubsystem::LoadGame(const FString& SlotName)
     {
         if (USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>())
         {
-            SongManager->LoadState(SaveObject);
+            SongManager->DeserializeFromSave(SaveObject->SavedSongs);
         }
 
         if (UArtistManagerSubsystem* ArtistManager = GameInstance->GetSubsystem<UArtistManagerSubsystem>())

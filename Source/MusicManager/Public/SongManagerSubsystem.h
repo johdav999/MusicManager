@@ -1,14 +1,29 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "FSongData.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "SongManagerSubsystem.generated.h"
 
 class USong;
-class UMusicSaveGame;
+
+USTRUCT()
+struct FSongSaveRecord
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    FString SongId;
+
+    UPROPERTY()
+    FString ArtistId;
+
+    UPROPERTY()
+    FSongData Data;
+};
 
 /**
- * Subsystem that owns and simulates all song instances for the project.
+ * Thread-safe registry and factory for all song instances in the game.
  */
 UCLASS()
 class MUSICMANAGER_API USongManagerSubsystem : public UGameInstanceSubsystem
@@ -16,58 +31,28 @@ class MUSICMANAGER_API USongManagerSubsystem : public UGameInstanceSubsystem
     GENERATED_BODY()
 
 public:
-    // UGameInstanceSubsystem interface
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
-    // Create a new song owned by an artist.
+    /** Create a song for an artist using the provided data payload. */
     UFUNCTION(BlueprintCallable, Category = "Songs")
-    USong* CreateSong(const FString& ArtistId, const FString& SongName, const FString& Genre);
+    USong* CreateSong(const FString& ArtistId, const FSongData& Data);
 
-    // Mark a song as released at a specific date.
+    /** Lookup a song by its identifier. */
     UFUNCTION(BlueprintCallable, Category = "Songs")
-    void ReleaseSong(USong* Song, const FDateTime& ReleaseDate);
+    USong* GetSongById(const FString& InSongId) const;
 
-    // Handle monthly time advancement from UGameTimeSubsystem.
-    UFUNCTION()
-    void HandleMonthAdvanced(const FDateTime& NewDate);
-
-    // Query helpers for UI and gameplay.
+    /** Fetch all songs authored by the specified artist. */
     UFUNCTION(BlueprintCallable, Category = "Songs")
-    TArray<USong*> GetTopSongs(int32 Count) const;
+    void GetSongsForArtist(const FString& ArtistId, TArray<USong*>& OutSongs) const;
 
-    UFUNCTION(BlueprintCallable, Category = "Songs")
-    TArray<USong*> GetSongsByArtist(const FString& ArtistId) const;
+    /** Serialize the registry for a save game. */
+    void SerializeForSave(TArray<FSongSaveRecord>& OutRecords) const;
 
-    // Serialization helpers
-    void SaveState(UMusicSaveGame* SaveObject);
-    void LoadState(const UMusicSaveGame* SaveObject);
-
-    // Access to all active songs (read-only).
-    const TArray<TObjectPtr<USong>>& GetAllActiveSongs() const
-    {
-        ensure(IsInGameThread());
-        return ActiveSongs;
-    }
-
-    // Delegate fired when a song is released (for NewsFeed, UI, etc.).
-    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSongReleased, USong*, Song);
-
-    UPROPERTY(BlueprintAssignable, Category = "Events")
-    FOnSongReleased OnSongReleased;
+    /** Restore the registry from saved data. */
+    void DeserializeFromSave(const TArray<FSongSaveRecord>& Records);
 
 private:
-    // Songs currently active in the simulation (charting / relevant).
     UPROPERTY()
-    TArray<TObjectPtr<USong>> ActiveSongs;
-
-    // Songs that have fallen out of relevance / archived.
-    UPROPERTY()
-    TArray<TObjectPtr<USong>> ArchivedSongs;
-
-    // Internal helper to update popularity and chart stats.
-    void UpdateSongForNewMonth(USong* Song);
-
-    // Internal helper to move a song to archive.
-    void ArchiveSong(USong* Song);
+    TMap<FString, TObjectPtr<USong>> Songs;
 };

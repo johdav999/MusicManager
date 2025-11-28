@@ -1,19 +1,21 @@
 #include "AuditionEventActor.h"
 
+#include "ArtistManagerSubsystem.h"
 #include "Async/Async.h"
-#include "EventSubsystem.h"
-#include "Layout.h"
-#include "UIManagerSubsystem.h"
+#include "MusicPlayerComponent.h"
+#include "SongManagerSubsystem.h"
+#include "Song.h"
+#include "Math/UnrealMathUtility.h"
 
 AAuditionEventActor::AAuditionEventActor()
 {
     PrimaryActorTick.bCanEverTick = false;
-    ActiveWidget = nullptr;
+
+    MusicPlayer = CreateDefaultSubobject<UMusicPlayerComponent>(TEXT("MusicPlayer"));
 }
 
 void AAuditionEventActor::StartAudition()
 {
-    // Always marshal to the game thread before touching UObjects that live on the UI tree.
     if (!IsInGameThread())
     {
         const TWeakObjectPtr<AAuditionEventActor> WeakThis(this);
@@ -27,91 +29,100 @@ void AAuditionEventActor::StartAudition()
         return;
     }
 
+    if (!MusicPlayer)
+    {
+        MusicPlayer = NewObject<UMusicPlayerComponent>(this, TEXT("MusicPlayerRuntime"));
+    }
+
     UWorld* World = GetWorld();
-    if (!IsValid(World))
+    if (!World)
     {
         return;
     }
 
     UGameInstance* GameInstance = World->GetGameInstance();
-    if (GameInstance == nullptr)
+    if (!GameInstance)
     {
         return;
     }
 
-    UEventSubsystem* EventSubsystem = GameInstance->GetSubsystem<UEventSubsystem>();
-    if (!IsValid(EventSubsystem))
+    UArtistManagerSubsystem* ArtistManager = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
+    USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>();
+
+    if (!ArtistManager || !SongManager)
     {
         return;
     }
 
-    ULayout* Layout = EventSubsystem->LayoutWeak.Get();
-    if (!IsValid(Layout))
+    FArtistData Artist;
+    if (!ArtistManager->GetNextUnsignedArtist(Artist))
     {
         return;
     }
 
-    // Reuse the audition widget bound inside the layout instead of spawning a new one.
-    UAuditionWidget* LayoutAuditionWidget = Layout->GetAuditionWidget();
-    if (!IsValid(LayoutAuditionWidget))
+    CurrentArtistId = Artist.ArtistName;
+
+    TArray<USong*> ArtistSongs;
+    SongManager->GetSongsForArtist(CurrentArtistId, ArtistSongs);
+
+    if (ArtistSongs.Num() > 0)
     {
-        return;
+        CurrentSong = ArtistSongs[FMath::RandRange(0, ArtistSongs.Num() - 1)];
+    }
+    else
+    {
+        FSongData ImprovisedData;
+        ImprovisedData.SongName = FString::Printf(TEXT("%s – Live Improvisation"), *Artist.ArtistName);
+        ImprovisedData.Genre = Artist.Genre;
+
+        CurrentSong = SongManager->CreateSong(CurrentArtistId, ImprovisedData);
     }
 
-    ActiveWidget = LayoutAuditionWidget;
-
-    // Push the audition data to the widget so the UI stays in sync with this actor.
-    ActiveWidget->AuditionData = AuditionData;
-
-    // Ensure the widget is visible before interacting with it.
-    if (ActiveWidget->GetVisibility() != ESlateVisibility::Visible)
+    if (MusicPlayer && !MusicPlayer->OnPerformanceFinished.IsAlreadyBound(this, &AAuditionEventActor::HandlePerformanceFinished))
     {
-        ActiveWidget->SetVisibility(ESlateVisibility::Visible);
+        MusicPlayer->OnPerformanceFinished.AddDynamic(this, &AAuditionEventActor::HandlePerformanceFinished);
     }
 
-    // Bind delegates only once to avoid duplicate callbacks when the widget is reused.
-    if (!ActiveWidget->OnSignArtist.IsAlreadyBound(this, &AAuditionEventActor::HandleSignArtist))
+    if (MusicPlayer)
     {
-        ActiveWidget->OnSignArtist.AddDynamic(this, &AAuditionEventActor::HandleSignArtist);
+        if (USong* Song = CurrentSong.Get())
+        {
+            MusicPlayer->PlaySong(Song, Artist);
+        }
+        else
+        {
+            MusicPlayer->PlayImprovisedPerformance(Artist);
+        }
     }
 
-    if (!ActiveWidget->OnPass.IsAlreadyBound(this, &AAuditionEventActor::HandlePassOnArtist))
-    {
-        ActiveWidget->OnPass.AddDynamic(this, &AAuditionEventActor::HandlePassOnArtist);
-    }
+    BeginPerformanceScoring(Artist, CurrentSong.Get());
 }
 
 void AAuditionEventActor::FinalizeDeal(bool bAcceptDeal)
 {
     AuditionData.bSignedArtist = bAcceptDeal;
     AuditionData.Outcome = bAcceptDeal ? TEXT("Deal Accepted") : TEXT("Deal Rejected");
-
-    if (ActiveWidget)
-    {
-        ActiveWidget->AuditionData = AuditionData;
-        ActiveWidget->SetVisibility(ESlateVisibility::Hidden);
-    }
-
-    if (UWorld* World = GetWorld())
-    {
-        if (UGameInstance* GameInstance = World->GetGameInstance())
-        {
-            if (UUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>())
-            {
-                UIManager->HandleAuditionResult(bAcceptDeal);
-            }
-        }
-    }
-
     OnNegotiationUpdated.Broadcast();
 }
 
-void AAuditionEventActor::HandleSignArtist()
+void AAuditionEventActor::BeginPerformanceScoring(const FArtistData& /*Artist*/, USong* /*Song*/)
 {
-    FinalizeDeal(true);
+    // Placeholder for gameplay tuning. Hook into analytics or scoring logic here.
 }
 
-void AAuditionEventActor::HandlePassOnArtist()
+void AAuditionEventActor::HandlePerformanceFinished()
 {
-    FinalizeDeal(false);
+    FinalizePerformance();
+}
+
+void AAuditionEventActor::FinalizePerformance()
+{
+    FinalizePerformanceResults();
+}
+
+void AAuditionEventActor::FinalizePerformanceResults()
+{
+    // update ArtistManagerSubsystem with scoring results
+    // increase stage presence, fan engagement, etc.
+    // trigger news/event subsystem if it exists
 }

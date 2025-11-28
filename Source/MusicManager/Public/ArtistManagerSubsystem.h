@@ -13,6 +13,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnContractsUpdated, const TArray<FA
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnArtistListChanged);
 
 class UMusicSaveGame;
+class USong;
+struct FSongData;
 
 UCLASS()
 class UArtistManagerSubsystem : public UGameInstanceSubsystem
@@ -31,6 +33,12 @@ public:
 
     UFUNCTION(BlueprintCallable, Category="Artists")
     void RotateUnsignedArtist();
+
+    USong* CreateSongForArtist(const FString& ArtistId, const FSongData& Data);
+
+    void GetSongsForArtist(const FString& ArtistId, TArray<USong*>& OutSongs) const;
+
+    void RegisterSongToArtist(const FString& ArtistId, const FString& SongId);
 
     UFUNCTION(BlueprintCallable, Category="Artists")
     void LoadArtistsFromDataTable();

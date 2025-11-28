@@ -1,324 +1,210 @@
 #include "SongManagerSubsystem.h"
 
-#include "Algo/Sort.h"
+#include "Async/Async.h"
 #include "Engine/GameInstance.h"
-#include "Engine/World.h"
-#include "FSongData.h"
-#include "GameTimeSubsystem.h"
-#include "MusicSaveGame.h"
-#include "Math/UnrealMathUtility.h"
-#include "Misc/DateTime.h"
 #include "Song.h"
+#include "Misc/Guid.h"
+#include "HAL/PlatformProcess.h"
+
+namespace
+{
+USong* CreateSongInternal(USongManagerSubsystem* Subsystem, const FString& ArtistId, const FSongData& Data)
+{
+    if (!Subsystem || !IsInGameThread())
+    {
+        return nullptr;
+    }
+
+    UGameInstance* GameInstance = Subsystem->GetGameInstance();
+    UObject* Outer = GameInstance ? static_cast<UObject*>(GameInstance) : GetTransientPackage();
+
+    USong* NewSong = NewObject<USong>(Outer);
+    if (!NewSong)
+    {
+        return nullptr;
+    }
+
+    NewSong->Initialize(ArtistId, Data);
+    NewSong->SongId = FString::Printf(TEXT("SNG_%s"), *FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
+
+    return NewSong;
+}
+} // namespace
 
 void USongManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     ensure(IsInGameThread());
-
     Super::Initialize(Collection);
-
-    if (UGameInstance* GameInstance = GetGameInstance())
-    {
-        if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
-        {
-            // Listen for global month advancement events to drive popularity simulation.
-            TimeSubsystem->OnMonthAdvanced.AddDynamic(this, &USongManagerSubsystem::HandleMonthAdvanced);
-        }
-    }
+    Songs.Reset();
 }
 
 void USongManagerSubsystem::Deinitialize()
 {
     ensure(IsInGameThread());
-
-    if (UGameInstance* GameInstance = GetGameInstance())
-    {
-        if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
-        {
-            // Clean up bindings so the subsystem can be garbage collected correctly.
-            TimeSubsystem->OnMonthAdvanced.RemoveDynamic(this, &USongManagerSubsystem::HandleMonthAdvanced);
-        }
-    }
-
+    Songs.Reset();
     Super::Deinitialize();
 }
 
-USong* USongManagerSubsystem::CreateSong(const FString& ArtistId, const FString& SongName, const FString& Genre)
+USong* USongManagerSubsystem::CreateSong(const FString& ArtistId, const FSongData& Data)
 {
-    ensure(IsInGameThread());
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<USongManagerSubsystem> WeakThis(this);
+        TWeakObjectPtr<USong> CreatedSong;
+
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId, Data, &CreatedSong, SyncEvent]()
+        {
+            if (USongManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                CreatedSong = StrongThis->CreateSong(ArtistId, Data);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return CreatedSong.Get();
+    }
 
     if (!GetGameInstance())
     {
         return nullptr;
     }
 
-    // Use the time subsystem if available to stamp the creation year.
-    const int32 CurrentYear = [this]() -> int32
-    {
-        if (UGameInstance* GameInstance = GetGameInstance())
-        {
-            if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
-            {
-                return TimeSubsystem->GetCurrentGameDate().GetYear();
-            }
-        }
-        return FDateTime::Now().GetYear();
-    }();
-
-    // Construct the base data with a few randomized attributes for variety.
-    FSongData SongData;
-    SongData.SongName = SongName;
-    SongData.Genre = Genre;
-    SongData.YearCreated = CurrentYear;
-    SongData.HitPotential = FMath::FRandRange(40.f, 90.f);
-    SongData.Authenticity = FMath::FRandRange(30.f, 100.f);
-    SongData.LyricsQuality = FMath::FRandRange(20.f, 100.f);
-    SongData.Innovation = FMath::FRandRange(10.f, 90.f);
-    SongData.ProductionQuality = FMath::FRandRange(30.f, 95.f);
-    SongData.ArrangementQuality = FMath::FRandRange(25.f, 95.f);
-    SongData.Energy = FMath::FRandRange(10.f, 100.f);
-    SongData.Catchiness = FMath::FRandRange(20.f, 100.f);
-    SongData.TrendAlignment = FMath::FRandRange(10.f, 100.f);
-    SongData.Longevity = FMath::FRandRange(10.f, 100.f);
-    SongData.ViralPotential = FMath::FRandRange(0.f, 100.f);
-    SongData.CurrentPopularity = 0.f;
-    SongData.ChartWeeks = 0;
-
-    // UObjects must be created with NewObject so that the engine can manage their lifetime.
-    USong* NewSong = NewObject<USong>(GetGameInstance());
+    USong* NewSong = CreateSongInternal(this, ArtistId, Data);
     if (!NewSong)
     {
         return nullptr;
     }
 
-    NewSong->Initialize(ArtistId, SongData);
-
-    // Store the reference so every subsystem can query the authoritative list.
-    ActiveSongs.Add(NewSong);
-
+    Songs.Add(NewSong->SongId, NewSong);
     return NewSong;
 }
 
-void USongManagerSubsystem::ReleaseSong(USong* Song, const FDateTime& ReleaseDate)
+USong* USongManagerSubsystem::GetSongById(const FString& InSongId) const
 {
-    ensure(IsInGameThread());
-
-    if (!Song)
+    if (!IsInGameThread())
     {
-        return;
-    }
+        TWeakObjectPtr<const USongManagerSubsystem> WeakThis(this);
+        TWeakObjectPtr<USong> FoundSong;
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
 
-    // Keep the core identity information synchronized with the release date.
-    Song->Data.YearCreated = ReleaseDate.GetYear();
-    Song->Data.ReleaseYear = ReleaseDate.GetYear();
-    Song->Data.ReleaseMonth = ReleaseDate.GetMonth();
-    Song->Data.bIsReleased = true;
-
-    // Notify any listeners (UI, news feed, etc.).
-    OnSongReleased.Broadcast(Song);
-}
-
-void USongManagerSubsystem::HandleMonthAdvanced(const FDateTime& /*NewDate*/)
-{
-    ensure(IsInGameThread());
-
-    // Run the simulation step for every active song.
-    for (const TObjectPtr<USong>& SongPtr : ActiveSongs)
-    {
-        if (USong* Song = SongPtr.Get())
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, InSongId, &FoundSong, SyncEvent]()
         {
-            UpdateSongForNewMonth(Song);
-        }
-    }
-
-    // Determine which songs should be archived after updates.
-    TArray<USong*> SongsToArchive;
-    for (const TObjectPtr<USong>& SongPtr : ActiveSongs)
-    {
-        if (USong* Song = SongPtr.Get())
-        {
-            if (Song->Data.CurrentPopularity < 5.f)
+            if (const USongManagerSubsystem* StrongThis = WeakThis.Get())
             {
-                SongsToArchive.Add(Song);
+                FoundSong = StrongThis->GetSongById(InSongId);
             }
-        }
-    }
-
-    for (USong* Song : SongsToArchive)
-    {
-        ArchiveSong(Song);
-    }
-}
-
-TArray<USong*> USongManagerSubsystem::GetTopSongs(int32 Count) const
-{
-    ensure(IsInGameThread());
-
-    TArray<USong*> SortedSongs;
-    SortedSongs.Reserve(ActiveSongs.Num());
-
-    for (const TObjectPtr<USong>& SongPtr : ActiveSongs)
-    {
-        if (USong* Song = SongPtr.Get())
-        {
-            SortedSongs.Add(Song);
-        }
-    }
-
-    SortedSongs.Sort([](const USong& A, const USong& B)
-        {
-            return A.Data.CurrentPopularity > B.Data.CurrentPopularity;
+            SyncEvent->Trigger();
         });
 
-    if (Count <= 0)
-    {
-        return {};
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return FoundSong.Get();
     }
 
-    if (SortedSongs.Num() <= Count)
+    if (const TObjectPtr<USong>* Found = Songs.Find(InSongId))
     {
-        return SortedSongs;
+        return Found->Get();
     }
-
-    TArray<USong*> Result;
-    Result.Reserve(Count);
-    for (int32 Index = 0; Index < Count; ++Index)
-    {
-        Result.Add(SortedSongs[Index]);
-    }
-    return Result;
+    return nullptr;
 }
 
-TArray<USong*> USongManagerSubsystem::GetSongsByArtist(const FString& ArtistId) const
+void USongManagerSubsystem::GetSongsForArtist(const FString& ArtistId, TArray<USong*>& OutSongs) const
 {
-    ensure(IsInGameThread());
-
-    TArray<USong*> Result;
-
-    const auto Collect = [&Result, &ArtistId](const TArray<TObjectPtr<USong>>& Source)
+    if (!IsInGameThread())
     {
-        for (const TObjectPtr<USong>& SongPtr : Source)
+        TWeakObjectPtr<const USongManagerSubsystem> WeakThis(this);
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId, &OutSongs, SyncEvent]()
         {
-            if (USong* Song = SongPtr.Get())
+            if (const USongManagerSubsystem* StrongThis = WeakThis.Get())
             {
-                if (Song->ArtistId == ArtistId)
-                {
-                    Result.Add(Song);
-                }
+                StrongThis->GetSongsForArtist(ArtistId, OutSongs);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return;
+    }
+
+    OutSongs.Reset();
+    for (const TPair<FString, TObjectPtr<USong>>& Pair : Songs)
+    {
+        if (const USong* Song = Pair.Value.Get())
+        {
+            if (Song->ArtistId == ArtistId)
+            {
+                OutSongs.Add(Pair.Value.Get());
             }
         }
-    };
-
-    Collect(ActiveSongs);
-    Collect(ArchivedSongs);
-
-    return Result;
+    }
 }
 
-void USongManagerSubsystem::SaveState(UMusicSaveGame* SaveObject)
+void USongManagerSubsystem::SerializeForSave(TArray<FSongSaveRecord>& OutRecords) const
 {
-    ensure(IsInGameThread());
-
-    if (!SaveObject)
+    if (!IsInGameThread())
     {
-        return;
-    }
-
-    const auto AppendSongs = [&SaveObject](const TArray<TObjectPtr<USong>>& Source)
-    {
-        for (const TObjectPtr<USong>& SongPtr : Source)
+        TWeakObjectPtr<const USongManagerSubsystem> WeakThis(this);
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, &OutRecords, SyncEvent]()
         {
-            if (USong* Song = SongPtr.Get())
+            if (const USongManagerSubsystem* StrongThis = WeakThis.Get())
             {
-                FSavedSong SavedSong;
-                SavedSong.SongId = Song->SongId;
-                SavedSong.ArtistId = Song->ArtistId;
-                SavedSong.Data = Song->Data;
-                SaveObject->SavedSongs.Add(SavedSong);
+                StrongThis->SerializeForSave(OutRecords);
             }
-        }
-    };
-
-    AppendSongs(ActiveSongs);
-    AppendSongs(ArchivedSongs);
-}
-
-void USongManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
-{
-    ensure(IsInGameThread());
-
-    if (!SaveObject)
-    {
+            SyncEvent->Trigger();
+        });
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
         return;
     }
 
-    ActiveSongs.Reset();
-    ArchivedSongs.Reset();
-
-    for (const FSavedSong& SavedSong : SaveObject->SavedSongs)
+    OutRecords.Reset();
+    for (const TPair<FString, TObjectPtr<USong>>& Pair : Songs)
     {
-        UGameInstance* GameInstance = GetGameInstance();
-        UObject* Outer = GameInstance ? static_cast<UObject*>(GameInstance) : GetTransientPackage();
-
-        USong* NewSong = NewObject<USong>(Outer);
-        if (!NewSong)
+        if (const USong* Song = Pair.Value.Get())
         {
-            continue;
-        }
-
-        NewSong->Initialize(SavedSong.ArtistId, SavedSong.Data);
-        NewSong->SongId = SavedSong.SongId;
-        NewSong->Data = SavedSong.Data;
-
-        if (NewSong->Data.CurrentPopularity < 5.f)
-        {
-            ArchivedSongs.Add(NewSong);
-        }
-        else
-        {
-            ActiveSongs.Add(NewSong);
+            FSongSaveRecord Record;
+            Record.SongId = Song->SongId;
+            Record.ArtistId = Song->ArtistId;
+            Record.Data = Song->Data;
+            OutRecords.Add(Record);
         }
     }
 }
 
-void USongManagerSubsystem::UpdateSongForNewMonth(USong* Song)
+void USongManagerSubsystem::DeserializeFromSave(const TArray<FSongSaveRecord>& Records)
 {
-    ensure(IsInGameThread());
-
-    if (!Song)
+    if (!IsInGameThread())
     {
+        TWeakObjectPtr<USongManagerSubsystem> WeakThis(this);
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, Records, SyncEvent]()
+        {
+            if (USongManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->DeserializeFromSave(Records);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
         return;
     }
 
-    // Core simulation step: adjust popularity based on creative quality and market factors.
-    const float BaseGrowth = Song->Data.HitPotential * 0.05f;           // Great songs grow faster in general.
-    const float InnovationBoost = Song->Data.Innovation * 0.02f;         // Innovation keeps the track exciting.
-    const float TrendFactor = Song->Data.TrendAlignment * 0.03f;         // Trend alignment rides cultural waves.
-    const float ViralBoost = Song->Data.ViralPotential * FMath::FRandRange(0.0f, 0.4f); // Random viral spikes.
-    const float AgingDecay = Song->Data.ChartWeeks * 0.4f;               // Songs cool off over time.
-
-    Song->Data.CurrentPopularity += BaseGrowth + InnovationBoost + TrendFactor + ViralBoost - AgingDecay;
-    Song->Data.CurrentPopularity = FMath::Clamp(Song->Data.CurrentPopularity, 0.0f, 100.0f);
-
-    if (Song->Data.CurrentPopularity > 20.f)
+    Songs.Reset();
+    for (const FSongSaveRecord& Record : Records)
     {
-        // Songs that remain relevant accumulate chart weeks.
-        ++Song->Data.ChartWeeks;
-    }
-}
-
-void USongManagerSubsystem::ArchiveSong(USong* Song)
-{
-    ensure(IsInGameThread());
-
-    if (!Song)
-    {
-        return;
-    }
-
-    const int32 Index = ActiveSongs.IndexOfByKey(Song);
-    if (Index != INDEX_NONE)
-    {
-        ActiveSongs.RemoveAtSwap(Index);
-        ArchivedSongs.Add(Song);
+        if (USong* NewSong = CreateSongInternal(this, Record.ArtistId, Record.Data))
+        {
+            NewSong->SongId = Record.SongId;
+            Songs.Add(NewSong->SongId, NewSong);
+        }
     }
 }
