@@ -3,6 +3,9 @@
 #include "Engine/Engine.h"
 #include "GameTimeSubsystem.h"
 #include "MusicSaveGame.h"
+#include "SongManagerSubsystem.h"
+#include "Async/Async.h"
+#include "HAL/PlatformProcess.h"
 
 UArtistManagerSubsystem::UArtistManagerSubsystem()
 {
@@ -75,6 +78,94 @@ void UArtistManagerSubsystem::RotateUnsignedArtist()
         const FArtistData Temp = UnsignedArtists[0];
         UnsignedArtists.RemoveAt(0);
         UnsignedArtists.Add(Temp);
+    }
+}
+
+USong* UArtistManagerSubsystem::CreateSongForArtist(const FString& ArtistId, const FSongData& Data)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<UArtistManagerSubsystem> WeakThis(this);
+        TWeakObjectPtr<USong> CreatedSong;
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId, Data, &CreatedSong, SyncEvent]()
+        {
+            if (UArtistManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                CreatedSong = StrongThis->CreateSongForArtist(ArtistId, Data);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return CreatedSong.Get();
+    }
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>())
+        {
+            USong* Song = SongManager->CreateSong(ArtistId, Data);
+            if (Song)
+            {
+                RegisterSongToArtist(ArtistId, Song->SongId);
+            }
+            return Song;
+        }
+    }
+    return nullptr;
+}
+
+void UArtistManagerSubsystem::GetSongsForArtist(const FString& ArtistId, TArray<USong*>& OutSongs) const
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<const UArtistManagerSubsystem> WeakThis(this);
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId, &OutSongs, SyncEvent]()
+        {
+            if (const UArtistManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->GetSongsForArtist(ArtistId, OutSongs);
+            }
+            SyncEvent->Trigger();
+        });
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return;
+    }
+
+    if (const UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (const USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>())
+        {
+            SongManager->GetSongsForArtist(ArtistId, OutSongs);
+        }
+    }
+}
+
+void UArtistManagerSubsystem::RegisterSongToArtist(const FString& ArtistId, const FString& SongId)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<UArtistManagerSubsystem> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId, SongId]()
+        {
+            if (UArtistManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->RegisterSongToArtist(ArtistId, SongId);
+            }
+        });
+        return;
+    }
+
+    for (FArtistContract& Contract : ActiveContracts)
+    {
+        if (Contract.ArtistId == ArtistId)
+        {
+            Contract.SongIds.AddUnique(SongId);
+        }
     }
 }
 

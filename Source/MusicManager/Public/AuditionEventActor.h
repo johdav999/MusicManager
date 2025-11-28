@@ -1,13 +1,15 @@
 #pragma once
 
+#include "AuditionTypes.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Engine/GameInstance.h"
-#include "AuditionTypes.h"
-#include "AuditionWidget.h"
 #include "AuditionEventActor.generated.h"
 
-// Declare a dynamic multicast delegate that Blueprints can bind to
+class UArtistManagerSubsystem;
+class USongManagerSubsystem;
+class UMusicPlayerComponent;
+class USong;
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNegotiationUpdated);
 
 UCLASS()
@@ -21,10 +23,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audition")
     FAuditionEvent AuditionData;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Audition")
-    TSubclassOf<UAuditionWidget> WidgetClass;
-
-    // Blueprint event version of the delegate
     UPROPERTY(BlueprintAssignable, Category = "Audition")
     FOnNegotiationUpdated OnNegotiationUpdated;
 
@@ -34,13 +32,17 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Audition")
     void FinalizeDeal(bool bAcceptDeal);
 
+protected:
+    void BeginPerformanceScoring(const FArtistData& Artist, USong* Song);
+    void FinalizePerformance();
+    void FinalizePerformanceResults();
+
 private:
     UPROPERTY()
-    UAuditionWidget* ActiveWidget;
+    TObjectPtr<UMusicPlayerComponent> MusicPlayer;
 
-    UFUNCTION()
-    void HandleSignArtist();
+    FString CurrentArtistId;
+    TWeakObjectPtr<USong> CurrentSong;
 
-    UFUNCTION()
-    void HandlePassOnArtist();
+    void HandlePerformanceFinished();
 };
