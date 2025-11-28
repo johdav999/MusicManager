@@ -56,7 +56,7 @@ void UMusicPlayerComponent::PlaySong(USong* Song, const FArtistData& Artist)
     PlayImprovisedPerformance(Artist);
 }
 
-void UMusicPlayerComponent::OnAudioFinishedInternal(UAudioComponent* InAudioComponent)
+void UMusicPlayerComponent::OnAudioFinishedInternal()
 {
     HandlePlayFinished();
 }
