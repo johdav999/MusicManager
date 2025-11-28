@@ -26,6 +26,7 @@ void UMusicPlayerComponent::PlaySong(USong* Song, const FArtistData& Artist)
         TWeakObjectPtr<UMusicPlayerComponent> WeakThis(this);
         TWeakObjectPtr<USong> WeakSong(Song);
         const FArtistData ArtistCopy = Artist;
+
         AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakSong, ArtistCopy]()
         {
             if (UMusicPlayerComponent* StrongThis = WeakThis.Get())
@@ -41,22 +42,23 @@ void UMusicPlayerComponent::PlaySong(USong* Song, const FArtistData& Artist)
     if (AudioComponent && Song && Song->Data.SoundWave)
     {
         AudioComponent->SetSound(Song->Data.SoundWave);
-        AudioComponent->OnAudioFinished.Clear();
 
-        TWeakObjectPtr<UMusicPlayerComponent> WeakThis(this);
-        AudioComponent->OnAudioFinished.AddLambda([WeakThis](UAudioComponent*)
-        {
-            if (UMusicPlayerComponent* StrongThis = WeakThis.Get())
-            {
-                StrongThis->HandlePlayFinished();
-            }
-        });
+        AudioComponent->OnAudioFinished.Clear();
+        AudioComponent->OnAudioFinished.AddDynamic(
+            this,
+            &UMusicPlayerComponent::OnAudioFinishedInternal
+        );
 
         AudioComponent->Play();
         return;
     }
 
     PlayImprovisedPerformance(Artist);
+}
+
+void UMusicPlayerComponent::OnAudioFinishedInternal(UAudioComponent* InAudioComponent)
+{
+    HandlePlayFinished();
 }
 
 void UMusicPlayerComponent::PlayImprovisedPerformance(const FArtistData& Artist)
