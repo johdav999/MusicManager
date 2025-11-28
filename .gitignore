@@ -15,6 +15,7 @@ Saved/
 # Ignore user-specific config
 *.user
 *.userprefs
+*.ini
 
 # Ignore autosaves and backups
 *_Backup*.umap
