@@ -44,6 +44,9 @@ protected:
     void InitializeAudioComponent();
     void HandlePlayFinished();
 
+    UFUNCTION()
+    void OnAudioFinishedInternal(UAudioComponent* InAudioComponent);
+
 private:
     UPROPERTY()
     UAudioComponent* AudioComponent;
