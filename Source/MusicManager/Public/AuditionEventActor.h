@@ -44,5 +44,6 @@ private:
     FString CurrentArtistId;
     TWeakObjectPtr<USong> CurrentSong;
 
+    UFUNCTION()
     void HandlePerformanceFinished();
 };
