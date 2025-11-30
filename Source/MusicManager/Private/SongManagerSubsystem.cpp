@@ -1,6 +1,7 @@
 #include "SongManagerSubsystem.h"
 
 #include "Async/Async.h"
+#include "Engine/DataTable.h"
 #include "Engine/GameInstance.h"
 #include "Song.h"
 #include "Misc/Guid.h"
@@ -35,13 +36,18 @@ void USongManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     ensure(IsInGameThread());
     Super::Initialize(Collection);
+
     Songs.Reset();
+    SongMap.Reset();
+
+    LoadSongsFromDataTable();
 }
 
 void USongManagerSubsystem::Deinitialize()
 {
     ensure(IsInGameThread());
     Songs.Reset();
+    SongMap.Reset();
     Super::Deinitialize();
 }
 
@@ -78,7 +84,7 @@ USong* USongManagerSubsystem::CreateSong(const FString& ArtistId, const FSongDat
         return nullptr;
     }
 
-    Songs.Add(NewSong->SongId, NewSong);
+    AddSongToCollections(NewSong);
     return NewSong;
 }
 
@@ -104,7 +110,7 @@ USong* USongManagerSubsystem::GetSongById(const FString& InSongId) const
         return FoundSong.Get();
     }
 
-    if (const TObjectPtr<USong>* Found = Songs.Find(InSongId))
+    if (const TObjectPtr<USong>* Found = SongMap.Find(InSongId))
     {
         return Found->Get();
     }
@@ -133,7 +139,7 @@ void USongManagerSubsystem::GetSongsForArtist(const FString& ArtistId, TArray<US
     }
 
     OutSongs.Reset();
-    for (const TPair<FString, TObjectPtr<USong>>& Pair : Songs)
+    for (const TPair<FString, TObjectPtr<USong>>& Pair : SongMap)
     {
         if (const USong* Song = Pair.Value.Get())
         {
@@ -165,7 +171,7 @@ void USongManagerSubsystem::SerializeForSave(TArray<FSongSaveRecord>& OutRecords
     }
 
     OutRecords.Reset();
-    for (const TPair<FString, TObjectPtr<USong>>& Pair : Songs)
+    for (const TPair<FString, TObjectPtr<USong>>& Pair : SongMap)
     {
         if (const USong* Song = Pair.Value.Get())
         {
@@ -199,12 +205,63 @@ void USongManagerSubsystem::DeserializeFromSave(const TArray<FSongSaveRecord>& R
     }
 
     Songs.Reset();
+    SongMap.Reset();
     for (const FSongSaveRecord& Record : Records)
     {
         if (USong* NewSong = CreateSongInternal(this, Record.ArtistId, Record.Data))
         {
             NewSong->SongId = Record.SongId;
-            Songs.Add(NewSong->SongId, NewSong);
+            AddSongToCollections(NewSong);
         }
     }
+}
+
+void USongManagerSubsystem::LoadSongsFromDataTable()
+{
+    if (!SongDataTable)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SongManagerSubsystem: SongDataTable is not set."));
+        return;
+    }
+
+    static const FString ContextString(TEXT("SongManagerSubsystem::LoadSongsFromDataTable"));
+
+    TArray<FSongData*> AllRows;
+    SongDataTable->GetAllRows<FSongData>(ContextString, AllRows);
+
+    Songs.Reserve(AllRows.Num());
+    SongMap.Reserve(AllRows.Num());
+
+    for (FSongData* Row : AllRows)
+    {
+        if (!Row)
+        {
+            continue;
+        }
+
+        USong* NewSong = NewObject<USong>(this);
+        if (!NewSong)
+        {
+            continue;
+        }
+
+        NewSong->Initialize(TEXT(""), *Row);
+
+        NewSong->SongId = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensInBraces);
+
+        AddSongToCollections(NewSong);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("SongManagerSubsystem: Loaded %d songs from SongDataTable."), Songs.Num());
+}
+
+void USongManagerSubsystem::AddSongToCollections(USong* NewSong)
+{
+    if (!NewSong)
+    {
+        return;
+    }
+
+    Songs.Add(NewSong);
+    SongMap.Add(NewSong->SongId, NewSong);
 }

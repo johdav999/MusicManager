@@ -5,6 +5,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "SongManagerSubsystem.generated.h"
 
+class UDataTable;
 class USong;
 
 USTRUCT()
@@ -34,6 +35,14 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
+    /** DataTable containing all song rows (FSongData). */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Songs")
+    UDataTable* SongDataTable;
+
+    /** All songs instantiated at game startup. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Songs")
+    TArray<USong*> Songs;
+
     /** Create a song for an artist using the provided data payload. */
     UFUNCTION(BlueprintCallable, Category = "Songs")
     USong* CreateSong(const FString& ArtistId, const FSongData& Data);
@@ -53,6 +62,11 @@ public:
     void DeserializeFromSave(const TArray<FSongSaveRecord>& Records);
 
 private:
+    /** Helper to load song rows from SongDataTable into Songs array. */
+    void LoadSongsFromDataTable();
+
+    void AddSongToCollections(USong* NewSong);
+
     UPROPERTY()
-    TMap<FString, TObjectPtr<USong>> Songs;
+    TMap<FString, TObjectPtr<USong>> SongMap;
 };
