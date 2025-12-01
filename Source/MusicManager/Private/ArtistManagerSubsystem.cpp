@@ -160,19 +160,13 @@ void UArtistManagerSubsystem::RegisterSongToArtist(const FString& ArtistId, cons
         return;
     }
 
-    ArtistToSongs.FindOrAdd(ArtistId).AddUnique(SongId);
-
-    for (FArtistContract& Contract : ActiveContracts)
-    {
-        if (Contract.ArtistId == ArtistId)
-        {
-            Contract.SongIds.AddUnique(SongId);
-        }
-    }
+    ArtistToSongs.FindOrAdd(ArtistId).SongIds.AddUnique(SongId);
 }
 
 void UArtistManagerSubsystem::LoadArtistsFromDataTable()
 {
+    ensure(IsInGameThread());
+
     UnsignedArtists.Empty();
 
     if (!ArtistDataTable)
@@ -183,18 +177,6 @@ void UArtistManagerSubsystem::LoadArtistsFromDataTable()
 
     static const FString ContextString(TEXT("Artist Data Table"));
 
-    USongManagerSubsystem* SongManager = nullptr;
-    TArray<USong*> AllSongs;
-
-    if (UGameInstance* GameInstance = GetGameInstance())
-    {
-        SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>();
-        if (SongManager)
-        {
-            SongManager->GetAllSongs(AllSongs);
-        }
-    }
-
     TArray<FName> RowNames = ArtistDataTable->GetRowNames();
     for (const FName& RowName : RowNames)
     {
@@ -202,28 +184,17 @@ void UArtistManagerSubsystem::LoadArtistsFromDataTable()
         {
             UnsignedArtists.Add(*Row);
 
-            const FString ArtistId = Row->ArtistName;
-            if (SongManager && AllSongs.Num() > 0)
+            if (UGameInstance* GameInstance = GetGameInstance())
             {
-                USong* SelectedSong = nullptr;
-
-                for (USong* Song : AllSongs)
+                if (USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>())
                 {
-                    if (Song && Song->Data.Genre == Row->Genre)
+                    TArray<USong*> AllSongs;
+                    SongManager->GetAllSongs(AllSongs);
+
+                    if (AllSongs.Num() > 0 && AllSongs[0])
                     {
-                        SelectedSong = Song;
-                        break;
+                        RegisterSongToArtist(Row->ArtistName, AllSongs[0]->SongId);
                     }
-                }
-
-                if (!SelectedSong)
-                {
-                    SelectedSong = AllSongs[0];
-                }
-
-                if (SelectedSong)
-                {
-                    RegisterSongToArtist(ArtistId, SelectedSong->SongId);
                 }
             }
         }

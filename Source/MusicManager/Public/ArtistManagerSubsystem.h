@@ -16,6 +16,15 @@ class UMusicSaveGame;
 class USong;
 struct FSongData;
 
+USTRUCT(BlueprintType)
+struct FArtistSongList
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    TArray<FString> SongIds;
+};
+
 UCLASS()
 class UArtistManagerSubsystem : public UGameInstanceSubsystem
 {
@@ -82,7 +91,7 @@ public:
     TArray<FArtistData> UnsignedArtists;
 
     UPROPERTY()
-    TMap<FString, TArray<FString>> ArtistToSongs;
+    TMap<FString, FArtistSongList> ArtistToSongs;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contracts")
     FDateTime CurrentGameDate = FDateTime();

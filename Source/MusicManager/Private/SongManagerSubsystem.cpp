@@ -173,12 +173,12 @@ void USongManagerSubsystem::GetAllSongs(TArray<USong*>& OutSongs) const
     }
 
     OutSongs.Reset();
-    OutSongs.Reserve(Songs.Num());
-    for (USong* Song : Songs)
+    OutSongs.Reserve(SongMap.Num());
+    for (const TPair<FString, TObjectPtr<USong>>& Pair : SongMap)
     {
-        if (Song)
+        if (Pair.Value)
         {
-            OutSongs.Add(Song);
+            OutSongs.Add(Pair.Value);
         }
     }
 }
