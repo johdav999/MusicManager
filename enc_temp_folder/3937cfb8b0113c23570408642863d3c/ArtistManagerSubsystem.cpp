@@ -43,7 +43,7 @@ void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     //    ArtistDataTable = nullptr;
     //    UE_LOG(LogTemp, Error, TEXT("Could not load ArtistData datatable at /Game/Data/ArtistData.ArtistData"));
     //}
-    //LoadArtistsFromDataTable();
+    LoadArtistsFromDataTable();
 
     if (UGameInstance* GameInstance = GetGameInstance())
     {
