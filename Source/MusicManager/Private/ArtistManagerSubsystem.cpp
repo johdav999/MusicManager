@@ -160,6 +160,8 @@ void UArtistManagerSubsystem::RegisterSongToArtist(const FString& ArtistId, cons
         return;
     }
 
+    ArtistToSongs.FindOrAdd(ArtistId).AddUnique(SongId);
+
     for (FArtistContract& Contract : ActiveContracts)
     {
         if (Contract.ArtistId == ArtistId)
@@ -181,12 +183,49 @@ void UArtistManagerSubsystem::LoadArtistsFromDataTable()
 
     static const FString ContextString(TEXT("Artist Data Table"));
 
+    USongManagerSubsystem* SongManager = nullptr;
+    TArray<USong*> AllSongs;
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>();
+        if (SongManager)
+        {
+            SongManager->GetAllSongs(AllSongs);
+        }
+    }
+
     TArray<FName> RowNames = ArtistDataTable->GetRowNames();
     for (const FName& RowName : RowNames)
     {
         if (FArtistData* Row = ArtistDataTable->FindRow<FArtistData>(RowName, ContextString))
         {
             UnsignedArtists.Add(*Row);
+
+            const FString ArtistId = Row->ArtistName;
+            if (SongManager && AllSongs.Num() > 0)
+            {
+                USong* SelectedSong = nullptr;
+
+                for (USong* Song : AllSongs)
+                {
+                    if (Song && Song->Data.Genre == Row->Genre)
+                    {
+                        SelectedSong = Song;
+                        break;
+                    }
+                }
+
+                if (!SelectedSong)
+                {
+                    SelectedSong = AllSongs[0];
+                }
+
+                if (SelectedSong)
+                {
+                    RegisterSongToArtist(ArtistId, SelectedSong->SongId);
+                }
+            }
         }
     }
 

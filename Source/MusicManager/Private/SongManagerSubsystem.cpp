@@ -151,6 +151,38 @@ void USongManagerSubsystem::GetSongsForArtist(const FString& ArtistId, TArray<US
     }
 }
 
+void USongManagerSubsystem::GetAllSongs(TArray<USong*>& OutSongs) const
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<const USongManagerSubsystem> WeakThis(this);
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, &OutSongs, SyncEvent]()
+        {
+            if (const USongManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->GetAllSongs(OutSongs);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return;
+    }
+
+    OutSongs.Reset();
+    OutSongs.Reserve(Songs.Num());
+    for (USong* Song : Songs)
+    {
+        if (Song)
+        {
+            OutSongs.Add(Song);
+        }
+    }
+}
+
 void USongManagerSubsystem::SerializeForSave(TArray<FSongSaveRecord>& OutRecords) const
 {
     if (!IsInGameThread())

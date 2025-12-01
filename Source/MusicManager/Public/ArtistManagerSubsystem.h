@@ -81,6 +81,9 @@ public:
     UPROPERTY(VisibleAnywhere, Category="Artists")
     TArray<FArtistData> UnsignedArtists;
 
+    UPROPERTY()
+    TMap<FString, TArray<FString>> ArtistToSongs;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contracts")
     FDateTime CurrentGameDate = FDateTime();
 

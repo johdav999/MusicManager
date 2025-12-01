@@ -55,6 +55,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Songs")
     void GetSongsForArtist(const FString& ArtistId, TArray<USong*>& OutSongs) const;
 
+    /** Retrieve all songs currently loaded in the subsystem. */
+    void GetAllSongs(TArray<USong*>& OutSongs) const;
+
     /** Serialize the registry for a save game. */
     void SerializeForSave(TArray<FSongSaveRecord>& OutRecords) const;
 
