@@ -36,7 +36,7 @@ public:
     virtual void Deinitialize() override;
 
     /** DataTable containing all song rows (FSongData). */
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Songs")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Songs")
     UDataTable* SongDataTable;
 
     /** All songs instantiated at game startup. */
@@ -63,6 +63,7 @@ public:
 
 private:
     /** Helper to load song rows from SongDataTable into Songs array. */
+    UFUNCTION(BlueprintCallable, Category = "Songs")
     void LoadSongsFromDataTable();
 
     void AddSongToCollections(USong* NewSong);
