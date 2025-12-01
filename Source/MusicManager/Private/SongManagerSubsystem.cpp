@@ -39,6 +39,7 @@ void USongManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     Songs.Reset();
     SongMap.Reset();
+    ArtistToSongs.Reset();
 
     LoadSongsFromDataTable();
 }
@@ -48,6 +49,7 @@ void USongManagerSubsystem::Deinitialize()
     ensure(IsInGameThread());
     Songs.Reset();
     SongMap.Reset();
+    ArtistToSongs.Reset();
     Super::Deinitialize();
 }
 
@@ -139,13 +141,18 @@ void USongManagerSubsystem::GetSongsForArtist(const FString& ArtistId, TArray<US
     }
 
     OutSongs.Reset();
-    for (const TPair<FString, TObjectPtr<USong>>& Pair : SongMap)
+
+    if (const FArtistSongList* SongList = ArtistToSongs.Find(ArtistId))
     {
-        if (const USong* Song = Pair.Value.Get())
+        OutSongs.Reserve(SongList->SongIds.Num());
+        for (const FString& SongId : SongList->SongIds)
         {
-            if (Song->ArtistId == ArtistId)
+            if (const TObjectPtr<USong>* FoundSongPtr = SongMap.Find(SongId))
             {
-                OutSongs.Add(Pair.Value.Get());
+                if (USong* Song = FoundSongPtr->Get())
+                {
+                    OutSongs.Add(Song);
+                }
             }
         }
     }
@@ -238,6 +245,7 @@ void USongManagerSubsystem::DeserializeFromSave(const TArray<FSongSaveRecord>& R
 
     Songs.Reset();
     SongMap.Reset();
+    ArtistToSongs.Reset();
     for (const FSongSaveRecord& Record : Records)
     {
         if (USong* NewSong = CreateSongInternal(this, Record.ArtistId, Record.Data))
@@ -296,4 +304,6 @@ void USongManagerSubsystem::AddSongToCollections(USong* NewSong)
 
     Songs.Add(NewSong);
     SongMap.Add(NewSong->SongId, NewSong);
+
+    ArtistToSongs.FindOrAdd(NewSong->ArtistId).SongIds.AddUnique(NewSong->SongId);
 }

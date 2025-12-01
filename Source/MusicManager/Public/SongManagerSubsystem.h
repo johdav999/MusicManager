@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "FSongData.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "ArtistManagerSubsystem.h"
 #include "SongManagerSubsystem.generated.h"
 
 class UDataTable;
@@ -70,6 +71,9 @@ private:
     void LoadSongsFromDataTable();
 
     void AddSongToCollections(USong* NewSong);
+
+    UPROPERTY()
+    TMap<FString, FArtistSongList> ArtistToSongs;
 
     UPROPERTY()
     TMap<FString, TObjectPtr<USong>> SongMap;
