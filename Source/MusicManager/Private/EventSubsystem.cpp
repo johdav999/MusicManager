@@ -5,6 +5,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "AuditionTypes.h"
+#include "Layout.h"  
 #include "GameTimeSubsystem.h"
 #include "UIManagerSubsystem.h"
 
@@ -68,7 +69,7 @@ void UEventSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::Initia
     GameTimeSubsystem = TimeSubsystem;
 
    /* TimeSubsystem->OnMonthAdvanced.AddUObject(this, &UEventSubsystem::HandleMonthAdvanced);*/
-    TimeSubsystem->OnMonthAdvanced.RemoveDynamic(this, &UEventSubsystem::HandleMonthAdvanced);
+    TimeSubsystem->OnMonthAdvanced.AddDynamic(this, &UEventSubsystem::HandleMonthAdvanced);
     ProcessMonthAdvanced(TimeSubsystem->GetCurrentGameDate());
 }
 

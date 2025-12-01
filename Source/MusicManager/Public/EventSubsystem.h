@@ -7,7 +7,7 @@
 #include "EventSubsystem.generated.h"
 
 class UGameTimeSubsystem;
-class ULayout;
+
 class AAuditionEventActor;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogEventSubsystem, Log, All);
@@ -96,6 +96,8 @@ struct FMusicNewsEvent
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNewsEventGenerated, const FMusicNewsEvent&, Event);
 
+class ULayout;
+
 
 /**
  * Game-instance subsystem that relays simulated time changes to a child widget on a registered layout widget.
@@ -127,6 +129,9 @@ private:
     void ProcessMonthAdvanced(const FDateTime& NewDate);
     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
     UPROPERTY()
+
+
+  
     TWeakObjectPtr<ULayout> LayoutWeak;
     TWeakObjectPtr<UGameTimeSubsystem> GameTimeSubsystem;
 
