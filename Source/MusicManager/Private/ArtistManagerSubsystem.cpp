@@ -176,6 +176,17 @@ void UArtistManagerSubsystem::RegisterSongToArtist(const FString& ArtistId, cons
     }
 
     ArtistToSongs.FindOrAdd(ArtistId).SongIds.AddUnique(SongId);
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>())
+        {
+            if (USong* Song = SongManager->GetSongById(SongId))
+            {
+                Song->ArtistId = ArtistId;
+            }
+        }
+    }
 }
 
 void UArtistManagerSubsystem::LoadArtistsFromDataTable()
