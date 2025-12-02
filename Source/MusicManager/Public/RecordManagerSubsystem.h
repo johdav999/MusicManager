@@ -41,7 +41,7 @@ public:
     FString CreateRecord(const FRecordData& Data);
 
     UFUNCTION(BlueprintCallable)
-    FRecordData GetRecordById(const FString& RecordId) const;
+    bool GetRecordById(const FString& RecordId, FRecordData& OutData) const;
 
 private:
     UPROPERTY()

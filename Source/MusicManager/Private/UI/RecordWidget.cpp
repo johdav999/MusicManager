@@ -45,7 +45,11 @@ void URecordWidget::OnConfirmPressed()
     }
     NewRecord.bIsSingle = bSingleSelected;
     NewRecord.bIsLP = bLPSelected;
-    SelectedSongIds.GenerateValueArray(NewRecord.SongIds);
+    NewRecord.SongIds.Reset();
+    for (const FString& Id : SelectedSongIds)
+    {
+        NewRecord.SongIds.Add(Id);
+    }
     NewRecord.DateRecorded = FDateTime::Now();
 
     if (UGameInstance* GameInstance = GetGameInstance())
@@ -86,7 +90,7 @@ void URecordWidget::HandleCancelClicked()
     OnCancelPressed();
 }
 
-void URecordWidget::HandleEntryGenerated(UUserWidget* EntryWidget)
+void URecordWidget::HandleEntryGenerated(UUserWidget& EntryWidget)
 {
     if (URecordSongListItemWidget* ListItem = Cast<URecordSongListItemWidget>(&EntryWidget))
     {

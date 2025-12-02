@@ -5,7 +5,7 @@
 #include "AuditionTypes.h"
 #include "MusicManagerPlayerController.h"
 #include "MusicPlayerComponent.h"
-#include "RecordWidget.h"
+#include "UI/RecordWidget.h"
 #include "Song.h"
 #include "SongManagerSubsystem.h"
 
