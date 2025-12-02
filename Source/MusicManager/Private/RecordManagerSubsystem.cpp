@@ -18,12 +18,13 @@ FString URecordManagerSubsystem::CreateRecord(const FRecordData& Data)
     return NewRecordId;
 }
 
-FRecordData URecordManagerSubsystem::GetRecordById(const FString& RecordId) const
+bool URecordManagerSubsystem::GetRecordById(const FString& RecordId, FRecordData& OutData) const
 {
     if (const FRecordData* Found = Records.Find(RecordId))
     {
-        return *Found;
+        OutData = *Found;
+        return true;
     }
 
-    return FRecordData();
+    return false;
 }

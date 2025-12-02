@@ -77,9 +77,8 @@ private:
     UFUNCTION()
     void HandleCancelClicked();
 
-    UFUNCTION()
-
-    void HandleEntryGenerated(UUserWidget* EntryWidget);
+    // NOTE: Not a UFUNCTION because UE delegates use a reference signature.
+    void HandleEntryGenerated(UUserWidget& EntryWidget);
 
 
     void PopulateSongs(const FString& ArtistId);
