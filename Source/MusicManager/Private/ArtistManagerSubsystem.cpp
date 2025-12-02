@@ -160,6 +160,21 @@ void UArtistManagerSubsystem::RegisterSongToArtist(const FString& ArtistId, cons
         return;
     }
 
+    for (const auto& Pair : ArtistToSongs)
+    {
+        const FString& ExistingArtistId = Pair.Key;
+        const FArtistSongList& SongList = Pair.Value;
+
+        if (ExistingArtistId != ArtistId &&
+            SongList.SongIds.Contains(SongId))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("RegisterSongToArtist: Song %s is already assigned to Artist %s. Cannot assign to Artist %s."),
+                   *SongId, *ExistingArtistId, *ArtistId);
+
+            return;
+        }
+    }
+
     ArtistToSongs.FindOrAdd(ArtistId).SongIds.AddUnique(SongId);
 }
 
