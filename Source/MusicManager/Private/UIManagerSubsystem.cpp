@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Layout.h"
 #include "ArtistManagerSubsystem.h"
+#include "UI/RecordWidget.h"
 #include "Logging/LogMacros.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUIManagerSubsystem, Log, All);
@@ -294,6 +295,24 @@ void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
             }
             UE_LOG(LogTemp, Display, TEXT("Show Contract"));
             Layout->ShowContract(Contract);
+        }
+        else if (CommandName == TEXT("Studio"))
+        {
+            UGameInstance* GameInstance = Self->GetGameInstance();
+            if (!IsValid(GameInstance))
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: GameInstance invalid for Studio command."));
+                return;
+            }
+
+            URecordWidget* RecordWidget = CreateWidget<URecordWidget>(GameInstance, URecordWidget::StaticClass());
+            if (!IsValid(RecordWidget))
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: Failed to create RecordWidget."));
+                return;
+            }
+
+            RecordWidget->AddToViewport();
         }
     });
 }
