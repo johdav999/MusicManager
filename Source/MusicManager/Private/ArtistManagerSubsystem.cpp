@@ -4,6 +4,7 @@
 #include "GameTimeSubsystem.h"
 #include "MusicSaveGame.h"
 #include "SongManagerSubsystem.h"
+#include "Song.h"
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
 
@@ -180,7 +181,7 @@ void UArtistManagerSubsystem::RegisterSongToArtist(const FString& ArtistId, cons
     if (UGameInstance* GameInstance = GetGameInstance())
     {
         if (USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>())
-        {
+        {           
             if (USong* Song = SongManager->GetSongById(SongId))
             {
                 Song->ArtistId = ArtistId;
