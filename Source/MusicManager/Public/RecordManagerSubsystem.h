@@ -40,8 +40,8 @@ public:
     UFUNCTION()
     FString CreateRecord(const FRecordData& Data);
 
-    UFUNCTION()
-    const FRecordData* GetRecordById(const FString& RecordId) const;
+    UFUNCTION(BlueprintCallable)
+    FRecordData GetRecordById(const FString& RecordId) const;
 
 private:
     UPROPERTY()

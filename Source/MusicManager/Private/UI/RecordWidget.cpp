@@ -86,7 +86,7 @@ void URecordWidget::HandleCancelClicked()
     OnCancelPressed();
 }
 
-void URecordWidget::HandleEntryGenerated(UUserWidget& EntryWidget)
+void URecordWidget::HandleEntryGenerated(UUserWidget* EntryWidget)
 {
     if (URecordSongListItemWidget* ListItem = Cast<URecordSongListItemWidget>(&EntryWidget))
     {

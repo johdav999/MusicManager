@@ -78,7 +78,9 @@ private:
     void HandleCancelClicked();
 
     UFUNCTION()
-    void HandleEntryGenerated(UUserWidget& EntryWidget);
+
+    void HandleEntryGenerated(UUserWidget* EntryWidget);
+
 
     void PopulateSongs(const FString& ArtistId);
     void BindButtonDelegates();
