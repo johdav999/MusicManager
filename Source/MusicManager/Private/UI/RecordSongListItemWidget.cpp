@@ -16,13 +16,12 @@ URecordSongListItemWidget::URecordSongListItemWidget(const FObjectInitializer& O
 
 void URecordSongListItemWidget::NativeOnListItemObjectSet(UObject* ListItemObject)
 {
-    Super::NativeOnListItemObjectSet(ListItemObject);
-
-    if (const URecordSongListEntryObject* Entry = Cast<URecordSongListEntryObject>(ListItemObject))
+    if (URecordSongListEntryObject* Entry = Cast<URecordSongListEntryObject>(ListItemObject))
     {
         OwningRecordWidget = Entry->OwningWidget;
-        Setup(Entry->SongId, Entry->SongData);
         ArtistId = Entry->ArtistId;
+
+        Setup(Entry->SongId, Entry->SongData);
     }
 }
 

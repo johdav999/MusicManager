@@ -13,6 +13,9 @@ struct FArtistData : public FTableRowBase
     FString ArtistName = TEXT("");
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ArtistId = TEXT("");
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float PerformanceScore = 0.f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
