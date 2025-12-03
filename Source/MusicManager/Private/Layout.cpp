@@ -291,15 +291,42 @@ void ULayout::CloseAuditionWidget()
 
 void ULayout::ShowRecordWidget()
 {
-    if (RecordWidget)
+    if (!IsInGameThread())
     {
+        const TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (ULayout* Strong = WeakThis.Get())
+            {
+                Strong->ShowRecordWidget();
+            }
+        });
+        return;
+    }
+
+    if (IsValid(RecordWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Making RecordWidget visible"));
         RecordWidget->SetVisibility(ESlateVisibility::Visible);
     }
 }
 
 void ULayout::CloseRecordWidget()
 {
-    if (RecordWidget)
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (ULayout* Strong = WeakThis.Get())
+            {
+                Strong->CloseRecordWidget();
+            }
+        });
+        return;
+    }
+
+    if (IsValid(RecordWidget))
     {
         RecordWidget->SetVisibility(ESlateVisibility::Collapsed);
     }
