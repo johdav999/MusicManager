@@ -4,7 +4,6 @@
 #include "Blueprint/UserWidget.h"
 #include "Layout.h"
 #include "ArtistManagerSubsystem.h"
-#include "UI/RecordWidget.h"
 #include "Logging/LogMacros.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUIManagerSubsystem, Log, All);
@@ -298,21 +297,15 @@ void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
         }
         else if (CommandName == TEXT("Studio"))
         {
-            UGameInstance* GameInstance = Self->GetGameInstance();
-            if (!IsValid(GameInstance))
+            ULayout* Layout = Self->ActiveLayout.Get();
+            if (!IsValid(Layout))
             {
-                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: GameInstance invalid for Studio command."));
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Studio command: No active layout available."));
                 return;
             }
 
-            URecordWidget* RecordWidget = CreateWidget<URecordWidget>(GameInstance, URecordWidget::StaticClass());
-            if (!IsValid(RecordWidget))
-            {
-                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: Failed to create RecordWidget."));
-                return;
-            }
-
-            RecordWidget->AddToViewport();
+            // Show the embedded RecordWidget
+            Layout->ShowRecordWidget();
         }
     });
 }

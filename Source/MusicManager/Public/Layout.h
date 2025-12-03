@@ -5,6 +5,7 @@
 #include "EventSubsystem.h"
 #include "ContractWidget.h"
 #include "EventTickerWidget.h"
+#include "UI/RecordWidget.h"
 #include "AuditionTypes.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "Layout.generated.h"
@@ -56,6 +57,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "UI")
     void CloseAuditionWidget();
 
+    UFUNCTION(BlueprintCallable, Category="Studio")
+    void ShowRecordWidget();
+
+    UFUNCTION(BlueprintCallable, Category="Studio")
+    void CloseRecordWidget();
+
     /** Show the audition widget and populate it with real audition data from an FAuditionEvent. */
     UFUNCTION(BlueprintCallable, Category = "Audition")
     void ShowAuditionWidgetWithData(const FAuditionEvent& EventData);
@@ -78,6 +85,9 @@ protected:
 
     UPROPERTY(meta = (BindWidgetOptional))
         UContractWidget* ContractWidget;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    URecordWidget* RecordWidget;
 
     UPROPERTY(meta=(BindWidget))
     USignedArtistPanelWidget* SignedArtistsPanel;

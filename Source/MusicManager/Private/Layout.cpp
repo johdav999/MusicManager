@@ -289,6 +289,22 @@ void ULayout::CloseAuditionWidget()
     }
 }
 
+void ULayout::ShowRecordWidget()
+{
+    if (RecordWidget)
+    {
+        RecordWidget->SetVisibility(ESlateVisibility::Visible);
+    }
+}
+
+void ULayout::CloseRecordWidget()
+{
+    if (RecordWidget)
+    {
+        RecordWidget->SetVisibility(ESlateVisibility::Collapsed);
+    }
+}
+
 void ULayout::RefreshSignedArtists(const TArray<FArtistData>& Artists)
 {
     if (!IsValid(SignedArtistsPanel))

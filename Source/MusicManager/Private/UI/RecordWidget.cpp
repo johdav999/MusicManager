@@ -60,12 +60,26 @@ void URecordWidget::OnConfirmPressed()
         }
     }
 
-    RemoveFromParent();
+    if (UWidget* Parent = GetParent())
+    {
+        SetVisibility(ESlateVisibility::Collapsed);
+    }
+    else
+    {
+        RemoveFromParent();
+    }
 }
 
 void URecordWidget::OnCancelPressed()
 {
-    RemoveFromParent();
+    if (UWidget* Parent = GetParent())
+    {
+        SetVisibility(ESlateVisibility::Collapsed);
+    }
+    else
+    {
+        RemoveFromParent();
+    }
 }
 
 void URecordWidget::NotifySongSelectionChanged(const FString& SongId, bool bIsSelected)
