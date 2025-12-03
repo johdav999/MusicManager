@@ -293,6 +293,7 @@ void ULayout::ShowRecordWidget()
 {
     if (RecordWidget)
     {
+        UE_LOG(LogTemp, Warning, TEXT("Making RecordWidget visible"));
         RecordWidget->SetVisibility(ESlateVisibility::Visible);
     }
 }

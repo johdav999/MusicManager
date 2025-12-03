@@ -303,7 +303,7 @@ void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
                 UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Studio command: No active layout available."));
                 return;
             }
-
+            UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Showing Recording GUI"));
             // Show the embedded RecordWidget
             Layout->ShowRecordWidget();
         }
