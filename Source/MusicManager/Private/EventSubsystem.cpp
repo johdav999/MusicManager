@@ -114,14 +114,23 @@ void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
     }
 }
 
-bool UEventSubsystem::HasNewsBeenProcessed(const FGuid& NewsId) const
+bool UEventSubsystem::HasNewsKeyBeenProcessed(const FString& Key) const
 {
-    return ProcessedNewsIds.Contains(NewsId);
+    return ProcessedNewsKeys.Contains(Key);
 }
 
-void UEventSubsystem::MarkNewsAsProcessed(const FGuid& NewsId)
+void UEventSubsystem::MarkNewsKeyProcessed(const FString& Key)
 {
-    ProcessedNewsIds.Add(NewsId);
+    ProcessedNewsKeys.Add(Key);
+}
+
+FString UEventSubsystem::BuildNewsKey(const FMusicNewsEvent& Event) const
+{
+    // Unique key for each distinct event type.
+    // For NewUpcomingArtistPerforming: "NewUpcomingArtistPerforming:ArtistName"
+    return FString::Printf(TEXT("%d:%s"),
+        static_cast<int32>(Event.NewsType),
+        *Event.SourceName);
 }
 
 void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
@@ -136,14 +145,17 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
     const FMusicNewsEvent NewEvent = BuildMonthlyNews(NewDate);
     if (NewEvent.BodyText != "")
     {
-        // Prevent duplicate triggers
-        if (HasNewsBeenProcessed(NewEvent.NewsId))
+        // Build stable event key
+        const FString EventKey = BuildNewsKey(NewEvent);
+
+        // Prevent duplicates
+        if (HasNewsKeyBeenProcessed(EventKey))
         {
-            UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping duplicate news event %s"), *NewEvent.NewsId.ToString());
+            UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping duplicate event key: %s"), *EventKey);
             return;
         }
 
-        MarkNewsAsProcessed(NewEvent.NewsId);
+        MarkNewsKeyProcessed(EventKey);
 
         if (UGameInstance* GameInstance = GetGameInstance())
         {
