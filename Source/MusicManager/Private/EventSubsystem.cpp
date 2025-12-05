@@ -114,6 +114,16 @@ void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
     }
 }
 
+bool UEventSubsystem::HasNewsBeenProcessed(const FGuid& NewsId) const
+{
+    return ProcessedNewsIds.Contains(NewsId);
+}
+
+void UEventSubsystem::MarkNewsAsProcessed(const FGuid& NewsId)
+{
+    ProcessedNewsIds.Add(NewsId);
+}
+
 void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
 {
     if (!ensure(IsInGameThread()))
@@ -124,14 +134,27 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
     UE_LOG(LogEventSubsystem, Verbose, TEXT("Processing simulated date change to %s."), *NewDate.ToString());
 
     const FMusicNewsEvent NewEvent = BuildMonthlyNews(NewDate);
-    if (UGameInstance* GameInstance = GetGameInstance())
+    if (NewEvent.BodyText != "")
     {
-        if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+        // Prevent duplicate triggers
+        if (HasNewsBeenProcessed(NewEvent.NewsId))
         {
-            UI->HandleNewsEvent(NewEvent);
+            UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping duplicate news event %s"), *NewEvent.NewsId.ToString());
+            return;
         }
+
+        MarkNewsAsProcessed(NewEvent.NewsId);
+
+        if (UGameInstance* GameInstance = GetGameInstance())
+        {
+            if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+            {
+                UI->HandleNewsEvent(NewEvent);
+            }
+        }
+
+        OnNewsEventGenerated.Broadcast(NewEvent);
     }
-    OnNewsEventGenerated.Broadcast(NewEvent);
 }
 
 UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()

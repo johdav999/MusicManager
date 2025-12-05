@@ -3,6 +3,7 @@
 
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Engine/World.h"
+#include "Containers/Set.h"
 
 #include "EventSubsystem.generated.h"
 
@@ -123,15 +124,20 @@ public:
     void UnregisterLayout(ULayout* InLayout);
 
 private:
-  
+
     void HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS);
 
     void ProcessMonthAdvanced(const FDateTime& NewDate);
     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
+    /** Tracks which NewsIds have already been processed to prevent duplicates. */
     UPROPERTY()
+    TSet<FGuid> ProcessedNewsIds;
+
+    bool HasNewsBeenProcessed(const FGuid& NewsId) const;
+    void MarkNewsAsProcessed(const FGuid& NewsId);
 
 
-  
+
     TWeakObjectPtr<ULayout> LayoutWeak;
     TWeakObjectPtr<UGameTimeSubsystem> GameTimeSubsystem;
 
