@@ -114,16 +114,6 @@ void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
     }
 }
 
-bool UEventSubsystem::HasNewsBeenProcessed(const FGuid& NewsId) const
-{
-    return ProcessedNewsIds.Contains(NewsId);
-}
-
-void UEventSubsystem::MarkNewsAsProcessed(const FGuid& NewsId)
-{
-    ProcessedNewsIds.Add(NewsId);
-}
-
 void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
 {
     if (!ensure(IsInGameThread()))
@@ -134,27 +124,14 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
     UE_LOG(LogEventSubsystem, Verbose, TEXT("Processing simulated date change to %s."), *NewDate.ToString());
 
     const FMusicNewsEvent NewEvent = BuildMonthlyNews(NewDate);
-    if (NewEvent.BodyText != "")
+    if (UGameInstance* GameInstance = GetGameInstance())
     {
-        // Prevent duplicate triggers
-        if (HasNewsBeenProcessed(NewEvent.NewsId))
+        if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
         {
-            UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping duplicate news event %s"), *NewEvent.NewsId.ToString());
-            return;
+            UI->HandleNewsEvent(NewEvent);
         }
-
-        MarkNewsAsProcessed(NewEvent.NewsId);
-
-        if (UGameInstance* GameInstance = GetGameInstance())
-        {
-            if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
-            {
-                UI->HandleNewsEvent(NewEvent);
-            }
-        }
-
-        OnNewsEventGenerated.Broadcast(NewEvent);
     }
+    OnNewsEventGenerated.Broadcast(NewEvent);
 }
 
 UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
@@ -228,17 +205,17 @@ FMusicNewsEvent UEventSubsystem::BuildMonthlyNews(const FDateTime& NewDate) cons
         }
     }
 
-    //NewEvent.NewsType = EMusicNewsType::IndustryTrend;
+    NewEvent.NewsType = EMusicNewsType::IndustryTrend;
 
-    //const FString MonthYearString = NewDate.ToString(TEXT("%B %Y"));
-    //NewEvent.SourceName = TEXT("Global Market Desk");
-    //NewEvent.SubjectName = MonthYearString;
-    //NewEvent.Headline = FString::Printf(TEXT("%s Market Recap Released"), *MonthYearString);
-    //NewEvent.BodyText = FString::Printf(
-    //    TEXT("Simulated time advanced to %s, generating scheduled market coverage."),
-    //    *MonthYearString
-    //);
-    //NewEvent.Tags = { TEXT("Auto"), TEXT("TimeSubsystem") };
+    const FString MonthYearString = NewDate.ToString(TEXT("%B %Y"));
+    NewEvent.SourceName = TEXT("Global Market Desk");
+    NewEvent.SubjectName = MonthYearString;
+    NewEvent.Headline = FString::Printf(TEXT("%s Market Recap Released"), *MonthYearString);
+    NewEvent.BodyText = FString::Printf(
+        TEXT("Simulated time advanced to %s, generating scheduled market coverage."),
+        *MonthYearString
+    );
+    NewEvent.Tags = { TEXT("Auto"), TEXT("TimeSubsystem") };
 
     return NewEvent;
 }
