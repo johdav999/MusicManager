@@ -114,6 +114,16 @@ void UEventSubsystem::UnregisterLayout(ULayout* InLayout)
     }
 }
 
+bool UEventSubsystem::HasNewsBeenProcessed(const FGuid& NewsId) const
+{
+    return ProcessedNewsIds.Contains(NewsId);
+}
+
+void UEventSubsystem::MarkNewsAsProcessed(const FGuid& NewsId)
+{
+    ProcessedNewsIds.Add(NewsId);
+}
+
 void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
 {
     if (!ensure(IsInGameThread()))
@@ -126,6 +136,15 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
     const FMusicNewsEvent NewEvent = BuildMonthlyNews(NewDate);
     if (NewEvent.BodyText != "")
     {
+        // Prevent duplicate triggers
+        if (HasNewsBeenProcessed(NewEvent.NewsId))
+        {
+            UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping duplicate news event %s"), *NewEvent.NewsId.ToString());
+            return;
+        }
+
+        MarkNewsAsProcessed(NewEvent.NewsId);
+
         if (UGameInstance* GameInstance = GetGameInstance())
         {
             if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
@@ -133,6 +152,7 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
                 UI->HandleNewsEvent(NewEvent);
             }
         }
+
         OnNewsEventGenerated.Broadcast(NewEvent);
     }
 }
