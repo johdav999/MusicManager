@@ -129,14 +129,13 @@ private:
 
     void ProcessMonthAdvanced(const FDateTime& NewDate);
     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
-    /** Tracks which NewsIds have already been processed to prevent duplicates. */
+    /** Tracks unique news triggers using a stable string key (e.g., ArtistId + NewsType). */
     UPROPERTY()
-    TSet<FGuid> ProcessedNewsIds;
+    TSet<FString> ProcessedNewsKeys;
 
-    bool HasNewsBeenProcessed(const FGuid& NewsId) const;
-    void MarkNewsAsProcessed(const FGuid& NewsId);
-
-
+    bool HasNewsKeyBeenProcessed(const FString& Key) const;
+    void MarkNewsKeyProcessed(const FString& Key);
+    FString BuildNewsKey(const FMusicNewsEvent& Event) const;
 
     TWeakObjectPtr<ULayout> LayoutWeak;
     TWeakObjectPtr<UGameTimeSubsystem> GameTimeSubsystem;
