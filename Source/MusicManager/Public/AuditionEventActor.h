@@ -33,6 +33,8 @@ public:
     void FinalizeDeal(bool bAcceptDeal);
 
 protected:
+    virtual void BeginPlay() override;
+
     void BeginPerformanceScoring(const FArtistData& Artist, USong* Song);
     void FinalizePerformance();
     void FinalizePerformanceResults();

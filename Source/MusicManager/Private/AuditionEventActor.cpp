@@ -3,6 +3,7 @@
 #include "ArtistManagerSubsystem.h"
 #include "Async/Async.h"
 #include "MusicPlayerComponent.h"
+#include "UIManagerSubsystem.h"
 #include "SongManagerSubsystem.h"
 #include "Song.h"
 #include "Math/UnrealMathUtility.h"
@@ -12,6 +13,22 @@ AAuditionEventActor::AAuditionEventActor()
     PrimaryActorTick.bCanEverTick = false;
 
     MusicPlayer = CreateDefaultSubobject<UMusicPlayerComponent>(TEXT("MusicPlayer"));
+}
+
+void AAuditionEventActor::BeginPlay()
+{
+    Super::BeginPlay();
+
+    if (UMusicPlayerComponent* MPC = MusicPlayer)
+    {
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (UUIManagerSubsystem* UI = GI->GetSubsystem<UUIManagerSubsystem>())
+            {
+                UI->RegisterMusicPlayerComponent(MPC);
+            }
+        }
+    }
 }
 
 void AAuditionEventActor::StartAudition()
@@ -29,9 +46,12 @@ void AAuditionEventActor::StartAudition()
         return;
     }
 
+    bool bRegisterMusicPlayer = false;
+
     if (!MusicPlayer)
     {
         MusicPlayer = NewObject<UMusicPlayerComponent>(this, TEXT("MusicPlayerRuntime"));
+        bRegisterMusicPlayer = true;
     }
 
     UWorld* World = GetWorld();
@@ -44,6 +64,14 @@ void AAuditionEventActor::StartAudition()
     if (!GameInstance)
     {
         return;
+    }
+
+    if (bRegisterMusicPlayer)
+    {
+        if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+        {
+            UI->RegisterMusicPlayerComponent(MusicPlayer);
+        }
     }
 
     UArtistManagerSubsystem* ArtistManager = GameInstance->GetSubsystem<UArtistManagerSubsystem>();

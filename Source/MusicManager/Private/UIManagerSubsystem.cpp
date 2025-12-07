@@ -72,6 +72,33 @@ void UUIManagerSubsystem::RegisterLayout(ULayout* Layout)
     PendingNewsEvents.Empty();
 }
 
+void UUIManagerSubsystem::RegisterMusicPlayerComponent(UMusicPlayerComponent* InComponent)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+        TWeakObjectPtr<UMusicPlayerComponent> WeakComp(InComponent);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakComp]()
+        {
+            if (UUIManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->RegisterMusicPlayerComponent(WeakComp.Get());
+            }
+        });
+        return;
+    }
+
+    if (!IsValid(InComponent))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RegisterMusicPlayerComponent: Provided component is invalid."));
+        return;
+    }
+
+    MusicPlayerComponent = InComponent;
+    UE_LOG(LogTemp, Log, TEXT("MusicPlayerComponent registered in UIManagerSubsystem."));
+}
+
 void UUIManagerSubsystem::UnregisterLayout(ULayout* Layout)
 {
     if (ActiveLayout.Get() == Layout)
@@ -247,11 +274,6 @@ void UUIManagerSubsystem::HandleNewsEvent(const FMusicNewsEvent& EventData)
 void UUIManagerSubsystem::HandleNewsEventGenerated(const FMusicNewsEvent& EventData)
 {
     HandleNewsEvent(EventData);
-}
-
-UMusicPlayerComponent* UUIManagerSubsystem::GetMusicPlayerComponent() const
-{
-    return MusicPlayerComponent; // must already exist in subsystem as you stated
 }
 
 void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)

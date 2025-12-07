@@ -54,8 +54,11 @@ public:
 
     void ShowContractForArtist(const FString& ArtistName);
 
+    UFUNCTION()
+    void RegisterMusicPlayerComponent(UMusicPlayerComponent* InComponent);
+
     UFUNCTION(BlueprintCallable)
-    UMusicPlayerComponent* GetMusicPlayerComponent() const;
+    UMusicPlayerComponent* GetMusicPlayerComponent() const { return MusicPlayerComponent; }
 
     /** Raised when a news card is selected anywhere in the UI. */
     FOnNewsSelected OnNewsSelected;
