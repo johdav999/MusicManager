@@ -304,11 +304,31 @@ void ULayout::ShowRecordWidget()
         return;
     }
 
-    if (IsValid(RecordWidget))
+    if (!IsValid(RecordWidget))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Making RecordWidget visible"));
-        RecordWidget->SetVisibility(ESlateVisibility::Visible);
+        UE_LOG(LogTemp, Warning, TEXT("ShowRecordWidget: RecordWidget is invalid."));
+        return;
     }
+
+    // Resolve selected artist
+    FString ArtistId;
+    if (UArtistManagerSubsystem* ArtistSub = GetArtistManagerSubsystem())
+    {
+        ArtistId = ArtistSub->GetSelectedArtist();
+    }
+
+    if (ArtistId.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ShowRecordWidget: No selected artist. Unable to populate songs."));
+    }
+    else
+    {
+        // Initialize RecordWidget for selected artist
+        RecordWidget->InitializeForArtist(ArtistId);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("Making RecordWidget visible"));
+    RecordWidget->SetVisibility(ESlateVisibility::Visible);
 }
 
 void ULayout::CloseRecordWidget()

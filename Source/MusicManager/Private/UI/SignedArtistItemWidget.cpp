@@ -1,5 +1,6 @@
 #include "UI/SignedArtistItemWidget.h"
 
+#include "ArtistManagerSubsystem.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
@@ -60,4 +61,13 @@ void USignedArtistItemWidget::HandleClicked()
     }
 
     OnArtistClicked.Broadcast(LocalArtistData.ArtistName);
+
+    // Update global selected artist
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UArtistManagerSubsystem* ArtistSub = GI->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            ArtistSub->SetSelectedArtist(LocalArtistData.ArtistName);
+        }
+    }
 }
