@@ -69,6 +69,16 @@ public:
     UFUNCTION(BlueprintCallable, Category="Contracts")
     void ExpireContract(const FString& ArtistId);
 
+    /** Tracks the currently selected artist (globally used by UI systems). */
+    UPROPERTY()
+    FString SelectedArtistId;
+
+    UFUNCTION()
+    void SetSelectedArtist(const FString& ArtistId);
+
+    UFUNCTION()
+    FString GetSelectedArtist() const;
+
     const FArtistContract* GetContractByArtistId(const FString& ArtistId) const;
 
     void GetSignedArtistData(TArray<FArtistData>& OutArtistData) const;

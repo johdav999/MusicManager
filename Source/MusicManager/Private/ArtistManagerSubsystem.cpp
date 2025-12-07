@@ -190,6 +190,32 @@ void UArtistManagerSubsystem::RegisterSongToArtist(const FString& ArtistId, cons
     }
 }
 
+void UArtistManagerSubsystem::SetSelectedArtist(const FString& ArtistId)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<UArtistManagerSubsystem> WeakThis(this);
+        const FString CopyId = ArtistId;
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, CopyId]()
+        {
+            if (UArtistManagerSubsystem* Strong = WeakThis.Get())
+            {
+                Strong->SetSelectedArtist(CopyId);
+            }
+        });
+        return;
+    }
+
+    SelectedArtistId = ArtistId;
+    UE_LOG(LogTemp, Log, TEXT("Selected Artist Updated To: %s"), *ArtistId);
+}
+
+FString UArtistManagerSubsystem::GetSelectedArtist() const
+{
+    return SelectedArtistId;
+}
+
 void UArtistManagerSubsystem::LoadArtistsFromDataTable()
 {
     ensure(IsInGameThread());
