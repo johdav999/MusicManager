@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AuditionTypes.h"
+#include "FSongData.h"
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "TimerManager.h"
@@ -27,6 +28,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Music")
     void PlaySong(USong* Song, const FArtistData& Artist);
+
+    UFUNCTION()
+    void PlaySongData(const FSongData& SongData, const FString& ArtistId);
 
     UFUNCTION(BlueprintCallable, Category = "Music")
     void PlayImprovisedPerformance(const FArtistData& Artist);
