@@ -2,12 +2,10 @@
 
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
-#include "AuditionTypes.h"
-#include "MusicManagerPlayerController.h"
+#include "Async/Async.h"
 #include "MusicPlayerComponent.h"
 #include "UI/RecordWidget.h"
-#include "Song.h"
-#include "SongManagerSubsystem.h"
+#include "UIManagerSubsystem.h"
 
 URecordSongListItemWidget::URecordSongListItemWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -28,6 +26,7 @@ void URecordSongListItemWidget::NativeOnListItemObjectSet(UObject* ListItemObjec
 void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& SongData)
 {
     SongId = InSongId;
+    CachedSongData = SongData;
     bSelected = false;
 
     if (IsValid(SongNameText))
@@ -35,47 +34,58 @@ void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& 
         SongNameText->SetText(FText::FromString(SongData.SongName));
     }
 
+    if (PlayButton)
+    {
+        PlayButton->OnClicked.Clear();
+        PlayButton->OnClicked.AddDynamic(this, &URecordSongListItemWidget::OnPlayClicked);
+    }
+
     BindButtonDelegates();
 }
 
 void URecordSongListItemWidget::OnPlayClicked()
 {
-    UWorld* World = GetWorld();
-    if (!World)
+    if (!IsInGameThread())
     {
-        return;
-    }
+        TWeakObjectPtr<URecordSongListItemWidget> WeakThis(this);
 
-    UGameInstance* GameInstance = World->GetGameInstance();
-    if (!IsValid(GameInstance))
-    {
-        return;
-    }
-
-    USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>();
-    if (!SongManager)
-    {
-        return;
-    }
-
-    USong* Song = SongManager->GetSongById(SongId);
-    if (!Song)
-    {
-        return;
-    }
-
-    if (APlayerController* PlayerController = World->GetFirstPlayerController())
-    {
-        if (AMusicManagerPlayerController* MusicController = Cast<AMusicManagerPlayerController>(PlayerController))
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
         {
-            if (UMusicPlayerComponent* Player = MusicController->FindComponentByClass<UMusicPlayerComponent>())
+            if (URecordSongListItemWidget* StrongThis = WeakThis.Get())
             {
-                FArtistData ArtistData;
-                ArtistData.ArtistId = ArtistId;
-                Player->PlaySong(Song, ArtistData);
+                StrongThis->OnPlayClicked();
+            }
+        });
+        return;
+    }
+
+    // Validate song data
+    if (!CachedSongData.SoundWave)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("OnPlayClicked: No SoundWave available for playback."));
+        return;
+    }
+
+    // Forward playback to MusicPlayerComponent via UIManagerSubsystem
+    if (UWorld* World = GetWorld())
+    {
+        if (UGameInstance* GameInstance = World->GetGameInstance())
+        {
+            if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+            {
+                if (UMusicPlayerComponent* Player = UI->GetMusicPlayerComponent())
+                {
+                    // ArtistId may come from EntryObject or OwningRecordWidget
+                    FString ArtistIdToUse = ArtistId;
+
+                    Player->PlaySongData(CachedSongData, ArtistIdToUse);
+                    return;
+                }
             }
         }
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("OnPlayClicked: Could not resolve MusicPlayerComponent."));
 }
 
 void URecordSongListItemWidget::OnAddClicked()

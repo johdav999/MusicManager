@@ -56,6 +56,33 @@ void UMusicPlayerComponent::PlaySong(USong* Song, const FArtistData& Artist)
     PlayImprovisedPerformance(Artist);
 }
 
+void UMusicPlayerComponent::PlaySongData(const FSongData& SongData, const FString& ArtistId)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<UMusicPlayerComponent> WeakThis(this);
+        const FSongData CopyData = SongData;
+        const FString CopyArtistId = ArtistId;
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, CopyData, CopyArtistId]()
+        {
+            if (UMusicPlayerComponent* Strong = WeakThis.Get())
+            {
+                Strong->PlaySongData(CopyData, CopyArtistId);
+            }
+        });
+        return;
+    }
+
+    InitializeAudioComponent();
+
+    if (AudioComponent && SongData.SoundWave)
+    {
+        AudioComponent->SetSound(SongData.SoundWave);
+        AudioComponent->Play();
+    }
+}
+
 void UMusicPlayerComponent::OnAudioFinishedInternal()
 {
     HandlePlayFinished();

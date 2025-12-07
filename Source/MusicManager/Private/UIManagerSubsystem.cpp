@@ -5,6 +5,7 @@
 #include "Layout.h"
 #include "ArtistManagerSubsystem.h"
 #include "Logging/LogMacros.h"
+#include "MusicPlayerComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUIManagerSubsystem, Log, All);
 
@@ -246,6 +247,11 @@ void UUIManagerSubsystem::HandleNewsEvent(const FMusicNewsEvent& EventData)
 void UUIManagerSubsystem::HandleNewsEventGenerated(const FMusicNewsEvent& EventData)
 {
     HandleNewsEvent(EventData);
+}
+
+UMusicPlayerComponent* UUIManagerSubsystem::GetMusicPlayerComponent() const
+{
+    return MusicPlayerComponent; // must already exist in subsystem as you stated
 }
 
 void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)

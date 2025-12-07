@@ -10,6 +10,7 @@
 #include "UIManagerSubsystem.generated.h"
 
 class ULayout;
+class UMusicPlayerComponent;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnNewsSelected, const FMusicNewsEvent&);
 
@@ -53,6 +54,9 @@ public:
 
     void ShowContractForArtist(const FString& ArtistName);
 
+    UFUNCTION(BlueprintCallable)
+    UMusicPlayerComponent* GetMusicPlayerComponent() const;
+
     /** Raised when a news card is selected anywhere in the UI. */
     FOnNewsSelected OnNewsSelected;
 
@@ -83,6 +87,9 @@ private:
     /** Weak pointer to the active layout to avoid ownership over widgets. */
     UPROPERTY()
     TWeakObjectPtr<ULayout> ActiveLayout;
+
+    UPROPERTY()
+    UMusicPlayerComponent* MusicPlayerComponent;
 
     /** News events received before the layout exists */
     UPROPERTY()

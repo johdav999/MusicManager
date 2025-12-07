@@ -33,7 +33,7 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UTextBlock* SongNameText;
 
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UButton* PlayButton;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
@@ -47,6 +47,9 @@ protected:
 
     UPROPERTY(BlueprintReadWrite)
     bool bSelected = false;
+
+    UPROPERTY()
+    FSongData CachedSongData;
 
 private:
     void BindButtonDelegates();
