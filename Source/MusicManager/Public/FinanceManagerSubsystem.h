@@ -1,0 +1,77 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Subsystems/GameInstanceSubsystem.h"
+#include "FinanceManagerSubsystem.generated.h"
+
+UENUM(BlueprintType)
+enum class ETransactionType : uint8
+{
+    RecordSales,
+    RecordingCost,
+    MarketingCost,
+    TourRevenue,
+    TourCost,
+    RoyaltyPayment,
+    GenericExpense,
+    GenericIncome
+};
+
+USTRUCT(BlueprintType)
+struct FCashFlowEntry
+{
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString LabelId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ETransactionType Type;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float Amount = 0.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime Timestamp;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString RefId;
+};
+
+USTRUCT(BlueprintType)
+struct FLabelAccount
+{
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString LabelId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float CurrentBalance = 0.f;
+
+    UPROPERTY()
+    TArray<FCashFlowEntry> Ledger;
+};
+
+UCLASS()
+class MUSICMANAGER_API UFinanceManagerSubsystem : public UGameInstanceSubsystem
+{
+    GENERATED_BODY()
+
+public:
+    UFUNCTION()
+    void RegisterTransaction(const FCashFlowEntry& Entry);
+
+    UFUNCTION(BlueprintCallable)
+    float GetLabelBalance(const FString& LabelId) const;
+
+    UFUNCTION(BlueprintCallable)
+    void GetLabelLedger(const FString& LabelId, TArray<FCashFlowEntry>& OutEntries) const;
+
+    UFUNCTION()
+    void RegisterRecordSalesRevenue(const FString& LabelId, const FString& RecordId, float Amount, const FDateTime& Timestamp);
+
+private:
+    UPROPERTY()
+    TMap<FString, FLabelAccount> LabelAccounts;
+};
