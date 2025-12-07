@@ -1,12 +1,14 @@
 #include "UI/RecordWidget.h"
 
 #include "ArtistManagerSubsystem.h"
+#include "Async/Async.h"
 #include "Components/Button.h"
 #include "Components/CheckBox.h"
 #include "Components/EditableTextBox.h"
 #include "Components/ListView.h"
 #include "RecordManagerSubsystem.h"
 #include "Song.h"
+#include "SongManagerSubsystem.h"
 #include "UI/RecordSongListItemWidget.h"
 
 URecordWidget::URecordWidget(const FObjectInitializer& ObjectInitializer)
@@ -29,7 +31,7 @@ void URecordWidget::InitializeForArtist(const FString& ArtistId)
 {
     CurrentArtistId = ArtistId;
     SelectedSongIds.Reset();
-    PopulateSongs(ArtistId);
+    PopulateSongsForArtist(ArtistId);
 }
 
 void URecordWidget::OnConfirmPressed()
@@ -112,10 +114,26 @@ void URecordWidget::HandleEntryGenerated(UUserWidget& EntryWidget)
     }
 }
 
-void URecordWidget::PopulateSongs(const FString& ArtistId)
+void URecordWidget::PopulateSongsForArtist(const FString& ArtistId)
 {
-    if (!IsValid(SongListView))
+    if (!IsInGameThread())
     {
+        TWeakObjectPtr<URecordWidget> WeakThis(this);
+        const FString CopyId = ArtistId;
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, CopyId]()
+        {
+            if (URecordWidget* Strong = WeakThis.Get())
+            {
+                Strong->PopulateSongsForArtist(CopyId);
+            }
+        });
+        return;
+    }
+
+    if (!SongListView)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("PopulateSongsForArtist: SongListView not bound."));
         return;
     }
 
@@ -127,29 +145,38 @@ void URecordWidget::PopulateSongs(const FString& ArtistId)
         return;
     }
 
-    UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
-    if (!ArtistSubsystem)
+    USongManagerSubsystem* SongSubsystem = GameInstance->GetSubsystem<USongManagerSubsystem>();
+    if (!IsValid(SongSubsystem))
     {
         return;
     }
 
-    TArray<USong*> SongsForArtist;
-    ArtistSubsystem->GetSongsForArtist(ArtistId, SongsForArtist);
+    TArray<USong*> Songs;
+    SongSubsystem->GetSongsForArtist(ArtistId, Songs);
 
-    for (USong* Song : SongsForArtist)
+    for (USong* Song : Songs)
     {
         if (!IsValid(Song))
         {
             continue;
         }
 
-        URecordSongListEntryObject* EntryObject = NewObject<URecordSongListEntryObject>(this);
-        EntryObject->SongId = Song->SongId;
-        EntryObject->ArtistId = Song->ArtistId;
-        EntryObject->SongData = Song->Data;
-        EntryObject->OwningWidget = this;
+        const FSongData& Data = Song->Data;
 
-        SongListView->AddItem(EntryObject);
+        // Skip already released songs
+        if (Data.bIsReleased)
+        {
+            continue;
+        }
+
+        // Create entry object for the list
+        URecordSongListEntryObject* Entry = NewObject<URecordSongListEntryObject>(this);
+        Entry->SongId = Song->SongId;
+        Entry->SongData = Data;
+        Entry->ArtistId = ArtistId;
+        Entry->OwningWidget = this;
+
+        SongListView->AddItem(Entry);
     }
 }
 

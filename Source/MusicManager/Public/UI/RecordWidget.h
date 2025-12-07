@@ -67,7 +67,7 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UButton* CancelButton;
 
-    UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UListView* SongListView;
 
 private:
@@ -80,8 +80,8 @@ private:
     // NOTE: Not a UFUNCTION because UE delegates use a reference signature.
     void HandleEntryGenerated(UUserWidget& EntryWidget);
 
-
-    void PopulateSongs(const FString& ArtistId);
+    UFUNCTION()
+    void PopulateSongsForArtist(const FString& ArtistId);
     void BindButtonDelegates();
 
     FString CurrentArtistId;
