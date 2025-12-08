@@ -1,95 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/DataTable.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Engine/DataTable.h"
+#include "MarketRegion.h"
 #include "MarketManagerSubsystem.generated.h"
-
-UENUM(BlueprintType)
-enum class EMarketRegionType : uint8
-{
-    Country,
-    State,
-    CityCluster
-};
-
-USTRUCT(BlueprintType)
-struct FMarketSegmentProfile
-{
-    GENERATED_BODY();
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FString SegmentId;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float PopulationShare = 0.f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float AvgIncome = 0.f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float Trendiness = 0.f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TMap<FString, float> GenreAffinity;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float PriceSensitivity = 1.f;
-};
-
-USTRUCT(BlueprintType)
-struct FMarketRegion : public FTableRowBase
-{
-    GENERATED_BODY();
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FString RegionId;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FString DisplayName;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    EMarketRegionType RegionType = EMarketRegionType::Country;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 TotalPopulation = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FMarketSegmentProfile> Segments;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float RadioReach = 0.5f;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-    TMap<FString, float> RecentArtistExposure;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-    TMap<FString, float> RecentRecordExposure;
-};
-
-USTRUCT(BlueprintType)
-struct FRecordSalesSnapshot
-{
-    GENERATED_BODY();
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FString RecordId;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FString LabelId;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FString RegionId;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 UnitsSold = 0;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FDateTime PeriodStart;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FDateTime PeriodEnd;
-};
 
 UCLASS()
 class MUSICMANAGER_API UMarketManagerSubsystem : public UGameInstanceSubsystem
@@ -98,35 +13,20 @@ class MUSICMANAGER_API UMarketManagerSubsystem : public UGameInstanceSubsystem
 
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
-    virtual void Deinitialize() override;
 
+    /** Assign in BP or defaults: DataTable with FMarketRegion rows */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
+    UDataTable* RegionDataTable;
+
+    /** Loaded regions keyed by RegionId */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market")
+    TMap<FString, FMarketRegion> LoadedRegions;
+
+    /** Load all rows from the DataTable */
     UFUNCTION()
-    void HandleMonthAdvanced(const FDateTime& NewDate);
+    void LoadRegions();
 
-    UFUNCTION()
-    void RegisterRecordRelease(const FString& RecordId, const FString& LabelId);
-
-    UFUNCTION()
-    void ApplyRadioExposure(const FString& RegionId, const FString& ArtistId, float Intensity);
-
-    UFUNCTION()
-    void SimulateMonthlyRecordSales(const FDateTime& PeriodStart, const FDateTime& PeriodEnd);
-
+    /** Lookup region by RegionId */
     UFUNCTION(BlueprintCallable)
-    void GetLastSalesForRecord(const FString& RecordId, TArray<FRecordSalesSnapshot>& OutSales) const;
-
-private:
-    UPROPERTY()
-    TMap<FString, FMarketRegion> Regions;
-
-    UPROPERTY()
-    TSet<FString> ActiveRecords;
-
-    UPROPERTY()
-    TArray<FRecordSalesSnapshot> SalesHistory;
-
-    UFUNCTION()
-    void BindToTimeSubsystem();
-
-    TWeakObjectPtr<class UGameTimeSubsystem> TimeSubsystem;
+    bool GetRegion(const FString& RegionId, FMarketRegion& OutRegion) const;
 };

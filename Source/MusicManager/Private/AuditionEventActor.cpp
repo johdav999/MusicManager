@@ -128,6 +128,9 @@ void AAuditionEventActor::StartAudition()
 
 void AAuditionEventActor::FinalizeDeal(bool bAcceptDeal)
 {
+    // Stop the audition music
+    StopAuditionMusic();
+
     AuditionData.bSignedArtist = bAcceptDeal;
     AuditionData.Outcome = bAcceptDeal ? TEXT("Deal Accepted") : TEXT("Deal Rejected");
     OnNegotiationUpdated.Broadcast();
@@ -153,4 +156,25 @@ void AAuditionEventActor::FinalizePerformanceResults()
     // update ArtistManagerSubsystem with scoring results
     // increase stage presence, fan engagement, etc.
     // trigger news/event subsystem if it exists
+}
+
+void AAuditionEventActor::StopAuditionMusic()
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<AAuditionEventActor> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (AAuditionEventActor* StrongThis = WeakThis.Get())
+            {
+                StrongThis->StopAuditionMusic();
+            }
+        });
+        return;
+    }
+
+    if (MusicPlayer)
+    {
+        MusicPlayer->Stop();
+    }
 }

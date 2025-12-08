@@ -1,68 +1,41 @@
 #include "MarketManagerSubsystem.h"
-#include "GameTimeSubsystem.h"
-#include "Engine/GameInstance.h"
 
 void UMarketManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-    BindToTimeSubsystem();
+    LoadRegions();
 }
 
-void UMarketManagerSubsystem::Deinitialize()
+void UMarketManagerSubsystem::LoadRegions()
 {
-    if (UGameTimeSubsystem* TS = TimeSubsystem.Get())
+    LoadedRegions.Empty();
+
+    if (!RegionDataTable)
     {
-        TS->OnMonthAdvanced.RemoveAll(this);
+        UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: No RegionDataTable assigned."));
+        return;
     }
-    TimeSubsystem.Reset();
 
-    Super::Deinitialize();
-}
+    static const FString Context = TEXT("RegionDataTable Load");
 
-void UMarketManagerSubsystem::BindToTimeSubsystem()
-{
-    if (UGameInstance* GI = GetGameInstance())
+    TArray<FMarketRegion*> Rows;
+    RegionDataTable->GetAllRows(Context, Rows);
+
+    for (FMarketRegion* Row : Rows)
     {
-        if (UGameTimeSubsystem* TS = GI->GetSubsystem<UGameTimeSubsystem>())
-        {
-            TimeSubsystem = TS;
-            TS->OnMonthAdvanced.AddDynamic(this, &UMarketManagerSubsystem::HandleMonthAdvanced);
-        }
+        if (!Row) continue;
+        LoadedRegions.Add(Row->RegionId, *Row);
     }
+
+    UE_LOG(LogTemp, Log, TEXT("MarketManagerSubsystem: Loaded %d regions."), LoadedRegions.Num());
 }
 
-void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
+bool UMarketManagerSubsystem::GetRegion(const FString& RegionId, FMarketRegion& OutRegion) const
 {
-    // Simulation placeholder
-}
-
-void UMarketManagerSubsystem::RegisterRecordRelease(const FString& RecordId, const FString& LabelId)
-{
-    ActiveRecords.Add(RecordId);
-}
-
-void UMarketManagerSubsystem::ApplyRadioExposure(const FString& RegionId, const FString& ArtistId, float Intensity)
-{
-    if (FMarketRegion* Region = Regions.Find(RegionId))
+    if (const FMarketRegion* Found = LoadedRegions.Find(RegionId))
     {
-        Region->RecentArtistExposure.FindOrAdd(ArtistId) += Intensity;
+        OutRegion = *Found;
+        return true;
     }
-}
-
-void UMarketManagerSubsystem::SimulateMonthlyRecordSales(const FDateTime& PeriodStart, const FDateTime& PeriodEnd)
-{
-    // Sales simulation placeholder
-    // UFinanceManagerSubsystem* Finance = GetGameInstance()->GetSubsystem<UFinanceManagerSubsystem>();
-    // Finance->RegisterRecordSalesRevenue(LabelId, RecordId, Revenue, PeriodEnd);
-}
-
-void UMarketManagerSubsystem::GetLastSalesForRecord(const FString& RecordId, TArray<FRecordSalesSnapshot>& OutSales) const
-{
-    for (const FRecordSalesSnapshot& Entry : SalesHistory)
-    {
-        if (Entry.RecordId == RecordId)
-        {
-            OutSales.Add(Entry);
-        }
-    }
+    return false;
 }
