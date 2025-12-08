@@ -32,9 +32,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Audition")
     void FinalizeDeal(bool bAcceptDeal);
 
-    UFUNCTION()
-    void StopAuditionMusic();
-
 protected:
     virtual void BeginPlay() override;
 
