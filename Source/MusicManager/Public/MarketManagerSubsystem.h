@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/DataTable.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "MarketManagerSubsystem.generated.h"
 
@@ -37,7 +38,7 @@ struct FMarketSegmentProfile
 };
 
 USTRUCT(BlueprintType)
-struct FMarketRegion
+struct FMarketRegion : public FTableRowBase
 {
     GENERATED_BODY();
 
