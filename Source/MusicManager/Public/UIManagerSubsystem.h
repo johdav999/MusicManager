@@ -60,6 +60,9 @@ public:
     UFUNCTION(BlueprintCallable)
     UMusicPlayerComponent* GetMusicPlayerComponent() const { return MusicPlayerComponent; }
 
+    UFUNCTION()
+    void StopAuditionMusic();
+
     /** Raised when a news card is selected anywhere in the UI. */
     FOnNewsSelected OnNewsSelected;
 

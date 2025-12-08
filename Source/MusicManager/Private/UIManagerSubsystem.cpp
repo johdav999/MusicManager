@@ -99,6 +99,32 @@ void UUIManagerSubsystem::RegisterMusicPlayerComponent(UMusicPlayerComponent* In
     UE_LOG(LogTemp, Log, TEXT("MusicPlayerComponent registered in UIManagerSubsystem."));
 }
 
+void UUIManagerSubsystem::StopAuditionMusic()
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (UUIManagerSubsystem* Strong = WeakThis.Get())
+            {
+                Strong->StopAuditionMusic();
+            }
+        });
+        return;
+    }
+
+    if (MusicPlayerComponent)
+    {
+        MusicPlayerComponent->Stop();
+        UE_LOG(LogTemp, Display, TEXT("UIManagerSubsystem: Stopped audition music."));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("UIManagerSubsystem: No MusicPlayerComponent registered to stop."));
+    }
+}
+
 void UUIManagerSubsystem::UnregisterLayout(ULayout* Layout)
 {
     if (ActiveLayout.Get() == Layout)
@@ -215,6 +241,9 @@ void UUIManagerSubsystem::HandleArtistSigned(const FArtistContract& Contract)
         });
         return;
     }
+
+    // Stop audition music when signing a deal
+    StopAuditionMusic();
 
     if (ULayout* Layout = ActiveLayout.Get())
     {
