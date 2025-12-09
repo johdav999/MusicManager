@@ -23,7 +23,7 @@ public:
     TMap<FString, FMarketRegion> LoadedRegions;
 
     /** Load all rows from the DataTable */
-    UFUNCTION()
+    UFUNCTION(BlueprintCallable)
     void LoadRegions();
 
     /** Lookup region by RegionId */
