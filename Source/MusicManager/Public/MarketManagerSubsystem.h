@@ -29,4 +29,8 @@ public:
     /** Lookup region by RegionId */
     UFUNCTION(BlueprintCallable)
     bool GetRegion(const FString& RegionId, FMarketRegion& OutRegion) const;
+
+    /** Get all loaded regions. */
+    UFUNCTION(BlueprintCallable)
+    void GetAllRegions(TArray<FMarketRegion>& OutRegions) const;
 };
