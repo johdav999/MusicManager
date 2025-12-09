@@ -74,10 +74,16 @@ void URegionMapWidget::RebuildWidgetTree()
                 }
 
                 NewButton->InitializeRegion(Region.RegionId);
+                NewButton->OnRegionClicked.AddDynamic(this, &URegionMapWidget::HandleButtonClicked);
 
                 RegionButtons.Add(Region.RegionId, NewButton);
                 RootCanvas->AddChild(NewButton);
             }
         }
     }
+}
+
+void URegionMapWidget::HandleButtonClicked(const FString& RegionId)
+{
+    OnRegionSelected.Broadcast(RegionId);
 }

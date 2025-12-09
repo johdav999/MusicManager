@@ -6,6 +6,8 @@
 #include "Components/TextBlock.h"
 #include "RegionMapButton.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRegionClicked, const FString&, RegionId);
+
 /**
  * A simple widget representing a region button on the map.
  */
@@ -27,6 +29,10 @@ public:
     UPROPERTY(meta = (BindWidget))
     UTextBlock* RegionText;
 
+    /** Broadcast when this region button is clicked. */
+    UPROPERTY(BlueprintAssignable, Category = "RegionMap")
+    FOnRegionClicked OnRegionClicked;
+
     /** Identifier for this region. */
     UPROPERTY(BlueprintReadOnly, Category = "Region")
     FString RegionId;
@@ -36,6 +42,10 @@ public:
     void InitializeRegion(const FString& InRegionId);
 
 protected:
+    /** Handle button clicked event. */
+    UFUNCTION()
+    void HandleClicked();
+
     /** Create default widgets if not provided by Blueprint. */
     void EnsureDefaultWidgets();
 };
