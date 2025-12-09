@@ -39,3 +39,8 @@ bool UMarketManagerSubsystem::GetRegion(const FString& RegionId, FMarketRegion& 
     }
     return false;
 }
+
+void UMarketManagerSubsystem::GetAllRegions(TArray<FMarketRegion>& OutRegions) const
+{
+    LoadedRegions.GenerateValueArray(OutRegions);
+}
