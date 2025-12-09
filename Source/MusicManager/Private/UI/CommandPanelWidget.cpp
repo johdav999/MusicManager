@@ -60,6 +60,14 @@ void UCommandPanelWidget::HandleCommandClicked(const FString& CommandName)
 {
     if (!IsInGameThread())
     {
+        const TWeakObjectPtr<UCommandPanelWidget> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, CommandName]()
+        {
+            if (UCommandPanelWidget* Strong = WeakThis.Get())
+            {
+                Strong->HandleCommandClicked(CommandName);
+            }
+        });
         return;
     }
 
@@ -70,6 +78,11 @@ void UCommandPanelWidget::HandleCommandClicked(const FString& CommandName)
         {
             if (UUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>())
             {
+                if (CommandName == TEXT("Marketing"))
+                {
+                    UIManager->ShowRegionMap();
+                }
+
                 UIManager->HandleCommandAction(CommandName);
             }
         }

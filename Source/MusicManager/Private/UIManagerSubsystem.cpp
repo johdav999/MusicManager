@@ -141,6 +141,28 @@ void UUIManagerSubsystem::ShowAudition(const FAuditionEvent& EventData)
     }
 }
 
+void UUIManagerSubsystem::ShowRegionMap()
+{
+    const TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+
+    if (!IsInGameThread())
+    {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (UUIManagerSubsystem* Strong = WeakThis.Get())
+            {
+                Strong->ShowRegionMap();
+            }
+        });
+        return;
+    }
+
+    if (ULayout* Layout = ActiveLayout.Get())
+    {
+        Layout->ShowRegionMap();
+    }
+}
+
 void UUIManagerSubsystem::HandleAuditionResult(bool bPassed)
 {
     UGameInstance* GameInstance = GetGameInstance();

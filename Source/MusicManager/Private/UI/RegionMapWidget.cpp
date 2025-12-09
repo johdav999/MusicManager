@@ -12,10 +12,16 @@ URegionMapWidget::URegionMapWidget(const FObjectInitializer& ObjectInitializer)
 
 void URegionMapWidget::NativeConstruct()
 {
+    Super::NativeConstruct();
+}
+
+void URegionMapWidget::NativePreConstruct()
+{
     if (!IsInGameThread())
     {
         const TWeakObjectPtr<URegionMapWidget> WeakThis(this);
-        AsyncTask(ENamedThreads::GameThread, [WeakThis]() {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
             if (URegionMapWidget* Strong = WeakThis.Get())
             {
                 Strong->RebuildWidgetTree();
@@ -24,7 +30,7 @@ void URegionMapWidget::NativeConstruct()
         return;
     }
 
-    Super::NativeConstruct();
+    Super::NativePreConstruct();
 
     RebuildWidgetTree();
 }
@@ -43,9 +49,14 @@ void URegionMapWidget::RebuildWidgetTree()
         return;
     }
 
-    if (!RootCanvas && WidgetTree)
+    if (WidgetTree && !RootCanvas)
     {
         RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
+        WidgetTree->RootWidget = RootCanvas;
+    }
+
+    if (WidgetTree && WidgetTree->RootWidget == nullptr && RootCanvas)
+    {
         WidgetTree->RootWidget = RootCanvas;
     }
 
@@ -57,33 +68,63 @@ void URegionMapWidget::RebuildWidgetTree()
     RootCanvas->ClearChildren();
     RegionButtons.Empty();
 
-    if (UGameInstance* GI = GetGameInstance())
+    const bool bIsRuntime = !IsDesignTime();
+    TArray<FMarketRegion> Regions;
+
+    if (bIsRuntime)
     {
-        if (UMarketManagerSubsystem* Market = GI->GetSubsystem<UMarketManagerSubsystem>())
+        if (UGameInstance* GI = GetGameInstance())
         {
-            TArray<FMarketRegion> Regions;
-            Market->GetAllRegions(Regions);
-
-            for (const FMarketRegion& Region : Regions)
+            if (UMarketManagerSubsystem* Market = GI->GetSubsystem<UMarketManagerSubsystem>())
             {
-                URegionMapButton* NewButton = WidgetTree->ConstructWidget<URegionMapButton>(URegionMapButton::StaticClass());
-
-                if (!NewButton)
-                {
-                    continue;
-                }
-
-                NewButton->InitializeRegion(Region.RegionId);
-                NewButton->OnRegionClicked.AddDynamic(this, &URegionMapWidget::HandleButtonClicked);
-
-                RegionButtons.Add(Region.RegionId, NewButton);
-                RootCanvas->AddChild(NewButton);
+                Market->GetAllRegions(Regions);
             }
         }
+    }
+    else
+    {
+        const TArray<FString> MockRegionIds = {
+            TEXT("Mock_NorthAmerica"),
+            TEXT("Mock_Europe"),
+            TEXT("Mock_Asia")
+        };
+
+        for (const FString& MockId : MockRegionIds)
+        {
+            FMarketRegion MockRegion;
+            MockRegion.RegionId = MockId;
+            MockRegion.DisplayName = MockId;
+            Regions.Add(MockRegion);
+        }
+    }
+
+    for (const FMarketRegion& Region : Regions)
+    {
+        URegionMapButton* NewButton = WidgetTree->ConstructWidget<URegionMapButton>(URegionMapButton::StaticClass());
+
+        if (!NewButton)
+        {
+            continue;
+        }
+
+        NewButton->InitializeRegion(Region.RegionId);
+
+        if (bIsRuntime)
+        {
+            NewButton->OnRegionClicked.AddDynamic(this, &URegionMapWidget::HandleButtonClicked);
+        }
+
+        RegionButtons.Add(Region.RegionId, NewButton);
+        RootCanvas->AddChild(NewButton);
     }
 }
 
 void URegionMapWidget::HandleButtonClicked(const FString& RegionId)
 {
     OnRegionSelected.Broadcast(RegionId);
+}
+
+void URegionMapWidget::RefreshRegions()
+{
+    RebuildWidgetTree();
 }

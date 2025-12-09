@@ -58,6 +58,7 @@ void URegionMapButton::EnsureDefaultWidgets()
     {
         RegionButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("RegionButton"));
         WidgetTree->RootWidget = RegionButton;
+        RegionButton->OnClicked.AddDynamic(this, &URegionMapButton::HandleClicked);
     }
 
     if (!RegionText)
