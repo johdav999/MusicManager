@@ -8,6 +8,8 @@
 
 class UMarketManagerSubsystem;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRegionSelected, const FString&, RegionId);
+
 /**
  * Widget that creates region buttons for each market region.
  */
@@ -21,6 +23,10 @@ public:
 
     virtual void NativeConstruct() override;
 
+    /** Broadcast when a region is selected. */
+    UPROPERTY(BlueprintAssignable, Category = "RegionMap")
+    FOnRegionSelected OnRegionSelected;
+
 protected:
     /** Canvas panel used as the root container for region buttons. */
     UPROPERTY(meta = (BindWidget))
@@ -32,4 +38,8 @@ protected:
 
     /** Rebuild the widget tree and populate buttons for all regions. */
     void RebuildWidgetTree();
+
+    /** Handle region button clicked event. */
+    UFUNCTION()
+    void HandleButtonClicked(const FString& RegionId);
 };

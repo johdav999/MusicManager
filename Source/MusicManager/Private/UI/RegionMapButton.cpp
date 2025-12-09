@@ -15,6 +15,12 @@ void URegionMapButton::NativeConstruct()
 
     EnsureDefaultWidgets();
 
+    if (RegionButton)
+    {
+        RegionButton->OnClicked.Clear();
+        RegionButton->OnClicked.AddDynamic(this, &URegionMapButton::HandleClicked);
+    }
+
     if (!RegionId.IsEmpty() && RegionText)
     {
         RegionText->SetText(FText::FromString(RegionId));
@@ -25,12 +31,20 @@ void URegionMapButton::InitializeRegion(const FString& InRegionId)
 {
     RegionId = InRegionId;
 
+    // Dynamically rename widget
+    Rename(*FString::Printf(TEXT("RegionMapButton_%s"), *RegionId));
+
     EnsureDefaultWidgets();
 
     if (RegionText)
     {
         RegionText->SetText(FText::FromString(RegionId));
     }
+}
+
+void URegionMapButton::HandleClicked()
+{
+    OnRegionClicked.Broadcast(RegionId);
 }
 
 void URegionMapButton::EnsureDefaultWidgets()
