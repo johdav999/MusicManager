@@ -16,6 +16,7 @@ class UAuditionWidget;
 class UUIManagerSubsystem;
 class USignedArtistPanelWidget;
 class UArtistManagerSubsystem;
+class URegionMapWidget;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
@@ -67,6 +68,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Audition")
     void ShowAuditionWidgetWithData(const FAuditionEvent& EventData);
 
+    UFUNCTION(BlueprintCallable)
+    void ShowRegionMap();
+
     UFUNCTION(BlueprintCallable, Category = "Contract")
     void ShowContract(const FArtistContract& SignedContract);
 
@@ -91,6 +95,9 @@ protected:
 
     UPROPERTY(meta=(BindWidget))
     USignedArtistPanelWidget* SignedArtistsPanel;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    URegionMapWidget* RegionMapWidget;
 
 private:
     UFUNCTION()

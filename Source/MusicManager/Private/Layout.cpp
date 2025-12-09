@@ -13,6 +13,7 @@
 #include "ArtistManagerSubsystem.h"
 #include "UIManagerSubsystem.h"
 #include "UI/SignedArtistPanelWidget.h"
+#include "UI/RegionMapWidget.h"
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -29,6 +30,19 @@ void ULayout::NativeConstruct()
         {
             UIManager->RegisterLayout(this);
         }
+    }
+
+    if (!RegionMapWidget && WidgetTree)
+    {
+        if (UWidget* FoundWidget = WidgetTree->FindWidget(TEXT("RegionMapWidget")))
+        {
+            RegionMapWidget = Cast<URegionMapWidget>(FoundWidget);
+        }
+    }
+
+    if (RegionMapWidget)
+    {
+        RegionMapWidget->RefreshRegions();
     }
 
     if (IsValid(SignedArtistsPanel))
@@ -221,6 +235,30 @@ void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
     {
         AuditionWidget->SetVisibility(ESlateVisibility::Visible);
     }
+}
+
+void ULayout::ShowRegionMap()
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (ULayout* Strong = WeakThis.Get())
+            {
+                Strong->ShowRegionMap();
+            }
+        });
+        return;
+    }
+
+    if (!RegionMapWidget)
+    {
+        return;
+    }
+
+    RegionMapWidget->SetVisibility(ESlateVisibility::Visible);
+    RegionMapWidget->RefreshRegions();
 }
 
 void ULayout::ShowAuditionWidget()

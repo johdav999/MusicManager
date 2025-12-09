@@ -42,6 +42,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI")
     void ShowAudition(const FAuditionEvent& EventData);
 
+    UFUNCTION(BlueprintCallable, Category = "UI")
+    void ShowRegionMap();
+
     /** Handle outcomes from audition flow to keep unsigned roster in sync. */
     UFUNCTION()
     void HandleAuditionResult(bool bPassed);

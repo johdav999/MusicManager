@@ -22,10 +22,14 @@ public:
     URegionMapWidget(const FObjectInitializer& ObjectInitializer);
 
     virtual void NativeConstruct() override;
+    virtual void NativePreConstruct() override;
 
     /** Broadcast when a region is selected. */
     UPROPERTY(BlueprintAssignable, Category = "RegionMap")
     FOnRegionSelected OnRegionSelected;
+
+    UFUNCTION(BlueprintCallable)
+    void RefreshRegions();
 
 protected:
     /** Canvas panel used as the root container for region buttons. */
