@@ -15,10 +15,22 @@ public class MusicManager : ModuleRules
                         "Engine",
                         "UMG",
                         "Slate",
-                        "SlateCore","EnhancedInput",    "InputCore",
+                        "SlateCore",
+                        "EnhancedInput",
+                        "InputCore",
                 });
 
                 PrivateDependencyModuleNames.AddRange(new string[] { });
+
+                if (Target.bBuildEditor)
+                {
+                        PrivateDependencyModuleNames.AddRange(new[]
+                        {
+                                "UnrealEd",
+                                "UMGEditor",
+                                "Kismet2",
+                        });
+                }
 
                 // Uncomment if you are using online features
                 // PrivateDependencyModuleNames.Add("OnlineSubsystem");
