@@ -25,8 +25,13 @@ public class MusicManagerEditor : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				"Core",
-				// ... add other public dependencies that you statically link with here ...
+            "Core",
+                "CoreUObject",
+                "Engine",
+                "Slate",
+                "SlateCore",
+                "UMG",
+                "MusicManager"   // Allow editor code to see your runtime classes
 			}
 			);
 			
@@ -43,6 +48,14 @@ public class MusicManagerEditor : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
+                 "UnrealEd",
+                "UMGEditor",
+                "Blutility",
+                "Kismet",
+                "KismetCompiler",
+                "KismetWidgets",
+                "EditorSubsystem",
+                "AssetRegistry",
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);

@@ -28,7 +28,7 @@ public class MusicManager : ModuleRules
                         {
                                 "UnrealEd",
                                 "UMGEditor",
-                                "Kismet2",
+                               
                         });
                 }
 
