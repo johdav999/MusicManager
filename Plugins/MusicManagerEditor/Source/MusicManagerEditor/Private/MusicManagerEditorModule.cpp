@@ -3,6 +3,7 @@
 #include "MusicManagerEditor.h"
 #include "MusicManagerEditorStyle.h"
 #include "MusicManagerEditorCommands.h"
+#include "RegionMapGeneratorTool.h"
 #include "Misc/MessageDialog.h"
 #include "ToolMenus.h"
 
@@ -45,13 +46,21 @@ void FMusicManagerEditorModule::ShutdownModule()
 
 void FMusicManagerEditorModule::PluginButtonClicked()
 {
-	// Put your "OnButtonClicked" stuff here
-        FText DialogText = FText::Format(
-                                                        LOCTEXT("PluginButtonDialogText", "Add code to {0} in {1} to override this button's actions"),
-                                                        FText::FromString(TEXT("FMusicManagerEditorModule::PluginButtonClicked()")),
-                                                        FText::FromString(TEXT("MusicManagerEditorModule.cpp"))
-                                           );
-	FMessageDialog::Open(EAppMsgType::Ok, DialogText);
+
+	// Create a transient instance of the tool
+	URegionMapGeneratorTool* Tool = NewObject<URegionMapGeneratorTool>();
+
+	if (!Tool)
+	{
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString("Failed to create RegionMapGeneratorTool instance."));
+		return;
+	}
+
+	// Run the generator
+	Tool->GenerateRegionButtons();
+
+	// Notify editor
+	FMessageDialog::Open(EAppMsgType::Ok, FText::FromString("Region Map Buttons generated successfully."));
 }
 
 void FMusicManagerEditorModule::RegisterMenus()

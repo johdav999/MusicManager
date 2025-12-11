@@ -4,7 +4,7 @@
 #include "UObject/Object.h"
 #include "RegionMapGeneratorTool.generated.h"
 
-UCLASS()
+UCLASS(BlueprintType, Blueprintable, EditInlineNew)
 class MUSICMANAGEREDITOR_API URegionMapGeneratorTool : public UObject
 {
     GENERATED_BODY()

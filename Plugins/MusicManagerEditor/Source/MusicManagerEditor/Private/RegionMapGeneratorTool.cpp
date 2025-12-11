@@ -17,7 +17,7 @@
 
 void URegionMapGeneratorTool::GenerateRegionButtons()
 {
-    const FString WidgetPath = TEXT("/Game/UI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
+    const FString WidgetPath = TEXT("/Game/GUI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
     UWidgetBlueprint* WidgetBP = Cast<UWidgetBlueprint>(
         StaticLoadObject(UWidgetBlueprint::StaticClass(), nullptr, *WidgetPath));
 
@@ -42,7 +42,7 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
     }
 
     // Load regions from DataTable
-    const FString DataTablePath = TEXT("/Game/Data/DT_Regions.DT_Regions");
+    const FString DataTablePath = TEXT("/Game/Data/RegionData.RegionData");
     UDataTable* RegionTable = Cast<UDataTable>(
         StaticLoadObject(UDataTable::StaticClass(), nullptr, *DataTablePath));
 
@@ -93,13 +93,24 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
     }
 
     // Save updated blueprint
+#if WITH_EDITOR
+
+    check(IsInGameThread());   // Ensure we are on the editor thread
+
+    // Ensure Blueprint is editable
     WidgetBP->Modify();
+
+    // Mark as structurally modified
     FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBP);
+
+    // Mark dirty BEFORE saving (UE5.6 requirement)
     WidgetBP->MarkPackageDirty();
 
-    UPackage* Pkg = WidgetBP->GetPackage();
-    FString OutputFilename = FPackageName::LongPackageNameToFilename(
-        Pkg->GetName(), FPackageName::GetAssetPackageExtension());
+    // Save package
+    UPackage* Package = WidgetBP->GetPackage();
+
+    FString OutputFilename =
+        FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
 
     FSavePackageArgs SaveArgs;
     SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
@@ -107,12 +118,13 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
     SaveArgs.bWarnOfLongFilename = false;
 
     UPackage::SavePackage(
-        Pkg,
+        Package,
         WidgetBP,
         *OutputFilename,
-        SaveArgs);
+        SaveArgs
+    );
 
-    UE_LOG(LogTemp, Log, TEXT("RegionMapGenerator: Added %d new region buttons."), Added);
+#endif
 }
 
 #endif
