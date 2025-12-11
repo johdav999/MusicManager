@@ -4,37 +4,27 @@ using UnrealBuildTool;
 
 public class MusicManager : ModuleRules
 {
-        public MusicManager(ReadOnlyTargetRules Target) : base(Target)
+    public MusicManager(ReadOnlyTargetRules Target) : base(Target)
+    {
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+
+        PublicDependencyModuleNames.AddRange(new[]
         {
-                PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+            "Core",
+            "CoreUObject",
+            "Engine",
+            "UMG",
+            "Slate",
+            "SlateCore",
+            "EnhancedInput",
+            "InputCore",
+        });
 
-                PublicDependencyModuleNames.AddRange(new[]
-                {
-                        "Core",
-                        "CoreUObject",
-                        "Engine",
-                        "UMG",
-                        "Slate",
-                        "SlateCore",
-                        "EnhancedInput",
-                        "InputCore",
-                });
+        PrivateDependencyModuleNames.AddRange(new string[] { });
 
-                PrivateDependencyModuleNames.AddRange(new string[] { });
+        // Uncomment if you are using online features
+        // PrivateDependencyModuleNames.Add("OnlineSubsystem");
 
-                if (Target.bBuildEditor)
-                {
-                        PrivateDependencyModuleNames.AddRange(new[]
-                        {
-                                "UnrealEd",
-                                "UMGEditor",
-                               
-                        });
-                }
-
-                // Uncomment if you are using online features
-                // PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-                // To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
-        }
+        // To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
+    }
 }
