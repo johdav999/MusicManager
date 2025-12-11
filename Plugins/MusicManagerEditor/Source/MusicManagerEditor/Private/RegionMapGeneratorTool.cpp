@@ -2,19 +2,18 @@
 
 #if WITH_EDITOR
 
-
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
-#include "Misc/PackageName.h"
 #include "Engine/DataTable.h"
 #include "Kismet2/BlueprintEditorUtils.h"
-#include "AssetRegistry/AssetRegistryModule.h"
-#include "UObject/Package.h"
-#include "WidgetBlueprint.h"
-// Include runtime references from game module
-#include "UI/RegionMapButton.h"
 #include "MarketRegion.h"
+#include "Misc/PackageName.h"
+#include "UObject/Package.h"
+#include "UObject/SavePackage.h"
+#include "UI/RegionMapButton.h"
+#include "WidgetBlueprint.h"
 
 void URegionMapGeneratorTool::GenerateRegionButtons()
 {
@@ -79,7 +78,14 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
 
         if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Button->Slot))
         {
-            Slot->SetPosition(FVector2D(50.f * Index, 50.f));
+            const int32 Columns = 8;
+            const float CellWidth = 100.f;
+            const float CellHeight = 80.f;
+
+            const int32 ColumnIndex = Index % Columns;
+            const int32 RowIndex = Index / Columns;
+
+            Slot->SetPosition(FVector2D(CellWidth * ColumnIndex, CellHeight * RowIndex));
             Slot->SetSize(FVector2D(150.f, 50.f));
         }
 
@@ -92,10 +98,19 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
     WidgetBP->MarkPackageDirty();
 
     UPackage* Pkg = WidgetBP->GetPackage();
-    FString OutPath = FPackageName::LongPackageNameToFilename(
+    FString OutputFilename = FPackageName::LongPackageNameToFilename(
         Pkg->GetName(), FPackageName::GetAssetPackageExtension());
 
-    UPackage::SavePackage(Pkg, WidgetBP, RF_Public | RF_Standalone, *OutPath);
+    FSavePackageArgs SaveArgs;
+    SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+    SaveArgs.Error = GError;
+    SaveArgs.bWarnOfLongFilename = false;
+
+    UPackage::SavePackage(
+        Pkg,
+        WidgetBP,
+        *OutputFilename,
+        SaveArgs);
 
     UE_LOG(LogTemp, Log, TEXT("RegionMapGenerator: Added %d new region buttons."), Added);
 }
