@@ -9,7 +9,7 @@
 #include "Engine/DataTable.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
-#include "Kismet2/WidgetBlueprintEditorUtils.h"
+#include "WidgetBlueprintEditorUtils.h"
 #include "MarketRegion.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
