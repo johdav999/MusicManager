@@ -46,11 +46,11 @@ void FMusicManagerEditorModule::ShutdownModule()
 void FMusicManagerEditorModule::PluginButtonClicked()
 {
 	// Put your "OnButtonClicked" stuff here
-	FText DialogText = FText::Format(
-							LOCTEXT("PluginButtonDialogText", "Add code to {0} in {1} to override this button's actions"),
-							FText::FromString(TEXT("FMusicManagerEditorModule::PluginButtonClicked()")),
-							FText::FromString(TEXT("MusicManagerEditor.cpp"))
-					   );
+        FText DialogText = FText::Format(
+                                                        LOCTEXT("PluginButtonDialogText", "Add code to {0} in {1} to override this button's actions"),
+                                                        FText::FromString(TEXT("FMusicManagerEditorModule::PluginButtonClicked()")),
+                                                        FText::FromString(TEXT("MusicManagerEditorModule.cpp"))
+                                           );
 	FMessageDialog::Open(EAppMsgType::Ok, DialogText);
 }
 
