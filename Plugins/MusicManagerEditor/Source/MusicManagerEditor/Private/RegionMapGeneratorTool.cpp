@@ -8,6 +8,8 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Engine/DataTable.h"
 #include "Kismet2/BlueprintEditorUtils.h"
+#include "Kismet2/KismetEditorUtilities.h"
+#include "Kismet2/WidgetBlueprintEditorUtils.h"
 #include "MarketRegion.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
@@ -17,9 +19,11 @@
 
 void URegionMapGeneratorTool::GenerateRegionButtons()
 {
+    check(IsInGameThread());
+
     const FString WidgetPath = TEXT("/Game/GUI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
-    UWidgetBlueprint* WidgetBP = Cast<UWidgetBlueprint>(
-        StaticLoadObject(UWidgetBlueprint::StaticClass(), nullptr, *WidgetPath));
+    UObject* LoadedObject = StaticLoadObject(UWidgetBlueprint::StaticClass(), nullptr, *WidgetPath);
+    UWidgetBlueprint* WidgetBP = Cast<UWidgetBlueprint>(LoadedObject);
 
     if (!WidgetBP)
     {
@@ -70,13 +74,25 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
             continue;
         }
 
-        // Create and attach button
-        URegionMapButton* Button = WidgetTree->ConstructWidget<URegionMapButton>(
-            URegionMapButton::StaticClass(), FName(*WidgetName));
+        const FString DesiredWidgetName = WidgetName;
 
-        RootCanvas->AddChild(Button);
+        URegionMapButton* NewButton = WidgetTree->ConstructWidget<URegionMapButton>(
+            URegionMapButton::StaticClass(),
+            FName(*DesiredWidgetName)
+        );
 
-        if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Button->Slot))
+        RootCanvas->AddChild(NewButton);
+
+        // Register with Blueprint system
+        FWidgetBlueprintEditorUtils::CreateWidgetForBlueprint(WidgetBP, NewButton, NewButton->GetFName());
+
+        const FGuid NewGuid = FGuid::NewGuid();
+        WidgetBP->WidgetGuidMap.Add(NewButton->GetFName(), NewGuid);
+        WidgetBP->WidgetVariableNameToGuidMap.Add(NewButton->GetFName(), NewGuid);
+
+        NewButton->SetDesignerFlags(EWidgetDesignFlags::Designed);
+
+        if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(NewButton->Slot))
         {
             const int32 Columns = 8;
             const float CellWidth = 100.f;
@@ -93,38 +109,30 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
     }
 
     // Save updated blueprint
-#if WITH_EDITOR
+    if (Added > 0)
+    {
+        UPackage* Package = WidgetBP->GetPackage();
 
-    check(IsInGameThread());   // Ensure we are on the editor thread
+        WidgetBP->Modify();
+        FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBP);
+        FKismetEditorUtilities::CompileBlueprint(WidgetBP);
+        WidgetBP->MarkPackageDirty();
 
-    // Ensure Blueprint is editable
-    WidgetBP->Modify();
+        FString OutputFilename =
+            FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
 
-    // Mark as structurally modified
-    FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBP);
+        FSavePackageArgs SaveArgs;
+        SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+        SaveArgs.Error = GError;
+        SaveArgs.bWarnOfLongFilename = false;
 
-    // Mark dirty BEFORE saving (UE5.6 requirement)
-    WidgetBP->MarkPackageDirty();
-
-    // Save package
-    UPackage* Package = WidgetBP->GetPackage();
-
-    FString OutputFilename =
-        FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
-
-    FSavePackageArgs SaveArgs;
-    SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
-    SaveArgs.Error = GError;
-    SaveArgs.bWarnOfLongFilename = false;
-
-    UPackage::SavePackage(
-        Package,
-        WidgetBP,
-        *OutputFilename,
-        SaveArgs
-    );
-
-#endif
+        UPackage::SavePackage(
+            Package,
+            WidgetBP,
+            *OutputFilename,
+            SaveArgs
+        );
+    }
 }
 
 #endif
