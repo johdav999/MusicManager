@@ -2,14 +2,12 @@
 
 #if WITH_EDITOR
 
-#include "AssetRegistry/AssetRegistryModule.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Engine/DataTable.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
-#include "WidgetBlueprintEditorUtils.h"
 #include "MarketRegion.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
@@ -21,9 +19,8 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
 {
     check(IsInGameThread());
 
-    const FString WidgetPath = TEXT("/Game/GUI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
-    UObject* LoadedObject = StaticLoadObject(UWidgetBlueprint::StaticClass(), nullptr, *WidgetPath);
-    UWidgetBlueprint* WidgetBP = Cast<UWidgetBlueprint>(LoadedObject);
+    const FString WidgetPath = TEXT("/Game/UI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
+    UWidgetBlueprint* WidgetBP = LoadObject<UWidgetBlueprint>(nullptr, *WidgetPath);
 
     if (!WidgetBP)
     {
@@ -82,15 +79,6 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
         );
 
         RootCanvas->AddChild(NewButton);
-
-        // Register with Blueprint system
-        FWidgetBlueprintEditorUtils::CreateWidgetForBlueprint(WidgetBP, NewButton, NewButton->GetFName());
-
-        const FGuid NewGuid = FGuid::NewGuid();
-        WidgetBP->WidgetGuidMap.Add(NewButton->GetFName(), NewGuid);
-        WidgetBP->WidgetVariableNameToGuidMap.Add(NewButton->GetFName(), NewGuid);
-
-        NewButton->SetDesignerFlags(EWidgetDesignFlags::Designed);
 
         if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(NewButton->Slot))
         {
