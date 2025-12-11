@@ -52,6 +52,11 @@ public class MusicManagerEditor : ModuleRules
                 "KismetCompiler",
                 "KismetWidgets",
                 "AssetRegistry",
+                "Blutility",
+                "Projects",
+                "ToolMenus",
+                "AssetRegistry",
+                "ApplicationCore",
                 "MusicManager"
                 // ... add private dependencies that you statically link with here ...
             }

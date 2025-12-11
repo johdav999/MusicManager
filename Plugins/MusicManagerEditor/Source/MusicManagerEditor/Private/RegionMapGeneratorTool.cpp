@@ -2,7 +2,7 @@
 
 #if WITH_EDITOR
 
-#include "Blueprint/WidgetBlueprint.h"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -11,7 +11,7 @@
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UObject/Package.h"
-
+#include "WidgetBlueprint.h"
 // Include runtime references from game module
 #include "UI/RegionMapButton.h"
 #include "MarketRegion.h"
