@@ -35,6 +35,8 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
         return;
     }
 
+    WidgetTree->Modify();
+
     UCanvasPanel* RootCanvas = Cast<UCanvasPanel>(WidgetTree->RootWidget);
     if (!RootCanvas)
     {
@@ -77,6 +79,15 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
             URegionMapButton::StaticClass(),
             FName(*DesiredWidgetName)
         );
+
+        if (!NewButton)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Failed to construct RegionMapButton for %s"), *Region->RegionId);
+            continue;
+        }
+
+        NewButton->Modify();
+        NewButton->InitializeRegion(Region->RegionId);
 
         RootCanvas->AddChild(NewButton);
 
