@@ -8,6 +8,7 @@
 #include "Engine/DataTable.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
+#include "WidgetBlueprintEditorUtils.h"
 #include "MarketRegion.h"
 #include "Misc/PackageName.h"
 #include "UObject/Package.h"
@@ -19,7 +20,7 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
 {
     check(IsInGameThread());
 
-    const FString WidgetPath = TEXT("/Game/UI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
+    const FString WidgetPath = TEXT("/Game/GUI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
     UWidgetBlueprint* WidgetBP = LoadObject<UWidgetBlueprint>(nullptr, *WidgetPath);
 
     if (!WidgetBP)
@@ -74,7 +75,6 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
         }
 
         const FString DesiredWidgetName = WidgetName;
-
         URegionMapButton* NewButton = WidgetTree->ConstructWidget<URegionMapButton>(
             URegionMapButton::StaticClass(),
             FName(*DesiredWidgetName)
