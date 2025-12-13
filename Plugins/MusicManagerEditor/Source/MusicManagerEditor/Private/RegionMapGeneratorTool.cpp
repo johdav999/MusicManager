@@ -1,4 +1,4 @@
-#include "RegionMapGeneratorTool.h"
+﻿#include "RegionMapGeneratorTool.h"
 
 #if WITH_EDITOR
 
@@ -16,82 +16,91 @@
 #include "UI/RegionMapButton.h"
 #include "WidgetBlueprint.h"
 
+
+#endif
 void URegionMapGeneratorTool::GenerateRegionButtons()
 {
     check(IsInGameThread());
 
-    const FString WidgetPath = TEXT("/Game/GUI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
-    UWidgetBlueprint* WidgetBP = LoadObject<UWidgetBlueprint>(nullptr, *WidgetPath);
+    const FString WidgetPath =
+        TEXT("/Game/GUI/RegionMap/BP_RegionMapWidget.BP_RegionMapWidget");
 
-    if (!WidgetBP)
+    UWidgetBlueprint* WidgetBP =
+        LoadObject<UWidgetBlueprint>(nullptr, *WidgetPath);
+
+    if (!WidgetBP || !WidgetBP->WidgetTree)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load RegionMapWidget at %s"), *WidgetPath);
+        UE_LOG(LogTemp, Error, TEXT("Invalid WidgetBlueprint"));
         return;
     }
 
     UWidgetTree* WidgetTree = WidgetBP->WidgetTree;
-    if (!WidgetTree)
-    {
-        UE_LOG(LogTemp, Error, TEXT("No WidgetTree in blueprint."));
-        return;
-    }
-
     WidgetTree->Modify();
 
-    UCanvasPanel* RootCanvas = Cast<UCanvasPanel>(WidgetTree->RootWidget);
+    UCanvasPanel* RootCanvas =
+        Cast<UCanvasPanel>(WidgetTree->RootWidget);
+
     if (!RootCanvas)
     {
-        UE_LOG(LogTemp, Error, TEXT("Root widget is not a CanvasPanel."));
+        UE_LOG(LogTemp, Error, TEXT("Root widget is not CanvasPanel"));
         return;
     }
 
-    // Load regions from DataTable
-    const FString DataTablePath = TEXT("/Game/Data/RegionData.RegionData");
-    UDataTable* RegionTable = Cast<UDataTable>(
-        StaticLoadObject(UDataTable::StaticClass(), nullptr, *DataTablePath));
+    // Load region data
+    const FString DataTablePath =
+        TEXT("/Game/Data/RegionData.RegionData");
+
+    UDataTable* RegionTable =
+        LoadObject<UDataTable>(nullptr, *DataTablePath);
 
     if (!RegionTable)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to load Region DataTable at %s"), *DataTablePath);
+        UE_LOG(LogTemp, Error, TEXT("Region DataTable not found"));
         return;
     }
 
     TArray<FMarketRegion*> Regions;
-    RegionTable->GetAllRows(TEXT("RegionGen"), Regions);
+    RegionTable->GetAllRows(TEXT("RegionMapGen"), Regions);
 
-    int32 Added = 0;
+    int32 AddedCount = 0;
 
-    for (int32 Index = 0; Index < Regions.Num(); Index++)
+    for (int32 Index = 0; Index < Regions.Num(); ++Index)
     {
         const FMarketRegion* Region = Regions[Index];
         if (!Region) continue;
 
-        FString WidgetName = FString::Printf(TEXT("RegionMapButton_%s"), *Region->RegionId);
+        const FString WidgetName =
+            FString::Printf(TEXT("RegionMapButton_%s"), *Region->RegionId);
 
-        // Skip if existing
         if (WidgetTree->FindWidget(FName(*WidgetName)))
         {
             continue;
         }
 
-        const FString DesiredWidgetName = WidgetName;
-        URegionMapButton* NewButton = WidgetTree->ConstructWidget<URegionMapButton>(
-            URegionMapButton::StaticClass(),
-            FName(*DesiredWidgetName)
-        );
+        // 1️⃣ Construct widget instance
+        URegionMapButton* NewButton =
+            WidgetTree->ConstructWidget<URegionMapButton>(
+                URegionMapButton::StaticClass(),
+                FName(*WidgetName));
 
         if (!NewButton)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Failed to construct RegionMapButton for %s"), *Region->RegionId);
             continue;
         }
 
         NewButton->Modify();
         NewButton->InitializeRegion(Region->RegionId);
 
-        RootCanvas->AddChild(NewButton);
+        // 2️⃣ Register widget with UMG designer (THIS CREATES THE GUID)
+        FWidgetBlueprintEditorUtils::AddWidget(
+            WidgetBP,
+            NewButton,
+            RootCanvas
+        );
 
-        if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(NewButton->Slot))
+        // 3️⃣ Layout
+        if (UCanvasPanelSlot* Slot =
+            Cast<UCanvasPanelSlot>(NewButton->Slot))
         {
             const int32 Columns = 8;
             const float CellWidth = 100.f;
@@ -100,38 +109,46 @@ void URegionMapGeneratorTool::GenerateRegionButtons()
             const int32 ColumnIndex = Index % Columns;
             const int32 RowIndex = Index / Columns;
 
-            Slot->SetPosition(FVector2D(CellWidth * ColumnIndex, CellHeight * RowIndex));
+            Slot->SetPosition(
+                FVector2D(CellWidth * ColumnIndex,
+                    CellHeight * RowIndex));
             Slot->SetSize(FVector2D(150.f, 50.f));
         }
 
-        Added++;
+        ++AddedCount;
     }
 
-    // Save updated blueprint
-    if (Added > 0)
+    if (AddedCount == 0)
     {
-        UPackage* Package = WidgetBP->GetPackage();
-
-        WidgetBP->Modify();
-        FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBP);
-        FKismetEditorUtilities::CompileBlueprint(WidgetBP);
-        WidgetBP->MarkPackageDirty();
-
-        FString OutputFilename =
-            FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
-
-        FSavePackageArgs SaveArgs;
-        SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
-        SaveArgs.Error = GError;
-        SaveArgs.bWarnOfLongFilename = false;
-
-        UPackage::SavePackage(
-            Package,
-            WidgetBP,
-            *OutputFilename,
-            SaveArgs
-        );
+        UE_LOG(LogTemp, Log, TEXT("No new region buttons added"));
+        return;
     }
-}
 
-#endif
+    // Finalize Blueprint
+    WidgetBP->Modify();
+    FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(WidgetBP);
+    FKismetEditorUtilities::CompileBlueprint(WidgetBP);
+    WidgetBP->MarkPackageDirty();
+
+    // Save
+    UPackage* Package = WidgetBP->GetPackage();
+    const FString Filename =
+        FPackageName::LongPackageNameToFilename(
+            Package->GetName(),
+            FPackageName::GetAssetPackageExtension());
+
+    FSavePackageArgs SaveArgs;
+    SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+    SaveArgs.Error = GError;
+
+    UPackage::SavePackage(
+        Package,
+        WidgetBP,
+        *Filename,
+        SaveArgs
+    );
+
+    UE_LOG(LogTemp, Log,
+        TEXT("RegionMapGenerator: added %d buttons"),
+        AddedCount);
+}
