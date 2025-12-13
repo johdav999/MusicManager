@@ -2,48 +2,45 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Components/CanvasPanel.h"
 #include "UI/RegionMapButton.h"
 #include "RegionMapWidget.generated.h"
 
-class UMarketManagerSubsystem;
-
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRegionSelected, const FString&, RegionId);
 
-/**
- * Widget that creates region buttons for each market region.
- */
-UCLASS(BlueprintType, Blueprintable)
+UCLASS()
 class MUSICMANAGER_API URegionMapWidget : public UUserWidget
 {
     GENERATED_BODY()
 
-public:
-    URegionMapWidget(const FObjectInitializer& ObjectInitializer);
-
+protected:
     virtual void NativeConstruct() override;
-    virtual void NativePreConstruct() override;
 
+    // Designer-bound region buttons
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_AL;
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_AK;
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_AZ;
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_AR;
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_CA;
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_CO;
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_CT;
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_DE;
+    UPROPERTY(meta=(BindWidgetOptional)) URegionMapButton* RegionMapButton_FL;
+
+    /** Runtime lookup: RegionId → Button */
+    TMap<FString, URegionMapButton*> RegionButtons;
+
+    UFUNCTION()
+    void HandleButtonClicked(const FString& RegionId);
+
+private:
+    void RegisterRegionButton(const FString& RegionId, URegionMapButton* Button);
+    void BindRegionButtons();
+
+public:
     /** Broadcast when a region is selected. */
     UPROPERTY(BlueprintAssignable, Category = "RegionMap")
     FOnRegionSelected OnRegionSelected;
 
     UFUNCTION(BlueprintCallable)
     void RefreshRegions();
-
-protected:
-    /** Canvas panel used as the root container for region buttons. */
-    UPROPERTY(meta = (BindWidget))
-    UCanvasPanel* RootCanvas;
-
-    /** Map of region ids to their corresponding buttons, instanced for Blueprint editing. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Instanced, Category = "RegionMap")
-    TMap<FString, URegionMapButton*> RegionButtons;
-
-    /** Rebuild the widget tree and populate buttons for all regions. */
-    void RebuildWidgetTree();
-
-    /** Handle region button clicked event. */
-    UFUNCTION()
-    void HandleButtonClicked(const FString& RegionId);
 };
