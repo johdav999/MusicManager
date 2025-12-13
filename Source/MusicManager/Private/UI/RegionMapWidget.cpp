@@ -1,122 +1,42 @@
 #include "UI/RegionMapWidget.h"
 
-#include "Async/Async.h"
-#include "Blueprint/WidgetTree.h"
-#include "Engine/GameInstance.h"
-#include "MarketManagerSubsystem.h"
-
-URegionMapWidget::URegionMapWidget(const FObjectInitializer& ObjectInitializer)
-    : Super(ObjectInitializer)
-{
-}
-
 void URegionMapWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-}
 
-void URegionMapWidget::NativePreConstruct()
-{
-    if (!IsInGameThread())
-    {
-        const TWeakObjectPtr<URegionMapWidget> WeakThis(this);
-        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
-        {
-            if (URegionMapWidget* Strong = WeakThis.Get())
-            {
-                Strong->RebuildWidgetTree();
-            }
-        });
-        return;
-    }
-
-    Super::NativePreConstruct();
-
-    RebuildWidgetTree();
-}
-
-void URegionMapWidget::RebuildWidgetTree()
-{
-    if (!IsInGameThread())
-    {
-        const TWeakObjectPtr<URegionMapWidget> WeakThis(this);
-        AsyncTask(ENamedThreads::GameThread, [WeakThis]() {
-            if (URegionMapWidget* Strong = WeakThis.Get())
-            {
-                Strong->RebuildWidgetTree();
-            }
-        });
-        return;
-    }
-
-    if (WidgetTree && !RootCanvas)
-    {
-        RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
-        WidgetTree->RootWidget = RootCanvas;
-    }
-
-    if (WidgetTree && WidgetTree->RootWidget == nullptr && RootCanvas)
-    {
-        WidgetTree->RootWidget = RootCanvas;
-    }
-
-    if (!RootCanvas)
-    {
-        return;
-    }
-
-    RootCanvas->ClearChildren();
     RegionButtons.Empty();
 
-    const bool bIsRuntime = !IsDesignTime();
-    TArray<FMarketRegion> Regions;
+    BindRegionButtons();
+}
 
-    if (bIsRuntime)
+void URegionMapWidget::RegisterRegionButton(
+    const FString& RegionId,
+    URegionMapButton* Button)
+{
+    if (!Button)
     {
-        if (UGameInstance* GI = GetGameInstance())
-        {
-            if (UMarketManagerSubsystem* Market = GI->GetSubsystem<UMarketManagerSubsystem>())
-            {
-                Market->GetAllRegions(Regions);
-            }
-        }
-    }
-    else
-    {
-        const TArray<FString> MockRegionIds = {
-            TEXT("Mock_NorthAmerica"),
-            TEXT("Mock_Europe"),
-            TEXT("Mock_Asia")
-        };
-
-        for (const FString& MockId : MockRegionIds)
-        {
-            FMarketRegion MockRegion;
-            MockRegion.RegionId = MockId;
-            MockRegion.DisplayName = MockId;
-            Regions.Add(MockRegion);
-        }
+        UE_LOG(LogTemp, Warning,
+            TEXT("RegionMapWidget: Missing button for region %s"), *RegionId);
+        return;
     }
 
-    for (const FMarketRegion& Region : Regions)
-    {
-        URegionMapButton* NewButton = WidgetTree->ConstructWidget<URegionMapButton>(URegionMapButton::StaticClass());
+    Button->InitializeRegion(RegionId);
+    Button->OnRegionClicked.RemoveDynamic(this, &URegionMapWidget::HandleButtonClicked);
+    Button->OnRegionClicked.AddDynamic(this, &URegionMapWidget::HandleButtonClicked);
+    RegionButtons.Add(RegionId, Button);
+}
 
-        if (!NewButton)
-        {
-            continue;
-        }
-
-        NewButton->InitializeRegion(Region.RegionId);
-
-        if (bIsRuntime)
-        {
-            NewButton->OnRegionClicked.AddDynamic(this, &URegionMapWidget::HandleButtonClicked);
-        }
-
-        RegionButtons.Add(Region.RegionId, NewButton);
-        RootCanvas->AddChild(NewButton);
-    }
+void URegionMapWidget::BindRegionButtons()
+{
+    RegisterRegionButton(TEXT("AL"), RegionMapButton_AL);
+    RegisterRegionButton(TEXT("AK"), RegionMapButton_AK);
+    RegisterRegionButton(TEXT("AZ"), RegionMapButton_AZ);
+    RegisterRegionButton(TEXT("AR"), RegionMapButton_AR);
+    RegisterRegionButton(TEXT("CA"), RegionMapButton_CA);
+    RegisterRegionButton(TEXT("CO"), RegionMapButton_CO);
+    RegisterRegionButton(TEXT("CT"), RegionMapButton_CT);
+    RegisterRegionButton(TEXT("DE"), RegionMapButton_DE);
+    RegisterRegionButton(TEXT("FL"), RegionMapButton_FL);
 }
 
 void URegionMapWidget::HandleButtonClicked(const FString& RegionId)
@@ -126,5 +46,6 @@ void URegionMapWidget::HandleButtonClicked(const FString& RegionId)
 
 void URegionMapWidget::RefreshRegions()
 {
-    RebuildWidgetTree();
+    RegionButtons.Empty();
+    BindRegionButtons();
 }

@@ -1,19 +1,8 @@
 #include "UI/RegionMapButton.h"
 
-#include "Blueprint/WidgetTree.h"
-
-URegionMapButton::URegionMapButton(const FObjectInitializer& ObjectInitializer)
-    : Super(ObjectInitializer)
-{
-}
-
 void URegionMapButton::NativeConstruct()
 {
-    ensure(IsInGameThread());
-
     Super::NativeConstruct();
-
-    EnsureDefaultWidgets();
 
     if (RegionButton)
     {
@@ -31,11 +20,6 @@ void URegionMapButton::InitializeRegion(const FString& InRegionId)
 {
     RegionId = InRegionId;
 
-    // Dynamically rename widget
-    Rename(*FString::Printf(TEXT("RegionMapButton_%s"), *RegionId));
-
-    EnsureDefaultWidgets();
-
     if (RegionText)
     {
         RegionText->SetText(FText::FromString(RegionId));
@@ -45,33 +29,4 @@ void URegionMapButton::InitializeRegion(const FString& InRegionId)
 void URegionMapButton::HandleClicked()
 {
     OnRegionClicked.Broadcast(RegionId);
-}
-
-void URegionMapButton::EnsureDefaultWidgets()
-{
-    if (!WidgetTree)
-    {
-        return;
-    }
-
-    if (!RegionButton)
-    {
-        RegionButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("RegionButton"));
-        WidgetTree->RootWidget = RegionButton;
-        RegionButton->OnClicked.AddDynamic(this, &URegionMapButton::HandleClicked);
-    }
-
-    if (!RegionText)
-    {
-        RegionText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("RegionText"));
-
-        if (RegionButton)
-        {
-            RegionButton->AddChild(RegionText);
-        }
-    }
-    else if (RegionButton && RegionText->GetParent() != RegionButton)
-    {
-        RegionButton->AddChild(RegionText);
-    }
 }
