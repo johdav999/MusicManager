@@ -78,9 +78,9 @@ void UCommandPanelWidget::HandleCommandClicked(const FString& CommandName)
         {
             if (UUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>())
             {
-                if (CommandName == TEXT("Marketing"))
+                if (CommandName == TEXT("Market"))
                 {
-                    UIManager->ShowRegionMap();
+                    UIManager->ShowMarketView();
                 }
 
                 UIManager->HandleCommandAction(CommandName);
@@ -122,7 +122,7 @@ void UCommandPanelWidget::BuildDefaultCommands()
         MakeDefinition(TEXT("Radio"), TEXT("/Game/GUI/Icons/Radio.Radio")),
         MakeDefinition(TEXT("Charts"), TEXT("/Game/GUI/Icons/Charts.Charts")),
         MakeDefinition(TEXT("Financials"), TEXT("/Game/GUI/Icons/Financials.Financials")),
-        MakeDefinition(TEXT("Marketing"), TEXT("/Game/GUI/Icons/Marketing.Marketing")),
+        MakeDefinition(TEXT("Market"), TEXT("/Game/GUI/Icons/Market.Market")),
         MakeDefinition(TEXT("Contracts"), TEXT("/Game/GUI/Icons/Contracts.Contracts"))
     };
 }

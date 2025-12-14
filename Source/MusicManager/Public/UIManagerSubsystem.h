@@ -42,6 +42,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI")
     void ShowAudition(const FAuditionEvent& EventData);
 
+    UFUNCTION()
+    void ShowMarketView();
+
     UFUNCTION(BlueprintCallable, Category = "UI")
     void ShowRegionMap();
 
