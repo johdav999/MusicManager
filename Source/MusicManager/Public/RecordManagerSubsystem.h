@@ -2,7 +2,83 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "MarketRegion.h"
+#include "MarketManagerSubsystem.h"
+#include "ArtistManagerSubsystem.h"
+#include "FinanceManagerSubsystem.h"
 #include "RecordManagerSubsystem.generated.h"
+
+class USongManagerSubsystem;
+class UGameTimeSubsystem;
+
+UENUM(BlueprintType)
+enum class ERecordFormat : uint8
+{
+    Vinyl,
+    Cassette,
+    CD,
+    DigitalDownload,
+    Streaming
+};
+
+/**
+ * Era validity, pricing, and cost profile for a record format.
+ */
+USTRUCT(BlueprintType)
+struct FRecordFormatRule
+{
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ERecordFormat Format = ERecordFormat::Vinyl;
+
+    /** First year this format can be sold. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 EraStartYear = 1955;
+
+    /** Last year this format is relevant (inclusive). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 EraEndYear = 2026;
+
+    /** Suggested retail price baseline used by FinanceManager. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float BasePrice = 10.f;
+
+    /** Variable cost rate applied in FinanceManager when booking sales. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float CostRate = 0.35f;
+
+    bool IsActiveForDate(const FDateTime& Date) const
+    {
+        return Date.GetYear() >= EraStartYear && Date.GetYear() <= EraEndYear;
+    }
+};
+
+/** Per-market and per-format unit sales for a single month. */
+USTRUCT(BlueprintType)
+struct FRecordSalesEntry
+{
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString RecordId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString MarketId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ERecordFormat Format = ERecordFormat::Vinyl;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime Month;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 UnitsSold = 0;
+
+    /** Optional debug/analytics value for demand strength. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float DemandScore = 0.f;
+};
 
 USTRUCT(BlueprintType)
 struct FRecordData
@@ -29,6 +105,30 @@ struct FRecordData
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FDateTime DateRecorded;
+
+    /** First day the record is commercially available. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime ReleaseDate;
+
+    /** Label owner used for finance booking. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString LabelId;
+
+    /** Primary genre for market appetite alignment. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString PrimaryGenre;
+
+    /** Formats this release should sell on (subject to era validity). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<ERecordFormat> Formats;
+
+    /** Intrinsic quality baseline derived from production/mastering. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float RecordQuality = 0.7f;
+
+    /** Marketing exposure multiplier injected by campaign systems. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float MarketingExposure = 1.0f;
 };
 
 UCLASS()
@@ -37,13 +137,43 @@ class MUSICMANAGER_API URecordManagerSubsystem : public UGameInstanceSubsystem
     GENERATED_BODY()
 
 public:
+    virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+    virtual void Deinitialize() override;
+
     UFUNCTION()
     FString CreateRecord(const FRecordData& Data);
 
     UFUNCTION(BlueprintCallable)
     bool GetRecordById(const FString& RecordId, FRecordData& OutData) const;
 
+    /** Entry point triggered from GameTimeSubsystem each month. */
+    UFUNCTION()
+    void HandleMonthAdvanced(const FDateTime& NewDate);
+
+    /** Allows other systems to query persisted sales history. */
+    UFUNCTION(BlueprintCallable, Category="Records|Sales")
+    void GetSalesHistory(const FString& RecordId, TArray<FRecordSalesEntry>& OutEntries) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records|Sales")
+    int32 GetLifetimeUnits(const FString& RecordId) const;
+
 private:
+    void SimulateMonthlySales(const FDateTime& CurrentDate);
+    void ComputeRecordSalesForMarket(const FRecordData& Record, const FString& MarketId, const FMarketDemandSnapshot& Demand, const FArtistMarketModifiers& ArtistImpact, const FDateTime& CurrentDate, TArray<FRecordSalesEntry>& OutEntries) const;
+    float ComputeLifecycleFactor(const FDateTime& ReleaseDate, const FDateTime& CurrentDate) const;
+    float EvaluateSongQuality(const FRecordData& Record) const;
+    bool IsFormatEligible(ERecordFormat Format, const FDateTime& CurrentDate) const;
+
     UPROPERTY()
     TMap<FString, FRecordData> Records;
+
+    UPROPERTY()
+    TMap<FString, TArray<FRecordSalesEntry>> SalesHistory;
+
+    UPROPERTY()
+    TMap<FString, int32> LifetimeUnits;
+
+    /** Era rules and pricing for each available format. */
+    UPROPERTY()
+    TMap<ERecordFormat, FRecordFormatRule> FormatRules;
 };

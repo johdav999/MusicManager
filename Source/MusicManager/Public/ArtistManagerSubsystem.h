@@ -25,10 +25,39 @@ struct FArtistSongList
     TArray<FString> SongIds;
 };
 
-UCLASS()
-class UArtistManagerSubsystem : public UGameInstanceSubsystem
-{
-    GENERATED_BODY()
+  /**
+   * Read-only view of per-market artist modifiers used by the record sales simulator.
+   */
+  USTRUCT(BlueprintType)
+  struct FArtistMarketModifiers
+  {
+      GENERATED_BODY();
+
+      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+      float Popularity = 1.0f;
+
+      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+      float Momentum = 1.0f;
+
+      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+      float Reputation = 1.0f;
+
+      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+      float GenreAlignment = 1.0f;
+
+      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+      float Cannibalization = 1.0f;
+
+      float GetComposite() const
+      {
+          return Popularity * Momentum * Reputation * GenreAlignment * Cannibalization;
+      }
+  };
+
+  UCLASS()
+  class UArtistManagerSubsystem : public UGameInstanceSubsystem
+  {
+      GENERATED_BODY()
 
 public:
     UArtistManagerSubsystem();
@@ -85,6 +114,15 @@ public:
 
     const FArtistContract* FindContractByArtistName(const FString& ArtistName) const;
 
+    /** Build per-market artist multipliers for the sales simulator. */
+    FArtistMarketModifiers EvaluateMarketModifiers(const FString& ArtistId, const FString& Genre, const FString& MarketId, const FDateTime& CurrentDate, int32 ConcurrentReleases) const;
+
+    /** Apply monthly decay/boost to stored momentum values. */
+    void ApplyMonthlyMomentum();
+
+    /** Calculate a cannibalization factor when an artist releases multiple records simultaneously. */
+    float CalculateCannibalization(const FString& ArtistId, int32 ConcurrentReleases) const;
+
     void SaveState(class UMusicSaveGame* SaveObject);
     void LoadState(const class UMusicSaveGame* SaveObject);
 
@@ -120,6 +158,14 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category="Contracts")
     FOnArtistListChanged OnArtistListChanged;
+
+    /** Runtime momentum tracking per artist. */
+    UPROPERTY()
+    TMap<FString, float> ArtistMomentum;
+
+    /** Simplified reputation cache per artist (driven by contract history). */
+    UPROPERTY()
+    TMap<FString, float> ArtistReputation;
 
 protected:
     int32 CalculateContractDurationMonths(const FArtistDealTerms& Deal) const;
