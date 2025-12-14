@@ -14,7 +14,7 @@ enum class EMarketRegionType : uint8
 };
 
 USTRUCT(BlueprintType)
-struct FMarketSegmentProfile
+struct FMarketSegmentProfile : public FTableRowBase
 {
     GENERATED_BODY();
 

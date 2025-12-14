@@ -4,6 +4,7 @@ void UMarketManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
     LoadRegions();
+    LoadMarketSegmentProfiles();
 }
 
 void UMarketManagerSubsystem::LoadRegions()
@@ -28,6 +29,30 @@ void UMarketManagerSubsystem::LoadRegions()
     }
 
     UE_LOG(LogTemp, Log, TEXT("MarketManagerSubsystem: Loaded %d regions."), LoadedRegions.Num());
+}
+
+void UMarketManagerSubsystem::LoadMarketSegmentProfiles()
+{
+    LoadedSegmentProfiles.Empty();
+
+    if (!SegmentProfileDataTable)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: No SegmentProfileDataTable assigned."));
+        return;
+    }
+
+    static const FString Context = TEXT("SegmentProfileDataTable Load");
+
+    TArray<FMarketSegmentProfile*> Rows;
+    SegmentProfileDataTable->GetAllRows(Context, Rows);
+
+    for (FMarketSegmentProfile* Row : Rows)
+    {
+        if (!Row) continue;
+        LoadedSegmentProfiles.Add(Row->SegmentId, *Row);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("MarketManagerSubsystem: Loaded %d market segment profiles."), LoadedSegmentProfiles.Num());
 }
 
 bool UMarketManagerSubsystem::GetRegion(const FString& RegionId, FMarketRegion& OutRegion) const
