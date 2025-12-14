@@ -81,6 +81,15 @@ struct FRecordSalesEntry
 };
 
 USTRUCT(BlueprintType)
+struct FRecordSalesHistory
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FRecordSalesEntry> Entries;
+};
+
+USTRUCT(BlueprintType)
 struct FRecordData
 {
     GENERATED_BODY()
@@ -152,7 +161,7 @@ public:
 
     /** Allows other systems to query persisted sales history. */
     UFUNCTION(BlueprintCallable, Category="Records|Sales")
-    void GetSalesHistory(const FString& RecordId, TArray<FRecordSalesEntry>& OutEntries) const;
+    bool GetSalesHistory(const FString& RecordId, TArray<FRecordSalesEntry>& OutEntries) const;
 
     UFUNCTION(BlueprintCallable, Category="Records|Sales")
     int32 GetLifetimeUnits(const FString& RecordId) const;
@@ -168,7 +177,7 @@ private:
     TMap<FString, FRecordData> Records;
 
     UPROPERTY()
-    TMap<FString, TArray<FRecordSalesEntry>> SalesHistory;
+    TMap<FString, FRecordSalesHistory> SalesHistory;
 
     UPROPERTY()
     TMap<FString, int32> LifetimeUnits;
