@@ -37,13 +37,25 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
     UDataTable* RegionDataTable;
 
+    /** Assign in BP or defaults: DataTable with FMarketSegmentProfile rows */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
+    UDataTable* SegmentProfileDataTable;
+
     /** Loaded regions keyed by RegionId */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market")
     TMap<FString, FMarketRegion> LoadedRegions;
 
+    /** Loaded market segments keyed by SegmentId */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market")
+    TMap<FString, FMarketSegmentProfile> LoadedSegmentProfiles;
+
     /** Load all rows from the DataTable */
     UFUNCTION(BlueprintCallable)
     void LoadRegions();
+
+    /** Load all market segment profiles from the DataTable */
+    UFUNCTION(BlueprintCallable)
+    void LoadMarketSegmentProfiles();
 
     /** Lookup region by RegionId */
     UFUNCTION(BlueprintCallable)
