@@ -4,6 +4,11 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "FinanceManagerSubsystem.generated.h"
 
+struct FRecordSalesEntry;
+struct FRecordFormatRule;
+struct FRecordData;
+enum class ERecordFormat : uint8;
+
 UENUM(BlueprintType)
 enum class ETransactionType : uint8
 {
@@ -70,6 +75,12 @@ public:
 
     UFUNCTION()
     void RegisterRecordSalesRevenue(const FString& LabelId, const FString& RecordId, float Amount, const FDateTime& Timestamp);
+
+    /** Placeholder for month-end finance hooks (interest, accruals, etc.). */
+    void HandleMonthAdvanced(const FDateTime& NewDate);
+
+    /** Book ledger entries for monthly sales without altering unit demand. */
+    void ProcessRecordSalesEntries(const TArray<FRecordSalesEntry>& Entries, const TMap<ERecordFormat, FRecordFormatRule>& FormatRules, const TMap<FString, FRecordData>& RecordDataById);
 
 private:
     UPROPERTY()

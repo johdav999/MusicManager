@@ -50,7 +50,6 @@ void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     {
         if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
         {
-            TimeSubsystem->OnMonthAdvanced.AddDynamic(this, &UArtistManagerSubsystem::HandleMonthAdvanced);
             CurrentGameDate = TimeSubsystem->GetCurrentGameDate();
         }
     }
@@ -450,51 +449,56 @@ void UArtistManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
     OnArtistListChanged.Broadcast();
 }
 
-FArtistMarketModifiers UArtistManagerSubsystem::EvaluateMarketModifiers(const FString& ArtistId, const FString& Genre, const FString& MarketId, const FDateTime& CurrentDate, int32 ConcurrentReleases) const
+void UArtistManagerSubsystem::GetArtistMarketModifiers(const FString& ArtistId, const FString& MarketId, const FMarketDemandSnapshot& MarketDemand, FArtistMarketModifiers& OutModifiers) const
 {
-    FArtistMarketModifiers Modifiers;
+    OutModifiers = FArtistMarketModifiers();
 
     const FArtistContract* Contract = GetContractByArtistId(ArtistId);
     if (!Contract)
     {
-        return Modifiers;
+        return;
     }
 
     const FArtistData& ArtistData = Contract->ArtistData;
 
-    // Base popularity from audience and creative scores.
+    // Popularity is anchored to artist quality but gently scaled by reachable audience in the market.
     const float AudienceComposite = ArtistData.PerformanceScore + ArtistData.StagePresence + ArtistData.AudienceEngagement;
     const float CreativeComposite = ArtistData.VocalQuality + ArtistData.SongwritingQuality;
-    Modifiers.Popularity = FMath::Clamp((AudienceComposite + CreativeComposite) / 500.f, 0.25f, 2.5f);
+    const float BasePopularity = FMath::Clamp((AudienceComposite + CreativeComposite) / 500.f, 0.25f, 2.5f);
+    OutModifiers.PopularityMultiplier = BasePopularity * FMath::Clamp(0.75f + MarketDemand.TotalReach * 0.05f, 0.5f, 1.5f);
 
-    // Momentum draws from the stored runtime momentum cache.
     if (const float* Momentum = ArtistMomentum.Find(ArtistId))
     {
-        Modifiers.Momentum = *Momentum;
+        OutModifiers.MomentumMultiplier = *Momentum;
     }
     else
     {
-        const float SeedMomentum = FMath::Clamp(ArtistData.PerformanceScore / 75.f, 0.5f, 1.5f);
-        Modifiers.Momentum = SeedMomentum;
+        OutModifiers.MomentumMultiplier = FMath::Clamp(ArtistData.PerformanceScore / 75.f, 0.5f, 1.5f);
     }
 
     if (const float* Reputation = ArtistReputation.Find(ArtistId))
     {
-        Modifiers.Reputation = *Reputation;
+        OutModifiers.ReputationMultiplier = *Reputation;
     }
-    else
+
+    // Genre fit leans on the market snapshot, rewarding trends when momentum is already high.
+    const float* MarketAffinity = MarketDemand.GenreDemand.Find(ArtistData.Genre);
+    const float DemandFit = MarketAffinity ? *MarketAffinity : 0.25f;
+    OutModifiers.GenreFitMultiplier = FMath::Lerp(0.65f, 1.35f, DemandFit);
+
+    const float TrendBoost = MarketAffinity ? *MarketAffinity : 0.f;
+    OutModifiers.MomentumMultiplier *= (1.0f + TrendBoost * 0.2f);
+
+    // Cannibalization reduces conversion when multiple releases are competing in the same month.
+    const int32* Concurrent = ConcurrentReleasesCache.Find(ArtistId);
+    if (Concurrent && *Concurrent > 1)
     {
-        Modifiers.Reputation = 1.0f;
+        const float Suppression = FMath::Clamp(0.12f * static_cast<float>(*Concurrent - 1), 0.f, 0.6f);
+        OutModifiers.GenreFitMultiplier *= (1.0f - Suppression);
     }
 
-    Modifiers.GenreAlignment = ArtistData.Genre.Equals(Genre, ESearchCase::IgnoreCase) ? 1.1f : 0.9f;
-
-    // MarketId is part of the signature to allow future territory-specific tweaks; touch it to avoid unused warnings.
-    Modifiers.Popularity *= MarketId.IsEmpty() ? 1.0f : 1.0f;
-
-    Modifiers.Cannibalization = CalculateCannibalization(ArtistId, ConcurrentReleases);
-
-    return Modifiers;
+    // MarketId preserved for future local reputation calculations.
+    (void)MarketId;
 }
 
 void UArtistManagerSubsystem::ApplyMonthlyMomentum()
@@ -510,14 +514,12 @@ void UArtistManagerSubsystem::ApplyMonthlyMomentum()
     }
 }
 
-float UArtistManagerSubsystem::CalculateCannibalization(const FString& ArtistId, int32 ConcurrentReleases) const
+void UArtistManagerSubsystem::SetConcurrentReleaseCount(const FString& ArtistId, int32 ConcurrentReleases)
 {
-    if (ConcurrentReleases <= 1)
-    {
-        return 1.0f;
-    }
+    ConcurrentReleasesCache.FindOrAdd(ArtistId) = ConcurrentReleases;
+}
 
-    // Each extra simultaneous release reduces appetite slightly.
-    const float Suppression = FMath::Clamp(0.15f * (ConcurrentReleases - 1), 0.f, 0.6f);
-    return 1.0f - Suppression;
+void UArtistManagerSubsystem::ClearConcurrentReleaseCache()
+{
+    ConcurrentReleasesCache.Empty();
 }

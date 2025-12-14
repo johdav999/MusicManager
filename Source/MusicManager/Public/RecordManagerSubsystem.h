@@ -168,7 +168,7 @@ public:
 
 private:
     void SimulateMonthlySales(const FDateTime& CurrentDate);
-    void ComputeRecordSalesForMarket(const FRecordData& Record, const FString& MarketId, const FMarketDemandSnapshot& Demand, const FArtistMarketModifiers& ArtistImpact, const FDateTime& CurrentDate, TArray<FRecordSalesEntry>& OutEntries) const;
+    void ComputeRecordSalesForMarket(const FRecordData& Record, const FMarketDemandSnapshot& Demand, const FArtistMarketModifiers& ArtistImpact, const FDateTime& CurrentDate, TArray<FRecordSalesEntry>& OutEntries) const;
     float ComputeLifecycleFactor(const FDateTime& ReleaseDate, const FDateTime& CurrentDate) const;
     float EvaluateSongQuality(const FRecordData& Record) const;
     bool IsFormatEligible(ERecordFormat Format, const FDateTime& CurrentDate) const;

@@ -45,70 +45,101 @@ void UMarketManagerSubsystem::GetAllRegions(TArray<FMarketRegion>& OutRegions) c
     LoadedRegions.GenerateValueArray(OutRegions);
 }
 
-bool UMarketManagerSubsystem::EvaluateDemandSnapshot(const FString& RegionId, const FString& Genre, const FDateTime& ForDate, FMarketDemandSnapshot& OutSnapshot) const
+void UMarketManagerSubsystem::BuildMarketDemandSnapshot(const FMarketRegion& Region, FMarketDemandSnapshot& OutSnapshot) const
 {
-    if (const FMarketRegion* Region = LoadedRegions.Find(RegionId))
+    OutSnapshot = FMarketDemandSnapshot();
+    OutSnapshot.MarketId = Region.RegionId;
+
+    float TotalEffectiveReach = 0.f;
+    float MaxGenreDemand = 0.f;
+
+    // Sum exposure once per region so each segment shares the same dampening.
+    float ExposureSum = 0.f;
+    for (const auto& Pair : Region.RecentArtistExposure)
     {
-        OutSnapshot = FMarketDemandSnapshot();
-
-        // Normalize population against a soft baseline of one million to keep multipliers tame.
-        OutSnapshot.PopulationReach = FMath::Clamp(static_cast<float>(Region->TotalPopulation) / 1'000'000.0f, 0.1f, 5.0f);
-
-        // Economic health: average income across all segments relative to $35k baseline.
-        float IncomeTotal = 0.f;
-        float PopulationShareTotal = 0.f;
-        float GenreAffinityTotal = 0.f;
-        for (const FMarketSegmentProfile& Segment : Region->Segments)
-        {
-            IncomeTotal += Segment.AvgIncome * Segment.PopulationShare;
-            PopulationShareTotal += Segment.PopulationShare;
-
-            if (const float* Affinity = Segment.GenreAffinity.Find(Genre))
-            {
-                GenreAffinityTotal += *Affinity * Segment.PopulationShare;
-            }
-        }
-
-        if (PopulationShareTotal > KINDA_SMALL_NUMBER)
-        {
-            const float WeightedIncome = IncomeTotal / PopulationShareTotal;
-            OutSnapshot.EconomicHealth = FMath::Clamp(WeightedIncome / 35000.f, 0.25f, 2.0f);
-            OutSnapshot.GenreAppetite = GenreAffinityTotal / PopulationShareTotal;
-        }
-
-        // Saturation is derived from recent record exposure. Higher exposure means heavier competition.
-        float RegionExposure = 0.f;
-        TArray<float> ExposureValues;
-        Region->RecentRecordExposure.GenerateValueArray(ExposureValues);
-        for (float Value : ExposureValues)
-        {
-            RegionExposure += Value;
-        }
-
-        const float ExposureClamp = FMath::Clamp(RegionExposure / 10.f, 0.f, 1.5f);
-        OutSnapshot.Saturation = 1.0f - FMath::Min(0.5f, ExposureClamp * 0.5f);
-
-        OutSnapshot.SeasonalEffect = GetSeasonalDemandMultiplier(ForDate.GetMonth());
-        OutSnapshot.Exposure = Region->RadioReach;
-
-        return true;
+        ExposureSum += Pair.Value;
+    }
+    for (const auto& Pair : Region.RecentRecordExposure)
+    {
+        ExposureSum += Pair.Value;
     }
 
-    return false;
+    const float ExposureDampen = 1.f / FMath::Max(1.f, 1.f + ExposureSum * 0.1f);
+
+    // Aggregate each segment's contribution into per-genre demand buckets.
+    for (const FMarketSegmentProfile& Segment : Region.Segments)
+    {
+        if (Segment.PopulationShare <= KINDA_SMALL_NUMBER)
+        {
+            continue;
+        }
+
+        const float EffectivePopulation = Region.TotalPopulation * Segment.PopulationShare;
+        if (EffectivePopulation <= 0.f)
+        {
+            continue;
+        }
+
+        const float Trendiness = FMath::Clamp(Segment.Trendiness, 0.f, 2.f);
+        const float Reach = EffectivePopulation * Region.RadioReach * ExposureDampen;
+        TotalEffectiveReach += Reach;
+
+        for (const TPair<FString, float>& AffinityPair : Segment.GenreAffinity)
+        {
+            const float Affinity = FMath::Max(0.f, AffinityPair.Value);
+            if (Affinity <= 0.f)
+            {
+                continue;
+            }
+
+            const float DemandContribution = Reach * Affinity * (0.5f + Trendiness * 0.5f);
+            float& Existing = OutSnapshot.GenreDemand.FindOrAdd(AffinityPair.Key);
+            Existing += DemandContribution;
+            MaxGenreDemand = FMath::Max(MaxGenreDemand, Existing);
+        }
+    }
+
+    // Normalize per-genre demand into 0-1 while retaining relative shape.
+    if (MaxGenreDemand > KINDA_SMALL_NUMBER)
+    {
+        for (auto& Pair : OutSnapshot.GenreDemand)
+        {
+            Pair.Value = FMath::Clamp(Pair.Value / MaxGenreDemand, 0.f, 1.f);
+        }
+    }
+
+    // Scale total reach to a manageable number so downstream systems can convert to units without overflow.
+    OutSnapshot.TotalReach = TotalEffectiveReach / 100000.f;
 }
 
-float UMarketManagerSubsystem::GetSeasonalDemandMultiplier(int32 MonthIndex) const
+void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 {
-    // Holiday season boosts physical sales; midsummer dip otherwise.
-    switch (MonthIndex)
+    // Light decay on recent exposure to naturally clear competition over time.
+    const float DecayRate = 0.9f;
+    for (auto& RegionPair : LoadedRegions)
     {
-    case 12:
-    case 11:
-        return 1.2f;
-    case 6:
-    case 7:
-        return 0.9f;
-    default:
-        return 1.0f;
+        for (auto& ArtistExposure : RegionPair.Value.RecentArtistExposure)
+        {
+            ArtistExposure.Value *= DecayRate;
+        }
+
+        for (auto& RecordExposure : RegionPair.Value.RecentRecordExposure)
+        {
+            RecordExposure.Value *= DecayRate;
+        }
+
+        // NewDate currently unused but preserved for future seasonal/economic hooks.
+        (void)NewDate;
+    }
+}
+
+void UMarketManagerSubsystem::GetAllDemandSnapshots(TArray<FMarketDemandSnapshot>& OutSnapshots) const
+{
+    OutSnapshots.Reset();
+    for (const auto& Pair : LoadedRegions)
+    {
+        FMarketDemandSnapshot Snapshot;
+        BuildMarketDemandSnapshot(Pair.Value, Snapshot);
+        OutSnapshots.Add(Snapshot);
     }
 }
