@@ -82,12 +82,15 @@ void URecordManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
     SimulateMonthlySales(NewDate);
 }
 
-void URecordManagerSubsystem::GetSalesHistory(const FString& RecordId, TArray<FRecordSalesEntry>& OutEntries) const
+bool URecordManagerSubsystem::GetSalesHistory(const FString& RecordId, TArray<FRecordSalesEntry>& OutEntries) const
 {
-    if (const TArray<FRecordSalesEntry>* Found = SalesHistory.Find(RecordId))
+    if (const FRecordSalesHistory* Found = SalesHistory.Find(RecordId))
     {
-        OutEntries = *Found;
+        OutEntries = Found->Entries;
+        return true;
     }
+
+    return false;
 }
 
 int32 URecordManagerSubsystem::GetLifetimeUnits(const FString& RecordId) const
@@ -160,7 +163,7 @@ void URecordManagerSubsystem::SimulateMonthlySales(const FDateTime& CurrentDate)
     // Persist sales and hand volumes to FinanceManager.
     for (const FRecordSalesEntry& Entry : AllSalesEntries)
     {
-        SalesHistory.FindOrAdd(Entry.RecordId).Add(Entry);
+        SalesHistory.FindOrAdd(Entry.RecordId).Entries.Add(Entry);
         LifetimeUnits.FindOrAdd(Entry.RecordId) += Entry.UnitsSold;
 
         const FRecordFormatRule* Rule = FormatRules.Find(Entry.Format);
