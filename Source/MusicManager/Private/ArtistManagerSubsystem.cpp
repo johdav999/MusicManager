@@ -306,6 +306,8 @@ void UArtistManagerSubsystem::AdvanceMonth()
 {
     check(IsInGameThread());
 
+    ApplyMonthlyMomentum();
+
     TArray<FString> ContractsToExpire;
     for (FArtistContract& Contract : ActiveContracts)
     {
@@ -446,4 +448,76 @@ void UArtistManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
     ExpiredContracts.Reset();
     OnMonthlyFinancialUpdate.Broadcast(ActiveContracts);
     OnArtistListChanged.Broadcast();
+}
+
+FArtistMarketModifiers UArtistManagerSubsystem::EvaluateMarketModifiers(const FString& ArtistId, const FString& Genre, const FString& MarketId, const FDateTime& CurrentDate, int32 ConcurrentReleases) const
+{
+    FArtistMarketModifiers Modifiers;
+
+    const FArtistContract* Contract = GetContractByArtistId(ArtistId);
+    if (!Contract)
+    {
+        return Modifiers;
+    }
+
+    const FArtistData& ArtistData = Contract->ArtistData;
+
+    // Base popularity from audience and creative scores.
+    const float AudienceComposite = ArtistData.PerformanceScore + ArtistData.StagePresence + ArtistData.AudienceEngagement;
+    const float CreativeComposite = ArtistData.VocalQuality + ArtistData.SongwritingQuality;
+    Modifiers.Popularity = FMath::Clamp((AudienceComposite + CreativeComposite) / 500.f, 0.25f, 2.5f);
+
+    // Momentum draws from the stored runtime momentum cache.
+    if (const float* Momentum = ArtistMomentum.Find(ArtistId))
+    {
+        Modifiers.Momentum = *Momentum;
+    }
+    else
+    {
+        const float SeedMomentum = FMath::Clamp(ArtistData.PerformanceScore / 75.f, 0.5f, 1.5f);
+        Modifiers.Momentum = SeedMomentum;
+    }
+
+    if (const float* Reputation = ArtistReputation.Find(ArtistId))
+    {
+        Modifiers.Reputation = *Reputation;
+    }
+    else
+    {
+        Modifiers.Reputation = 1.0f;
+    }
+
+    Modifiers.GenreAlignment = ArtistData.Genre.Equals(Genre, ESearchCase::IgnoreCase) ? 1.1f : 0.9f;
+
+    // MarketId is part of the signature to allow future territory-specific tweaks; touch it to avoid unused warnings.
+    Modifiers.Popularity *= MarketId.IsEmpty() ? 1.0f : 1.0f;
+
+    Modifiers.Cannibalization = CalculateCannibalization(ArtistId, ConcurrentReleases);
+
+    return Modifiers;
+}
+
+void UArtistManagerSubsystem::ApplyMonthlyMomentum()
+{
+    for (const FArtistContract& Contract : ActiveContracts)
+    {
+        float& MomentumValue = ArtistMomentum.FindOrAdd(Contract.ArtistId);
+        MomentumValue = FMath::Clamp(MomentumValue * 0.97f + (Contract.PerformanceMomentum / 120.f), 0.5f, 2.0f);
+
+        float& ReputationValue = ArtistReputation.FindOrAdd(Contract.ArtistId);
+        const float ContractAging = FMath::Clamp(static_cast<float>(Contract.MonthsActive) / 60.f, 0.f, 0.5f);
+        ReputationValue = FMath::Clamp(ReputationValue * 0.99f + 0.6f + ContractAging, 0.5f, 2.5f);
+    }
+}
+
+float UArtistManagerSubsystem::CalculateCannibalization(const FString& ArtistId, int32 ConcurrentReleases) const
+{
+    if (ConcurrentReleases <= 1)
+    {
+        return 1.0f;
+    }
+
+    // Each extra simultaneous release reduces appetite slightly.
+    const float Suppression = FMath::Clamp(0.15f * (ConcurrentReleases - 1), 0.f, 0.6f);
+    return 1.0f - Suppression;
 }
