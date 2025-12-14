@@ -6,41 +6,23 @@
 #include "MarketRegion.h"
 #include "MarketManagerSubsystem.generated.h"
 
-/** Lightweight snapshot of demand multipliers for a single market at a point in time. */
+/** Snapshot of all genre demand within a specific market at a single point in time. */
 USTRUCT(BlueprintType)
 struct FMarketDemandSnapshot
 {
     GENERATED_BODY();
 
-    /** Multiplier representing reachable audience size (scaled around 1.0). */
+    /** Owning market identifier. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
-    float PopulationReach = 1.0f;
+    FString MarketId;
 
-    /** Local economic confidence / discretionary spending strength. */
+    /** Effective reachable population (scaled down to manageable magnitudes). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
-    float EconomicHealth = 1.0f;
+    float TotalReach = 0.f;
 
-    /** How much the region currently wants the supplied genre. */
+    /** Normalized demand per genre (0-1). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
-    float GenreAppetite = 1.0f;
-
-    /** Competition pressure and saturation. < 1.0 means suppressed demand. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
-    float Saturation = 1.0f;
-
-    /** Seasonal bump or slump. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
-    float SeasonalEffect = 1.0f;
-
-    /** Marketing reach proxy (radio/press). */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
-    float Exposure = 1.0f;
-
-    /** Convenience helper to combine all multipliers without computing sales directly. */
-    float GetCompositeDemand() const
-    {
-        return PopulationReach * EconomicHealth * GenreAppetite * Saturation * SeasonalEffect * Exposure;
-    }
+    TMap<FString, float> GenreDemand;
 };
 
 UCLASS()
@@ -71,17 +53,12 @@ public:
     UFUNCTION(BlueprintCallable)
     void GetAllRegions(TArray<FMarketRegion>& OutRegions) const;
 
-    /**
-     * Build a read-only set of demand multipliers for the supplied market and genre.
-     * The result is a purely data-oriented snapshot that other subsystems can use to
-     * compute sales without duplicating market logic.
-     */
-    UFUNCTION(BlueprintCallable, Category="Market|Demand")
-    bool EvaluateDemandSnapshot(const FString& RegionId, const FString& Genre, const FDateTime& ForDate, FMarketDemandSnapshot& OutSnapshot) const;
+    /** Aggregate segment-level demand into a market snapshot. */
+    void BuildMarketDemandSnapshot(const FMarketRegion& Region, FMarketDemandSnapshot& OutSnapshot) const;
 
-    /**
-     * Utility: compute simple seasonal multiplier using month index (Decembers boost gifting, summers slow).
-     */
-    UFUNCTION(BlueprintCallable, Category="Market|Demand")
-    float GetSeasonalDemandMultiplier(int32 MonthIndex) const;
+    /** Convenience helper for monthly orchestration to refresh time-sensitive state. */
+    void HandleMonthAdvanced(const FDateTime& NewDate);
+
+    /** Utility: compute all market snapshots for the current month. */
+    void GetAllDemandSnapshots(TArray<FMarketDemandSnapshot>& OutSnapshots) const;
 };

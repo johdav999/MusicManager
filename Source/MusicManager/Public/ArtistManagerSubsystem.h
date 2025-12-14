@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "FArtistContract.h"
 #include "Engine/DataTable.h"
+#include "MarketManagerSubsystem.h"
 #include "ArtistManagerSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArtistSigned, const FArtistContract&, SignedContract);
@@ -25,34 +26,26 @@ struct FArtistSongList
     TArray<FString> SongIds;
 };
 
-  /**
-   * Read-only view of per-market artist modifiers used by the record sales simulator.
-   */
-  USTRUCT(BlueprintType)
-  struct FArtistMarketModifiers
-  {
-      GENERATED_BODY();
+/**
+ * Read-only view of per-market artist modifiers used by the record sales simulator.
+ */
+USTRUCT(BlueprintType)
+struct FArtistMarketModifiers
+{
+    GENERATED_BODY();
 
-      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
-      float Popularity = 1.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+    float PopularityMultiplier = 1.0f;
 
-      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
-      float Momentum = 1.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+    float MomentumMultiplier = 1.0f;
 
-      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
-      float Reputation = 1.0f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+    float ReputationMultiplier = 1.0f;
 
-      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
-      float GenreAlignment = 1.0f;
-
-      UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
-      float Cannibalization = 1.0f;
-
-      float GetComposite() const
-      {
-          return Popularity * Momentum * Reputation * GenreAlignment * Cannibalization;
-      }
-  };
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Artist")
+    float GenreFitMultiplier = 1.0f;
+};
 
   UCLASS()
   class UArtistManagerSubsystem : public UGameInstanceSubsystem
@@ -115,13 +108,14 @@ public:
     const FArtistContract* FindContractByArtistName(const FString& ArtistName) const;
 
     /** Build per-market artist multipliers for the sales simulator. */
-    FArtistMarketModifiers EvaluateMarketModifiers(const FString& ArtistId, const FString& Genre, const FString& MarketId, const FDateTime& CurrentDate, int32 ConcurrentReleases) const;
+    void GetArtistMarketModifiers(const FString& ArtistId, const FString& MarketId, const FMarketDemandSnapshot& MarketDemand, FArtistMarketModifiers& OutModifiers) const;
 
     /** Apply monthly decay/boost to stored momentum values. */
     void ApplyMonthlyMomentum();
 
-    /** Calculate a cannibalization factor when an artist releases multiple records simultaneously. */
-    float CalculateCannibalization(const FString& ArtistId, int32 ConcurrentReleases) const;
+    /** Supply release counts so cannibalization can be calculated inside market modifier generation. */
+    void SetConcurrentReleaseCount(const FString& ArtistId, int32 ConcurrentReleases);
+    void ClearConcurrentReleaseCache();
 
     void SaveState(class UMusicSaveGame* SaveObject);
     void LoadState(const class UMusicSaveGame* SaveObject);
@@ -166,6 +160,10 @@ public:
     /** Simplified reputation cache per artist (driven by contract history). */
     UPROPERTY()
     TMap<FString, float> ArtistReputation;
+
+    /** Cached simultaneous releases used to dampen appetite. */
+    UPROPERTY()
+    TMap<FString, int32> ConcurrentReleasesCache;
 
 protected:
     int32 CalculateContractDurationMonths(const FArtistDealTerms& Deal) const;

@@ -1,7 +1,11 @@
 #include "GameTimeSubsystem.h"
 
+#include "ArtistManagerSubsystem.h"
 #include "Engine/World.h"
+#include "FinanceManagerSubsystem.h"
+#include "MarketManagerSubsystem.h"
 #include "MusicSaveGame.h"
+#include "RecordManagerSubsystem.h"
 
 UGameTimeSubsystem::UGameTimeSubsystem()
     : CurrentGameDate(1955, 1, 1)
@@ -54,6 +58,30 @@ void UGameTimeSubsystem::AdvanceMonth()
     }
 
     CurrentGameDate = FDateTime(NewYear, NewMonth, 1);
+
+    // Orchestrate monthly flow explicitly to keep deterministic ordering across subsystems.
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UMarketManagerSubsystem* MarketSubsystem = GameInstance->GetSubsystem<UMarketManagerSubsystem>())
+        {
+            MarketSubsystem->HandleMonthAdvanced(CurrentGameDate);
+        }
+
+        if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            ArtistSubsystem->HandleMonthAdvanced(CurrentGameDate);
+        }
+
+        if (URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
+        {
+            RecordSubsystem->HandleMonthAdvanced(CurrentGameDate);
+        }
+
+        if (UFinanceManagerSubsystem* FinanceSubsystem = GameInstance->GetSubsystem<UFinanceManagerSubsystem>())
+        {
+            FinanceSubsystem->HandleMonthAdvanced(CurrentGameDate);
+        }
+    }
 
     OnMonthAdvanced.Broadcast(CurrentGameDate);
 }

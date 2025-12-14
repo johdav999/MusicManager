@@ -26,26 +26,11 @@ void URecordManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
     FormatRules.Add(ERecordFormat::DigitalDownload, {ERecordFormat::DigitalDownload, 2003, 2026, 10.0f, 0.1f});
     FormatRules.Add(ERecordFormat::Streaming, {ERecordFormat::Streaming, 2010, 2026, 1.0f, 0.02f});
 
-    // Bind to the monthly tick to orchestrate sales simulation.
-    if (UGameInstance* GameInstance = GetGameInstance())
-    {
-        if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
-        {
-            TimeSubsystem->OnMonthAdvanced.AddDynamic(this, &URecordManagerSubsystem::HandleMonthAdvanced);
-        }
-    }
+    // GameTimeSubsystem orchestrates monthly flow explicitly; no event binding needed here.
 }
 
 void URecordManagerSubsystem::Deinitialize()
 {
-    if (UGameInstance* GameInstance = GetGameInstance())
-    {
-        if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
-        {
-            TimeSubsystem->OnMonthAdvanced.RemoveDynamic(this, &URecordManagerSubsystem::HandleMonthAdvanced);
-        }
-    }
-
     Super::Deinitialize();
 }
 
@@ -120,8 +105,8 @@ void URecordManagerSubsystem::SimulateMonthlySales(const FDateTime& CurrentDate)
         return;
     }
 
-    TArray<FMarketRegion> Regions;
-    MarketSubsystem->GetAllRegions(Regions);
+    TArray<FMarketDemandSnapshot> DemandSnapshots;
+    MarketSubsystem->GetAllDemandSnapshots(DemandSnapshots);
 
     // Count concurrent releases per artist for cannibalization calculation.
     TMap<FString, int32> ReleasesPerArtist;
@@ -131,6 +116,12 @@ void URecordManagerSubsystem::SimulateMonthlySales(const FDateTime& CurrentDate)
         {
             ReleasesPerArtist.FindOrAdd(Pair.Value.ArtistId)++;
         }
+    }
+
+    ArtistSubsystem->ClearConcurrentReleaseCache();
+    for (const auto& ReleasePair : ReleasesPerArtist)
+    {
+        ArtistSubsystem->SetConcurrentReleaseCount(ReleasePair.Key, ReleasePair.Value);
     }
 
     TArray<FRecordSalesEntry> AllSalesEntries;
@@ -143,20 +134,13 @@ void URecordManagerSubsystem::SimulateMonthlySales(const FDateTime& CurrentDate)
             continue; // Not released yet.
         }
 
-        const int32 ConcurrentReleases = ReleasesPerArtist.FindRef(Record.ArtistId);
-
         // Evaluate artist impact per market and compute sales volume per format.
-        for (const FMarketRegion& Region : Regions)
+        for (const FMarketDemandSnapshot& Snapshot : DemandSnapshots)
         {
-            FMarketDemandSnapshot Demand;
-            if (!MarketSubsystem->EvaluateDemandSnapshot(Region.RegionId, Record.PrimaryGenre, CurrentDate, Demand))
-            {
-                continue;
-            }
+            FArtistMarketModifiers ArtistImpact;
+            ArtistSubsystem->GetArtistMarketModifiers(Record.ArtistId, Snapshot.MarketId, Snapshot, ArtistImpact);
 
-            const FArtistMarketModifiers ArtistImpact = ArtistSubsystem->EvaluateMarketModifiers(Record.ArtistId, Record.PrimaryGenre, Region.RegionId, CurrentDate, ConcurrentReleases);
-
-            ComputeRecordSalesForMarket(Record, Region.RegionId, Demand, ArtistImpact, CurrentDate, AllSalesEntries);
+            ComputeRecordSalesForMarket(Record, Snapshot, ArtistImpact, CurrentDate, AllSalesEntries);
         }
     }
 
@@ -165,35 +149,29 @@ void URecordManagerSubsystem::SimulateMonthlySales(const FDateTime& CurrentDate)
     {
         SalesHistory.FindOrAdd(Entry.RecordId).Entries.Add(Entry);
         LifetimeUnits.FindOrAdd(Entry.RecordId) += Entry.UnitsSold;
-
-        const FRecordFormatRule* Rule = FormatRules.Find(Entry.Format);
-        if (Rule)
-        {
-            const float GrossRevenue = Entry.UnitsSold * Rule->BasePrice;
-            const float Cost = GrossRevenue * Rule->CostRate;
-            const float Net = GrossRevenue - Cost;
-
-            FinanceSubsystem->RegisterRecordSalesRevenue(Records[Entry.RecordId].LabelId, Entry.RecordId, Net, Entry.Month);
-
-            // Record distribution cost separately to keep ledger transparent.
-            FCashFlowEntry CostEntry;
-            CostEntry.LabelId = Records[Entry.RecordId].LabelId;
-            CostEntry.Type = ETransactionType::MarketingCost;
-            CostEntry.Amount = -Cost;
-            CostEntry.Timestamp = Entry.Month;
-            CostEntry.RefId = Entry.RecordId;
-            FinanceSubsystem->RegisterTransaction(CostEntry);
-        }
     }
+
+    FinanceSubsystem->ProcessRecordSalesEntries(AllSalesEntries, FormatRules, Records);
 }
 
-void URecordManagerSubsystem::ComputeRecordSalesForMarket(const FRecordData& Record, const FString& MarketId, const FMarketDemandSnapshot& Demand, const FArtistMarketModifiers& ArtistImpact, const FDateTime& CurrentDate, TArray<FRecordSalesEntry>& OutEntries) const
+void URecordManagerSubsystem::ComputeRecordSalesForMarket(const FRecordData& Record, const FMarketDemandSnapshot& Demand, const FArtistMarketModifiers& ArtistImpact, const FDateTime& CurrentDate, TArray<FRecordSalesEntry>& OutEntries) const
 {
     const float LifecycleFactor = ComputeLifecycleFactor(Record.ReleaseDate, CurrentDate);
     const float SongQuality = EvaluateSongQuality(Record);
     const float Exposure = Record.MarketingExposure;
 
-    const float BaseDemand = Demand.GetCompositeDemand() * ArtistImpact.GetComposite() * Record.RecordQuality * SongQuality * Exposure * LifecycleFactor;
+    const float GenreDemand = Demand.GenreDemand.FindRef(Record.PrimaryGenre);
+    if (GenreDemand <= KINDA_SMALL_NUMBER)
+    {
+        return;
+    }
+
+    float BaseDemand = Demand.TotalReach * GenreDemand;
+    BaseDemand *= ArtistImpact.PopularityMultiplier;
+    BaseDemand *= ArtistImpact.MomentumMultiplier;
+    BaseDemand *= ArtistImpact.ReputationMultiplier;
+    BaseDemand *= ArtistImpact.GenreFitMultiplier;
+    BaseDemand *= Record.RecordQuality * SongQuality * Exposure * LifecycleFactor;
 
     if (BaseDemand <= KINDA_SMALL_NUMBER)
     {
@@ -217,7 +195,7 @@ void URecordManagerSubsystem::ComputeRecordSalesForMarket(const FRecordData& Rec
 
         FRecordSalesEntry Entry;
         Entry.RecordId = Record.RecordId;
-        Entry.MarketId = MarketId;
+        Entry.MarketId = Demand.MarketId;
         Entry.Format = Format;
         Entry.Month = CurrentDate;
         Entry.UnitsSold = UnitsSold;
