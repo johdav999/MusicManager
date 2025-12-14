@@ -141,6 +141,27 @@ void UUIManagerSubsystem::ShowAudition(const FAuditionEvent& EventData)
     }
 }
 
+void UUIManagerSubsystem::ShowMarketView()
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (UUIManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->ShowMarketView();
+            }
+        });
+        return;
+    }
+
+    if (ULayout* Layout = ActiveLayout.Get())
+    {
+        Layout->ShowRegionMap();
+    }
+}
+
 void UUIManagerSubsystem::ShowRegionMap()
 {
     const TWeakObjectPtr<UUIManagerSubsystem> WeakThis(this);

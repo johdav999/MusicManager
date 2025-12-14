@@ -254,6 +254,7 @@ void ULayout::ShowRegionMap()
 
     if (!RegionMapWidget)
     {
+        UE_LOG(LogTemp, Warning, TEXT("RegionMapWidget is not initialized"));
         return;
     }
 
