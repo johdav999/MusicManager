@@ -188,14 +188,21 @@ void URecordManagerSubsystem::ComputeRecordSalesForMarket(const FRecordData& Rec
         return;
     }
 
-    float BaseDemand = Demand.TotalReach * GenreDemand;
-    BaseDemand *= ArtistImpact.PopularityMultiplier;
-    BaseDemand *= ArtistImpact.MomentumMultiplier;
-    BaseDemand *= ArtistImpact.ReputationMultiplier;
-    BaseDemand *= ArtistImpact.GenreFitMultiplier;
-    BaseDemand *= Record.RecordQuality * SongQuality * Exposure * LifecycleFactor;
+    float DemandScore = Demand.TotalReach * GenreDemand;
+    DemandScore *= ArtistImpact.PopularityMultiplier;
+    DemandScore *= ArtistImpact.MomentumMultiplier;
+    DemandScore *= ArtistImpact.ReputationMultiplier;
+    DemandScore *= ArtistImpact.GenreFitMultiplier;
+    DemandScore *= Record.RecordQuality * SongQuality * Exposure * LifecycleFactor;
 
-    if (BaseDemand <= KINDA_SMALL_NUMBER)
+    const float* ArtistRadioBoostPtr = Demand.ArtistRadioBoost.Find(Record.ArtistId);
+    const float ArtistRadioBoost = ArtistRadioBoostPtr ? *ArtistRadioBoostPtr : 1.f;
+    const float RadioLifecycleWeight = FMath::GetMappedRangeValueClamped(FVector2D(0.25f, 1.25f), FVector2D(0.25f, 1.0f), LifecycleFactor);
+    const float RadioFormatBias = Record.bIsSingle ? 1.1f : 1.0f;
+    const float EffectiveRadioBoost = FMath::Clamp(1.f + (ArtistRadioBoost * RadioFormatBias - 1.f) * RadioLifecycleWeight, 0.8f, 1.8f);
+    DemandScore *= EffectiveRadioBoost;
+
+    if (DemandScore <= KINDA_SMALL_NUMBER)
     {
         return;
     }
@@ -208,7 +215,7 @@ void URecordManagerSubsystem::ComputeRecordSalesForMarket(const FRecordData& Rec
         }
 
         const float FormatWeight = Format == ERecordFormat::Streaming ? 0.35f : 1.0f;
-        const int32 UnitsSold = FMath::Max(0, static_cast<int32>(BaseDemand * FormatWeight));
+        const int32 UnitsSold = FMath::Max(0, static_cast<int32>(DemandScore * FormatWeight));
 
         if (UnitsSold <= 0)
         {
@@ -221,7 +228,7 @@ void URecordManagerSubsystem::ComputeRecordSalesForMarket(const FRecordData& Rec
         Entry.Format = Format;
         Entry.Month = CurrentDate;
         Entry.UnitsSold = UnitsSold;
-        Entry.DemandScore = BaseDemand;
+        Entry.DemandScore = DemandScore;
 
         OutEntries.Add(Entry);
     }

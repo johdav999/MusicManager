@@ -112,6 +112,8 @@ public:
 
     /** Apply monthly decay/boost to stored momentum values. */
     void ApplyMonthlyMomentum();
+    /** Temporary boost based on cross-market radio exposure. */
+    void ApplyRadioExposureMomentum(const TMap<FString, float>& ArtistMomentumBoosts);
 
     /** Supply release counts so cannibalization can be calculated inside market modifier generation. */
     void SetConcurrentReleaseCount(const FString& ArtistId, int32 ConcurrentReleases);

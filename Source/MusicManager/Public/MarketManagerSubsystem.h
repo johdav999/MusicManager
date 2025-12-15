@@ -23,6 +23,14 @@ struct FMarketDemandSnapshot
     /** Normalized demand per genre (0-1). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
     TMap<FString, float> GenreDemand;
+
+    /** Per-artist radio lift derived from recent exposure. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
+    TMap<FString, float> ArtistRadioBoost;
+
+    /** Optional per-record radio lift hook. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Market")
+    TMap<FString, float> RecordRadioBoost;
 };
 
 UCLASS()
