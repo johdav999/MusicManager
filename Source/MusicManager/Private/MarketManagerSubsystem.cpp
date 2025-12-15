@@ -273,10 +273,10 @@ void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
                 const FMarketRegion& Region = RegionPair.Value;
                 for (const auto& ArtistExposure : Region.RecentArtistExposure)
                 {
-                    if (ArtistExposure.Value < 0.6f)
-                    {
-                        continue; // Not enough spin to meaningfully move momentum.
-                    }
+                    //if (ArtistExposure.Value < 0.6f)
+                    //{
+                    //    continue; // Not enough spin to meaningfully move momentum.
+                    //}
 
                     FExposureAggregate& Aggregate = ExposureByArtist.FindOrAdd(ArtistExposure.Key);
                     Aggregate.ExposureSum += ArtistExposure.Value;
