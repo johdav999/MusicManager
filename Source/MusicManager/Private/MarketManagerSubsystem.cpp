@@ -7,8 +7,9 @@
 void UMarketManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-    LoadRegions();
     LoadMarketSegmentProfiles();
+    LoadRegions();
+    AssignSegmentsToRegions();
 }
 
 void UMarketManagerSubsystem::LoadRegions()
@@ -57,6 +58,46 @@ void UMarketManagerSubsystem::LoadMarketSegmentProfiles()
     }
 
     UE_LOG(LogTemp, Log, TEXT("MarketManagerSubsystem: Loaded %d market segment profiles."), LoadedSegmentProfiles.Num());
+}
+
+void UMarketManagerSubsystem::AssignSegmentsToRegions()
+{
+    for (auto& RegionPair : LoadedRegions)
+    {
+        FMarketRegion& Region = RegionPair.Value;
+
+        Region.Segments.Empty();
+
+        float TotalPopulationShare = 0.f;
+
+        for (const FString& SegmentId : Region.SegmentIds)
+        {
+            if (SegmentId.IsEmpty())
+            {
+                continue;
+            }
+
+            if (const FMarketSegmentProfile* SegmentProfile = LoadedSegmentProfiles.Find(SegmentId))
+            {
+                Region.Segments.Add(*SegmentProfile);
+                TotalPopulationShare += SegmentProfile->PopulationShare;
+            }
+            else
+            {
+                UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s references missing segment id '%s'."), *Region.RegionId, *SegmentId);
+            }
+        }
+
+        if (Region.Segments.Num() == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s has no assigned market segments."), *Region.RegionId);
+        }
+
+        if (TotalPopulationShare > 1.0f + KINDA_SMALL_NUMBER || TotalPopulationShare < 0.95f)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s population share sum %.2f outside recommended range [0.95, 1.0]."), *Region.RegionId, TotalPopulationShare);
+        }
+    }
 }
 
 bool UMarketManagerSubsystem::GetRegion(const FString& RegionId, FMarketRegion& OutRegion) const
