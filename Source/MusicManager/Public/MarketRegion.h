@@ -57,15 +57,12 @@ struct FMarketRegion : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TArray<FString> SegmentIds;
 
-    UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly)
-    TArray<FMarketSegmentProfile> Segments;
-
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float RadioReach = 0.5f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly)
     TMap<FString, float> RecentArtistExposure;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly)
     TMap<FString, float> RecentRecordExposure;
 };

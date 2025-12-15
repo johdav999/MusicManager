@@ -57,6 +57,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market")
     TMap<FString, FMarketSegmentProfile> LoadedSegmentProfiles;
 
+    /** Runtime resolved market segments per region */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market")
+    TMap<FString, TArray<FMarketSegmentProfile>> RegionSegments;
+
     /** Load all rows from the DataTable */
     UFUNCTION(BlueprintCallable)
     void LoadRegions();
