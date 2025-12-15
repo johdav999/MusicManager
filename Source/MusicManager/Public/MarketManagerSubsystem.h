@@ -73,4 +73,8 @@ public:
 
     /** Utility: compute all market snapshots for the current month. */
     void GetAllDemandSnapshots(TArray<FMarketDemandSnapshot>& OutSnapshots) const;
+
+private:
+    /** TEMPORARY RADIO SIMULATION: REPLACE WITH REAL RADIO SYSTEM */
+    void SimulateMonthlyRadioPlay(const FDateTime& CurrentDate);
 };

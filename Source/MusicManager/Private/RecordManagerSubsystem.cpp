@@ -61,6 +61,28 @@ bool URecordManagerSubsystem::GetRecordById(const FString& RecordId, FRecordData
     return false;
 }
 
+void URecordManagerSubsystem::GetRecentlyReleasedArtists(const FDateTime& CurrentDate, int32 MonthsBack, TArray<FString>& OutArtistIds) const
+{
+    OutArtistIds.Reset();
+
+    const int32 ClampedMonths = FMath::Max(0, MonthsBack);
+    const FDateTime CutoffDate = CurrentDate - FTimespan::FromDays(ClampedMonths * 30);
+
+    for (const TPair<FString, FRecordData>& Pair : Records)
+    {
+        const FRecordData& Record = Pair.Value;
+        if (Record.ReleaseDate > CurrentDate)
+        {
+            continue; // Not out yet.
+        }
+
+        if (Record.ReleaseDate >= CutoffDate)
+        {
+            OutArtistIds.AddUnique(Record.ArtistId);
+        }
+    }
+}
+
 void URecordManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 {
     check(IsInGameThread());
