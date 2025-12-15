@@ -69,6 +69,9 @@ public:
     UFUNCTION(BlueprintCallable)
     bool GetRegion(const FString& RegionId, FMarketRegion& OutRegion) const;
 
+    UFUNCTION(BlueprintCallable)
+    void AssignSegmentsToRegions();
+
     /** Get all loaded regions. */
     UFUNCTION(BlueprintCallable)
     void GetAllRegions(TArray<FMarketRegion>& OutRegions) const;
@@ -83,7 +86,7 @@ public:
     void GetAllDemandSnapshots(TArray<FMarketDemandSnapshot>& OutSnapshots) const;
 
 private:
-    void AssignSegmentsToRegions();
+
 
     /** TEMPORARY RADIO SIMULATION: REPLACE WITH REAL RADIO SYSTEM */
     void SimulateMonthlyRadioPlay(const FDateTime& CurrentDate);

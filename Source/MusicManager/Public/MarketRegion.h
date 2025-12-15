@@ -57,7 +57,7 @@ struct FMarketRegion : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TArray<FString> SegmentIds;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly)
     TArray<FMarketSegmentProfile> Segments;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
