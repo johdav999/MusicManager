@@ -62,24 +62,31 @@ void UMarketManagerSubsystem::LoadMarketSegmentProfiles()
 
 void UMarketManagerSubsystem::AssignSegmentsToRegions()
 {
-    for (auto& RegionPair : LoadedRegions)
+    RegionSegments.Empty();
+
+    for (const auto& RegionPair : LoadedRegions)
     {
-        FMarketRegion& Region = RegionPair.Value;
+        const FMarketRegion& Region = RegionPair.Value;
 
-        Region.Segments.Empty();
-
+        TArray<FMarketSegmentProfile> ResolvedSegments;
         float TotalPopulationShare = 0.f;
+
+        if (Region.SegmentIds.Num() == 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s has no segment ids configured."), *Region.RegionId);
+        }
 
         for (const FString& SegmentId : Region.SegmentIds)
         {
             if (SegmentId.IsEmpty())
             {
+                UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s contains an empty segment id entry."), *Region.RegionId);
                 continue;
             }
 
             if (const FMarketSegmentProfile* SegmentProfile = LoadedSegmentProfiles.Find(SegmentId))
             {
-                Region.Segments.Add(*SegmentProfile);
+                ResolvedSegments.Add(*SegmentProfile);
                 TotalPopulationShare += SegmentProfile->PopulationShare;
             }
             else
@@ -88,15 +95,17 @@ void UMarketManagerSubsystem::AssignSegmentsToRegions()
             }
         }
 
-        if (Region.Segments.Num() == 0)
+        if (ResolvedSegments.Num() == 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s has no assigned market segments."), *Region.RegionId);
+            UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s has no resolved market segments."), *Region.RegionId);
         }
 
         if (TotalPopulationShare > 1.0f + KINDA_SMALL_NUMBER || TotalPopulationShare < 0.95f)
         {
             UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s population share sum %.2f outside recommended range [0.95, 1.0]."), *Region.RegionId, TotalPopulationShare);
         }
+
+        RegionSegments.Add(Region.RegionId, MoveTemp(ResolvedSegments));
     }
 }
 
@@ -144,8 +153,15 @@ void UMarketManagerSubsystem::BuildMarketDemandSnapshot(const FMarketRegion& Reg
 
     const float ExposureDampen = 1.f / FMath::Max(1.f, 1.f + ExposureSum * 0.1f);
 
+    const TArray<FMarketSegmentProfile>* ResolvedSegments = RegionSegments.Find(Region.RegionId);
+    if (!ResolvedSegments || ResolvedSegments->Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: No resolved segments found for region %s when building demand snapshot."), *Region.RegionId);
+        return;
+    }
+
     // Aggregate each segment's contribution into per-genre demand buckets.
-    for (const FMarketSegmentProfile& Segment : Region.Segments)
+    for (const FMarketSegmentProfile& Segment : *ResolvedSegments)
     {
         if (Segment.PopulationShare <= KINDA_SMALL_NUMBER)
         {
