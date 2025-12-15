@@ -173,7 +173,7 @@ void UMarketManagerSubsystem::SimulateMonthlyRadioPlay(const FDateTime& CurrentD
         ArtistSubsystem->GetSignedArtistData(SignedArtists);
         for (const FArtistData& Artist : SignedArtists)
         {
-            CandidateArtistIds.AddUnique(Artist.ArtistId);
+            CandidateArtistIds.AddUnique(Artist.ArtistName);
         }
     }
 
@@ -201,7 +201,11 @@ void UMarketManagerSubsystem::SimulateMonthlyRadioPlay(const FDateTime& CurrentD
         FRandomStream Stream(Seed);
 
         TArray<FString> ShuffledArtists = CandidateArtistIds;
-        Algo::RandomShuffle(ShuffledArtists, Stream);
+        for (int32 i = ShuffledArtists.Num() - 1; i > 0; --i)
+        {
+            const int32 SwapIndex = Stream.RandRange(0, i);
+            ShuffledArtists.Swap(i, SwapIndex);
+        }
 
         const int32 ArtistsThisRegion = FMath::Clamp(Stream.RandRange(MinArtistsPerRegion, MaxArtistsPerRegion), 0, ShuffledArtists.Num());
         const float ClampedReach = FMath::Max(0.f, Region.RadioReach);
