@@ -1,5 +1,9 @@
 #include "MarketManagerSubsystem.h"
 
+#include "Algo/RandomShuffle.h"
+#include "ArtistManagerSubsystem.h"
+#include "RecordManagerSubsystem.h"
+
 void UMarketManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
@@ -137,8 +141,91 @@ void UMarketManagerSubsystem::BuildMarketDemandSnapshot(const FMarketRegion& Reg
     OutSnapshot.TotalReach = TotalEffectiveReach / 100000.f;
 }
 
+namespace
+{
+    /** TEMPORARY RADIO SIMULATION: tuning values to keep exposure lightweight. */
+    constexpr int32 MinArtistsPerRegion = 3;
+    constexpr int32 MaxArtistsPerRegion = 8;
+    constexpr float MinExposureMultiplier = 0.05f;
+    constexpr float MaxExposureMultiplier = 0.2f;
+    constexpr float MaxExposurePerArtist = 2.0f;
+    constexpr int32 RecentReleaseWindowMonths = 3;
+}
+
+void UMarketManagerSubsystem::SimulateMonthlyRadioPlay(const FDateTime& CurrentDate)
+{
+    check(IsInGameThread());
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!GameInstance)
+    {
+        return;
+    }
+
+    UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
+    URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>();
+
+    TArray<FString> CandidateArtistIds;
+
+    if (ArtistSubsystem)
+    {
+        TArray<FArtistData> SignedArtists;
+        ArtistSubsystem->GetSignedArtistData(SignedArtists);
+        for (const FArtistData& Artist : SignedArtists)
+        {
+            CandidateArtistIds.AddUnique(Artist.ArtistId);
+        }
+    }
+
+    if (RecordSubsystem)
+    {
+        TArray<FString> RecentReleaseArtists;
+        RecordSubsystem->GetRecentlyReleasedArtists(CurrentDate, RecentReleaseWindowMonths, RecentReleaseArtists);
+        for (const FString& ArtistId : RecentReleaseArtists)
+        {
+            CandidateArtistIds.AddUnique(ArtistId);
+        }
+    }
+
+    if (CandidateArtistIds.Num() == 0)
+    {
+        return;
+    }
+
+    for (auto& RegionPair : LoadedRegions)
+    {
+        FMarketRegion& Region = RegionPair.Value;
+
+        // Seeded randomness keeps tests deterministic per month/region while remaining lightweight.
+        const int32 Seed = CurrentDate.ToUnixTimestamp() ^ GetTypeHash(Region.RegionId);
+        FRandomStream Stream(Seed);
+
+        TArray<FString> ShuffledArtists = CandidateArtistIds;
+        Algo::RandomShuffle(ShuffledArtists, Stream);
+
+        const int32 ArtistsThisRegion = FMath::Clamp(Stream.RandRange(MinArtistsPerRegion, MaxArtistsPerRegion), 0, ShuffledArtists.Num());
+        const float ClampedReach = FMath::Max(0.f, Region.RadioReach);
+
+        for (int32 Index = 0; Index < ArtistsThisRegion; ++Index)
+        {
+            const FString& ArtistId = ShuffledArtists[Index];
+
+            const float Increment = ClampedReach * Stream.FRandRange(MinExposureMultiplier, MaxExposureMultiplier);
+            float& Exposure = Region.RecentArtistExposure.FindOrAdd(ArtistId);
+            Exposure = FMath::Clamp(Exposure + Increment, 0.f, MaxExposurePerArtist);
+
+            // TODO: Genre-based radio formatting once genre metadata is wired to stations.
+            // TODO: Payola/promotion hooks to bias selection.
+            // TODO: Chart feedback loops and touring boosts to influence rotations.
+            // TODO: Record-specific exposure that differentiates singles vs. albums.
+        }
+    }
+}
+
 void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 {
+    check(IsInGameThread());
+
     // Light decay on recent exposure to naturally clear competition over time.
     const float DecayRate = 0.9f;
     for (auto& RegionPair : LoadedRegions)
@@ -152,10 +239,10 @@ void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
         {
             RecordExposure.Value *= DecayRate;
         }
-
-        // NewDate currently unused but preserved for future seasonal/economic hooks.
-        (void)NewDate;
     }
+
+    // TEMPORARY RADIO SIMULATION: REPLACE WITH REAL RADIO SYSTEM
+    SimulateMonthlyRadioPlay(NewDate);
 }
 
 void UMarketManagerSubsystem::GetAllDemandSnapshots(TArray<FMarketDemandSnapshot>& OutSnapshots) const

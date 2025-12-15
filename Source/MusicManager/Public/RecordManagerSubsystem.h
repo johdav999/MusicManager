@@ -155,6 +155,9 @@ public:
     UFUNCTION(BlueprintCallable)
     bool GetRecordById(const FString& RecordId, FRecordData& OutData) const;
 
+    /** TEMPORARY RADIO SIMULATION SUPPORT: REPLACE WITH REAL RADIO SYSTEM */
+    void GetRecentlyReleasedArtists(const FDateTime& CurrentDate, int32 MonthsBack, TArray<FString>& OutArtistIds) const;
+
     /** Entry point triggered from GameTimeSubsystem each month. */
     UFUNCTION()
     void HandleMonthAdvanced(const FDateTime& NewDate);
