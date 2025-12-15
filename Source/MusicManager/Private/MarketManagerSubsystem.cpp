@@ -82,15 +82,23 @@ void UMarketManagerSubsystem::BuildMarketDemandSnapshot(const FMarketRegion& Reg
     float TotalEffectiveReach = 0.f;
     float MaxGenreDemand = 0.f;
 
+    auto ConvertExposureToBoost = [](float Exposure)
+    {
+        // Exposure is capped by radio play simulation; convert to a gentle multiplier.
+        return FMath::Clamp(1.f + Exposure * 0.3f, 1.f, 1.5f);
+    };
+
     // Sum exposure once per region so each segment shares the same dampening.
     float ExposureSum = 0.f;
     for (const auto& Pair : Region.RecentArtistExposure)
     {
         ExposureSum += Pair.Value;
+        OutSnapshot.ArtistRadioBoost.Add(Pair.Key, ConvertExposureToBoost(Pair.Value));
     }
     for (const auto& Pair : Region.RecentRecordExposure)
     {
         ExposureSum += Pair.Value;
+        OutSnapshot.RecordRadioBoost.Add(Pair.Key, ConvertExposureToBoost(Pair.Value));
     }
 
     const float ExposureDampen = 1.f / FMath::Max(1.f, 1.f + ExposureSum * 0.1f);
@@ -247,6 +255,54 @@ void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 
     // TEMPORARY RADIO SIMULATION: REPLACE WITH REAL RADIO SYSTEM
     SimulateMonthlyRadioPlay(NewDate);
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            struct FExposureAggregate
+            {
+                float ExposureSum = 0.f;
+                int32 Markets = 0;
+            };
+
+            TMap<FString, FExposureAggregate> ExposureByArtist;
+
+            for (const auto& RegionPair : LoadedRegions)
+            {
+                const FMarketRegion& Region = RegionPair.Value;
+                for (const auto& ArtistExposure : Region.RecentArtistExposure)
+                {
+                    if (ArtistExposure.Value < 0.6f)
+                    {
+                        continue; // Not enough spin to meaningfully move momentum.
+                    }
+
+                    FExposureAggregate& Aggregate = ExposureByArtist.FindOrAdd(ArtistExposure.Key);
+                    Aggregate.ExposureSum += ArtistExposure.Value;
+                    Aggregate.Markets++;
+                }
+            }
+
+            TMap<FString, float> MomentumBoosts;
+            for (const auto& Pair : ExposureByArtist)
+            {
+                if (Pair.Value.Markets < 2)
+                {
+                    continue; // Require cross-market presence to nudge momentum.
+                }
+
+                const float AverageExposure = Pair.Value.ExposureSum / static_cast<float>(Pair.Value.Markets);
+                const float BoostMagnitude = FMath::Clamp(1.f + AverageExposure * 0.08f + (Pair.Value.Markets - 1) * 0.04f, 1.f, 1.25f);
+                MomentumBoosts.Add(Pair.Key, BoostMagnitude);
+            }
+
+            if (MomentumBoosts.Num() > 0)
+            {
+                ArtistSubsystem->ApplyRadioExposureMomentum(MomentumBoosts);
+            }
+        }
+    }
 }
 
 void UMarketManagerSubsystem::GetAllDemandSnapshots(TArray<FMarketDemandSnapshot>& OutSnapshots) const

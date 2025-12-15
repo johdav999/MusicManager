@@ -514,6 +514,20 @@ void UArtistManagerSubsystem::ApplyMonthlyMomentum()
     }
 }
 
+void UArtistManagerSubsystem::ApplyRadioExposureMomentum(const TMap<FString, float>& ArtistMomentumBoosts)
+{
+    for (const auto& Pair : ArtistMomentumBoosts)
+    {
+        if (!GetContractByArtistId(Pair.Key))
+        {
+            continue; // Ignore artists we do not manage.
+        }
+
+        float& MomentumValue = ArtistMomentum.FindOrAdd(Pair.Key, 1.0f);
+        MomentumValue = FMath::Clamp(MomentumValue * Pair.Value, 0.5f, 2.5f);
+    }
+}
+
 void UArtistManagerSubsystem::SetConcurrentReleaseCount(const FString& ArtistId, int32 ConcurrentReleases)
 {
     ConcurrentReleasesCache.FindOrAdd(ArtistId) = ConcurrentReleases;
