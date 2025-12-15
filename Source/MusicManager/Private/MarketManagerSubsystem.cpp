@@ -68,7 +68,7 @@ void UMarketManagerSubsystem::AssignSegmentsToRegions()
     {
         const FMarketRegion& Region = RegionPair.Value;
 
-        TArray<FMarketSegmentProfile> ResolvedSegments;
+        FResolvedMarketSegments ResolvedSegments;
         float TotalPopulationShare = 0.f;
 
         if (Region.SegmentIds.Num() == 0)
@@ -86,7 +86,7 @@ void UMarketManagerSubsystem::AssignSegmentsToRegions()
 
             if (const FMarketSegmentProfile* SegmentProfile = LoadedSegmentProfiles.Find(SegmentId))
             {
-                ResolvedSegments.Add(*SegmentProfile);
+                ResolvedSegments.Segments.Add(*SegmentProfile);
                 TotalPopulationShare += SegmentProfile->PopulationShare;
             }
             else
@@ -95,7 +95,7 @@ void UMarketManagerSubsystem::AssignSegmentsToRegions()
             }
         }
 
-        if (ResolvedSegments.Num() == 0)
+        if (ResolvedSegments.Segments.Num() == 0)
         {
             UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: Region %s has no resolved market segments."), *Region.RegionId);
         }
@@ -153,15 +153,15 @@ void UMarketManagerSubsystem::BuildMarketDemandSnapshot(const FMarketRegion& Reg
 
     const float ExposureDampen = 1.f / FMath::Max(1.f, 1.f + ExposureSum * 0.1f);
 
-    const TArray<FMarketSegmentProfile>* ResolvedSegments = RegionSegments.Find(Region.RegionId);
-    if (!ResolvedSegments || ResolvedSegments->Num() == 0)
+    const FResolvedMarketSegments* ResolvedSegments = RegionSegments.Find(Region.RegionId);
+    if (!ResolvedSegments || ResolvedSegments->Segments.Num() == 0)
     {
         UE_LOG(LogTemp, Warning, TEXT("MarketManagerSubsystem: No resolved segments found for region %s when building demand snapshot."), *Region.RegionId);
         return;
     }
 
     // Aggregate each segment's contribution into per-genre demand buckets.
-    for (const FMarketSegmentProfile& Segment : *ResolvedSegments)
+    for (const FMarketSegmentProfile& Segment : ResolvedSegments->Segments)
     {
         if (Segment.PopulationShare <= KINDA_SMALL_NUMBER)
         {

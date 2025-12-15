@@ -33,6 +33,19 @@ struct FMarketDemandSnapshot
     TMap<FString, float> RecordRadioBoost;
 };
 
+/**
+ * Wrapper for resolved segment arrays because UHT does not support UPROPERTY on nested containers.
+ * Arrays stored as map values must be wrapped in a USTRUCT to remain Blueprint-visible.
+ */
+USTRUCT(BlueprintType)
+struct FResolvedMarketSegments
+{
+    GENERATED_BODY();
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market")
+    TArray<FMarketSegmentProfile> Segments;
+};
+
 UCLASS()
 class MUSICMANAGER_API UMarketManagerSubsystem : public UGameInstanceSubsystem
 {
@@ -59,7 +72,7 @@ public:
 
     /** Runtime resolved market segments per region */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market")
-    TMap<FString, TArray<FMarketSegmentProfile>> RegionSegments;
+    TMap<FString, FResolvedMarketSegments> RegionSegments;
 
     /** Load all rows from the DataTable */
     UFUNCTION(BlueprintCallable)
