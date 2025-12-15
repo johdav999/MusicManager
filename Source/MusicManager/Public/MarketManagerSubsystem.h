@@ -83,6 +83,8 @@ public:
     void GetAllDemandSnapshots(TArray<FMarketDemandSnapshot>& OutSnapshots) const;
 
 private:
+    void AssignSegmentsToRegions();
+
     /** TEMPORARY RADIO SIMULATION: REPLACE WITH REAL RADIO SYSTEM */
     void SimulateMonthlyRadioPlay(const FDateTime& CurrentDate);
 };

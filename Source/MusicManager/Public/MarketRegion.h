@@ -55,6 +55,9 @@ struct FMarketRegion : public FTableRowBase
     int32 TotalPopulation = 0;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FString> SegmentIds;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TArray<FMarketSegmentProfile> Segments;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
