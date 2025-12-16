@@ -46,6 +46,31 @@ struct FResolvedMarketSegments
     TArray<FMarketSegmentProfile> Segments;
 };
 
+/**
+ * Wrapper for per-region artist exposure because UHT disallows nested container values in UPROPERTY maps.
+ * Keeping the inner map inside a USTRUCT preserves Blueprint visibility without using a TMap as the map value.
+ */
+USTRUCT(BlueprintType)
+struct FRegionArtistExposureState
+{
+    GENERATED_BODY();
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market|Runtime")
+    TMap<FString, float> ArtistExposure;
+};
+
+/**
+ * Wrapper for per-region record exposure to satisfy UHT reflection rules while keeping runtime-only data in the subsystem.
+ */
+USTRUCT(BlueprintType)
+struct FRegionRecordExposureState
+{
+    GENERATED_BODY();
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market|Runtime")
+    TMap<FString, float> RecordExposure;
+};
+
 UCLASS()
 class MUSICMANAGER_API UMarketManagerSubsystem : public UGameInstanceSubsystem
 {
@@ -76,11 +101,11 @@ public:
 
     /** Runtime-only artist exposure per region (RegionId -> ArtistId -> Exposure). */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market|Runtime")
-    TMap<FString, TMap<FString, float>> RegionArtistExposure;
+    TMap<FString, FRegionArtistExposureState> RegionArtistExposure;
 
     /** Runtime-only record exposure per region (RegionId -> RecordId -> Exposure). */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market|Runtime")
-    TMap<FString, TMap<FString, float>> RegionRecordExposure;
+    TMap<FString, FRegionRecordExposureState> RegionRecordExposure;
 
     /** Load all rows from the DataTable */
     UFUNCTION(BlueprintCallable)

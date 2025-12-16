@@ -34,8 +34,8 @@ void UMarketManagerSubsystem::LoadRegions()
     {
         if (!Row) continue;
         LoadedRegions.Add(Row->RegionId, *Row);
-        RegionArtistExposure.Add(Row->RegionId, TMap<FString, float>());
-        RegionRecordExposure.Add(Row->RegionId, TMap<FString, float>());
+        RegionArtistExposure.Add(Row->RegionId, FRegionArtistExposureState());
+        RegionRecordExposure.Add(Row->RegionId, FRegionRecordExposureState());
     }
 
     UE_LOG(LogTemp, Log, TEXT("MarketManagerSubsystem: Loaded %d regions."), LoadedRegions.Num());
@@ -145,17 +145,17 @@ void UMarketManagerSubsystem::BuildMarketDemandSnapshot(const FMarketRegion& Reg
 
     // Sum exposure once per region so each segment shares the same dampening.
     float ExposureSum = 0.f;
-    if (const TMap<FString, float>* ArtistExposure = RegionArtistExposure.Find(Region.RegionId))
+    if (const FRegionArtistExposureState* ArtistExposure = RegionArtistExposure.Find(Region.RegionId))
     {
-        for (const auto& Pair : *ArtistExposure)
+        for (const auto& Pair : ArtistExposure->ArtistExposure)
         {
             ExposureSum += Pair.Value;
             OutSnapshot.ArtistRadioBoost.Add(Pair.Key, ConvertExposureToBoost(Pair.Value));
         }
     }
-    if (const TMap<FString, float>* RecordExposure = RegionRecordExposure.Find(Region.RegionId))
+    if (const FRegionRecordExposureState* RecordExposure = RegionRecordExposure.Find(Region.RegionId))
     {
-        for (const auto& Pair : *RecordExposure)
+        for (const auto& Pair : RecordExposure->RecordExposure)
         {
             ExposureSum += Pair.Value;
             OutSnapshot.RecordRadioBoost.Add(Pair.Key, ConvertExposureToBoost(Pair.Value));
@@ -272,7 +272,7 @@ void UMarketManagerSubsystem::SimulateMonthlyRadioPlay(const FDateTime& CurrentD
     {
         const FMarketRegion& Region = RegionPair.Value;
 
-        TMap<FString, float>& RegionExposure = RegionArtistExposure.FindOrAdd(Region.RegionId);
+        TMap<FString, float>& RegionExposure = RegionArtistExposure.FindOrAdd(Region.RegionId).ArtistExposure;
 
         // Seeded randomness keeps tests deterministic per month/region while remaining lightweight.
         const int32 Seed = CurrentDate.ToUnixTimestamp() ^ GetTypeHash(Region.RegionId);
@@ -312,7 +312,7 @@ void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
     const float DecayRate = 0.9f;
     for (auto& RegionExposure : RegionArtistExposure)
     {
-        for (auto& ArtistExposure : RegionExposure.Value)
+        for (auto& ArtistExposure : RegionExposure.Value.ArtistExposure)
         {
             ArtistExposure.Value *= DecayRate;
         }
@@ -320,7 +320,7 @@ void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 
     for (auto& RecordExposurePair : RegionRecordExposure)
     {
-        for (auto& RecordExposure : RecordExposurePair.Value)
+        for (auto& RecordExposure : RecordExposurePair.Value.RecordExposure)
         {
             RecordExposure.Value *= DecayRate;
         }
@@ -343,7 +343,7 @@ void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 
             for (const auto& RegionPair : RegionArtistExposure)
             {
-                for (const auto& ArtistExposure : RegionPair.Value)
+                for (const auto& ArtistExposure : RegionPair.Value.ArtistExposure)
                 {
                     //if (ArtistExposure.Value < 0.6f)
                     //{
