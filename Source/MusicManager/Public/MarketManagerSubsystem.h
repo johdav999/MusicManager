@@ -74,6 +74,14 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market")
     TMap<FString, FResolvedMarketSegments> RegionSegments;
 
+    /** Runtime-only artist exposure per region (RegionId -> ArtistId -> Exposure). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market|Runtime")
+    TMap<FString, TMap<FString, float>> RegionArtistExposure;
+
+    /** Runtime-only record exposure per region (RegionId -> RecordId -> Exposure). */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Market|Runtime")
+    TMap<FString, TMap<FString, float>> RegionRecordExposure;
+
     /** Load all rows from the DataTable */
     UFUNCTION(BlueprintCallable)
     void LoadRegions();

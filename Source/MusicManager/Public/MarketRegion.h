@@ -42,6 +42,10 @@ struct FMarketRegion : public FTableRowBase
 {
     GENERATED_BODY();
 
+    /**
+     * Authoring-only data for a market region.
+     * Runtime simulation state (exposure, resolved segments, etc.) lives in UMarketManagerSubsystem.
+     */
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FString RegionId;
 
@@ -59,10 +63,4 @@ struct FMarketRegion : public FTableRowBase
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float RadioReach = 0.5f;
-
-    UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly)
-    TMap<FString, float> RecentArtistExposure;
-
-    UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly)
-    TMap<FString, float> RecentRecordExposure;
 };

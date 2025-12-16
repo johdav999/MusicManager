@@ -15,6 +15,9 @@ void UMarketManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 void UMarketManagerSubsystem::LoadRegions()
 {
     LoadedRegions.Empty();
+    RegionArtistExposure.Empty();
+    RegionRecordExposure.Empty();
+    RegionSegments.Empty();
 
     if (!RegionDataTable)
     {
@@ -31,6 +34,8 @@ void UMarketManagerSubsystem::LoadRegions()
     {
         if (!Row) continue;
         LoadedRegions.Add(Row->RegionId, *Row);
+        RegionArtistExposure.Add(Row->RegionId, TMap<FString, float>());
+        RegionRecordExposure.Add(Row->RegionId, TMap<FString, float>());
     }
 
     UE_LOG(LogTemp, Log, TEXT("MarketManagerSubsystem: Loaded %d regions."), LoadedRegions.Num());
@@ -140,15 +145,21 @@ void UMarketManagerSubsystem::BuildMarketDemandSnapshot(const FMarketRegion& Reg
 
     // Sum exposure once per region so each segment shares the same dampening.
     float ExposureSum = 0.f;
-    for (const auto& Pair : Region.RecentArtistExposure)
+    if (const TMap<FString, float>* ArtistExposure = RegionArtistExposure.Find(Region.RegionId))
     {
-        ExposureSum += Pair.Value;
-        OutSnapshot.ArtistRadioBoost.Add(Pair.Key, ConvertExposureToBoost(Pair.Value));
+        for (const auto& Pair : *ArtistExposure)
+        {
+            ExposureSum += Pair.Value;
+            OutSnapshot.ArtistRadioBoost.Add(Pair.Key, ConvertExposureToBoost(Pair.Value));
+        }
     }
-    for (const auto& Pair : Region.RecentRecordExposure)
+    if (const TMap<FString, float>* RecordExposure = RegionRecordExposure.Find(Region.RegionId))
     {
-        ExposureSum += Pair.Value;
-        OutSnapshot.RecordRadioBoost.Add(Pair.Key, ConvertExposureToBoost(Pair.Value));
+        for (const auto& Pair : *RecordExposure)
+        {
+            ExposureSum += Pair.Value;
+            OutSnapshot.RecordRadioBoost.Add(Pair.Key, ConvertExposureToBoost(Pair.Value));
+        }
     }
 
     const float ExposureDampen = 1.f / FMath::Max(1.f, 1.f + ExposureSum * 0.1f);
@@ -259,7 +270,9 @@ void UMarketManagerSubsystem::SimulateMonthlyRadioPlay(const FDateTime& CurrentD
 
     for (auto& RegionPair : LoadedRegions)
     {
-        FMarketRegion& Region = RegionPair.Value;
+        const FMarketRegion& Region = RegionPair.Value;
+
+        TMap<FString, float>& RegionExposure = RegionArtistExposure.FindOrAdd(Region.RegionId);
 
         // Seeded randomness keeps tests deterministic per month/region while remaining lightweight.
         const int32 Seed = CurrentDate.ToUnixTimestamp() ^ GetTypeHash(Region.RegionId);
@@ -280,7 +293,7 @@ void UMarketManagerSubsystem::SimulateMonthlyRadioPlay(const FDateTime& CurrentD
             const FString& ArtistId = ShuffledArtists[Index];
 
             const float Increment = ClampedReach * Stream.FRandRange(MinExposureMultiplier, MaxExposureMultiplier);
-            float& Exposure = Region.RecentArtistExposure.FindOrAdd(ArtistId);
+            float& Exposure = RegionExposure.FindOrAdd(ArtistId);
             Exposure = FMath::Clamp(Exposure + Increment, 0.f, MaxExposurePerArtist);
 
             // TODO: Genre-based radio formatting once genre metadata is wired to stations.
@@ -297,14 +310,17 @@ void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 
     // Light decay on recent exposure to naturally clear competition over time.
     const float DecayRate = 0.9f;
-    for (auto& RegionPair : LoadedRegions)
+    for (auto& RegionExposure : RegionArtistExposure)
     {
-        for (auto& ArtistExposure : RegionPair.Value.RecentArtistExposure)
+        for (auto& ArtistExposure : RegionExposure.Value)
         {
             ArtistExposure.Value *= DecayRate;
         }
+    }
 
-        for (auto& RecordExposure : RegionPair.Value.RecentRecordExposure)
+    for (auto& RecordExposurePair : RegionRecordExposure)
+    {
+        for (auto& RecordExposure : RecordExposurePair.Value)
         {
             RecordExposure.Value *= DecayRate;
         }
@@ -325,10 +341,9 @@ void UMarketManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 
             TMap<FString, FExposureAggregate> ExposureByArtist;
 
-            for (const auto& RegionPair : LoadedRegions)
+            for (const auto& RegionPair : RegionArtistExposure)
             {
-                const FMarketRegion& Region = RegionPair.Value;
-                for (const auto& ArtistExposure : Region.RecentArtistExposure)
+                for (const auto& ArtistExposure : RegionPair.Value)
                 {
                     //if (ArtistExposure.Value < 0.6f)
                     //{
