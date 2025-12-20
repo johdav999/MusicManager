@@ -1,5 +1,6 @@
 #include "RecordManagerSubsystem.h"
 
+#include "ArtistManagerSubsystem.h"
 #include "GameTimeSubsystem.h"
 #include "SongManagerSubsystem.h"
 #include "Song.h"
@@ -86,7 +87,60 @@ void URecordManagerSubsystem::GetRecentlyReleasedArtists(const FDateTime& Curren
 void URecordManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 {
     check(IsInGameThread());
+
+    ProcessActiveRecordings(NewDate);
     SimulateMonthlySales(NewDate);
+}
+
+bool URecordManagerSubsystem::SubmitRecordingIntent(const FRecordRecordingIntent& Intent, FString& OutError)
+{
+    check(IsInGameThread());
+
+    if (!ValidateRecordingIntent(Intent, OutError))
+    {
+        return false;
+    }
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!GameInstance)
+    {
+        OutError = TEXT("Invalid game instance for recording.");
+        return false;
+    }
+
+    USongManagerSubsystem* SongSubsystem = GameInstance->GetSubsystem<USongManagerSubsystem>();
+    UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>();
+    if (!SongSubsystem || !TimeSubsystem)
+    {
+        OutError = TEXT("Missing dependent subsystems for recording.");
+        return false;
+    }
+
+    FRecordRecordingIntent SanitizedIntent = Intent;
+    if (SanitizedIntent.RequestedFormats.Num() == 0)
+    {
+        FormatRules.GenerateKeyArray(SanitizedIntent.RequestedFormats);
+    }
+
+    if (!SongSubsystem->LockSongsForRecording(SanitizedIntent.SongIds, OutError))
+    {
+        return false;
+    }
+
+    const FString RecordingId = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens);
+    ActiveRecordingIntents.Add(RecordingId, SanitizedIntent);
+
+    const FDateTime StartDate = TimeSubsystem->GetCurrentGameDate();
+    RecordingStartDates.Add(RecordingId, StartDate);
+
+    // For now recordings complete within the same month; future work can add durations.
+    RecordingCompletionDates.Add(RecordingId, StartDate);
+    RecordStates.Add(RecordingId, ERecordLifecycleState::Recording);
+
+    // Immediately process if completion date is now.
+    ProcessActiveRecordings(StartDate);
+
+    return true;
 }
 
 bool URecordManagerSubsystem::GetSalesHistory(const FString& RecordId, TArray<FRecordSalesEntry>& OutEntries) const
@@ -295,4 +349,241 @@ bool URecordManagerSubsystem::IsFormatEligible(ERecordFormat Format, const FDate
     }
 
     return false;
+}
+
+void URecordManagerSubsystem::ProcessActiveRecordings(const FDateTime& CurrentDate)
+{
+    TArray<FString> CompletedIds;
+    for (const auto& Pair : RecordingCompletionDates)
+    {
+        if (Pair.Value <= CurrentDate)
+        {
+            CompletedIds.Add(Pair.Key);
+        }
+    }
+
+    for (const FString& RecordingId : CompletedIds)
+    {
+        CompleteRecording(RecordingId, CurrentDate);
+    }
+}
+
+void URecordManagerSubsystem::CompleteRecording(const FString& RecordingId, const FDateTime& CompletionDate)
+{
+    FRecordRecordingIntent* Intent = ActiveRecordingIntents.Find(RecordingId);
+    if (!Intent)
+    {
+        return;
+    }
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!GameInstance)
+    {
+        return;
+    }
+
+    USongManagerSubsystem* SongSubsystem = GameInstance->GetSubsystem<USongManagerSubsystem>();
+    UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>();
+    if (!SongSubsystem || !TimeSubsystem)
+    {
+        return;
+    }
+
+    const FDateTime RecordDate = CompletionDate;
+
+    FRecordData NewRecord;
+    NewRecord.ArtistId = Intent->ArtistId;
+    NewRecord.AlbumName = Intent->AlbumName.IsEmpty() ? TEXT("Untitled Record") : Intent->AlbumName;
+    NewRecord.bIsSingle = Intent->bIsSingle;
+    NewRecord.bIsLP = Intent->bIsLP;
+    NewRecord.SongIds = Intent->SongIds;
+    NewRecord.DateRecorded = RecordDate;
+    NewRecord.ReleaseDate = ResolveReleaseDate(*Intent, RecordDate);
+    NewRecord.LabelId = ResolveLabelForArtist(Intent->ArtistId);
+    NewRecord.PrimaryGenre = DerivePrimaryGenre(Intent->SongIds);
+    NewRecord.Formats = Intent->RequestedFormats;
+    ApplyFormatRules(RecordDate, NewRecord.Formats);
+    NewRecord.RecordQuality = ComputeRecordQuality(Intent->SongIds, Intent->ArtistId);
+    NewRecord.MarketingExposure = 1.0f;
+
+    const FString NewRecordId = CreateRecord(NewRecord);
+    RecordStates.FindOrAdd(NewRecordId) = ERecordLifecycleState::Recorded;
+
+    SongSubsystem->MarkSongsRecorded(Intent->SongIds, NewRecordId);
+    SongSubsystem->UnlockSongs(Intent->SongIds);
+
+    ActiveRecordingIntents.Remove(RecordingId);
+    RecordingStartDates.Remove(RecordingId);
+    RecordingCompletionDates.Remove(RecordingId);
+    RecordStates.Remove(RecordingId);
+}
+
+bool URecordManagerSubsystem::ValidateRecordingIntent(const FRecordRecordingIntent& Intent, FString& OutError)
+{
+    if (Intent.ArtistId.IsEmpty())
+    {
+        OutError = TEXT("Artist must be selected.");
+        return false;
+    }
+
+    if (Intent.bIsSingle == Intent.bIsLP)
+    {
+        OutError = TEXT("Choose either Single or LP.");
+        return false;
+    }
+
+    if (Intent.SongIds.Num() == 0)
+    {
+        OutError = TEXT("At least one song must be selected.");
+        return false;
+    }
+
+    if (Intent.bIsSingle && Intent.SongIds.Num() != 1)
+    {
+        OutError = TEXT("Singles must contain exactly one track.");
+        return false;
+    }
+
+    if (Intent.bIsLP && Intent.SongIds.Num() < 2)
+    {
+        OutError = TEXT("LPs require multiple tracks.");
+        return false;
+    }
+
+    TSet<FString> UniqueSongs(Intent.SongIds);
+    if (UniqueSongs.Num() != Intent.SongIds.Num())
+    {
+        OutError = TEXT("Duplicate songs are not allowed.");
+        return false;
+    }
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!GameInstance)
+    {
+        OutError = TEXT("No game instance available for validation.");
+        return false;
+    }
+
+    UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
+    USongManagerSubsystem* SongSubsystem = GameInstance->GetSubsystem<USongManagerSubsystem>();
+    if (!ArtistSubsystem || !SongSubsystem)
+    {
+        OutError = TEXT("Required subsystems missing for recording.");
+        return false;
+    }
+
+    const FArtistContract* Contract = ArtistSubsystem->GetContractByArtistId(Intent.ArtistId);
+    if (!Contract || !Contract->bContractActive)
+    {
+        OutError = TEXT("Artist is not currently signed or eligible to record.");
+        return false;
+    }
+
+    for (const FString& SongId : Intent.SongIds)
+    {
+        if (USong* Song = SongSubsystem->GetSongById(SongId))
+        {
+            if (Song->ArtistId != Intent.ArtistId)
+            {
+                OutError = TEXT("All songs must belong to the selected artist.");
+                return false;
+            }
+
+            if (Song->Data.bIsReleased)
+            {
+                OutError = TEXT("Songs that are already released cannot be recorded again.");
+                return false;
+            }
+        }
+        else
+        {
+            OutError = TEXT("Invalid song selection detected.");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void URecordManagerSubsystem::ApplyFormatRules(const FDateTime& CurrentDate, TArray<ERecordFormat>& InOutFormats) const
+{
+    TSet<ERecordFormat> UniqueFormats;
+    for (ERecordFormat Format : InOutFormats)
+    {
+        if (IsFormatEligible(Format, CurrentDate))
+        {
+            UniqueFormats.Add(Format);
+        }
+    }
+
+    if (UniqueFormats.Num() == 0)
+    {
+        UniqueFormats.Add(ERecordFormat::DigitalDownload);
+    }
+
+    InOutFormats = UniqueFormats.Array();
+}
+
+FString URecordManagerSubsystem::DerivePrimaryGenre(const TArray<FString>& SongIds) const
+{
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!GameInstance)
+    {
+        return TEXT("Unknown");
+    }
+
+    const USongManagerSubsystem* SongSubsystem = GameInstance->GetSubsystem<USongManagerSubsystem>();
+    if (!SongSubsystem)
+    {
+        return TEXT("Unknown");
+    }
+
+    TMap<FString, int32> GenreCounts;
+    for (const FString& SongId : SongIds)
+    {
+        if (USong* Song = SongSubsystem->GetSongById(SongId))
+        {
+            GenreCounts.FindOrAdd(Song->Data.Genre)++;
+        }
+    }
+
+    FString SelectedGenre = TEXT("Unknown");
+    int32 BestCount = 0;
+    for (const auto& Pair : GenreCounts)
+    {
+        if (Pair.Value > BestCount)
+        {
+            BestCount = Pair.Value;
+            SelectedGenre = Pair.Key;
+        }
+    }
+
+    return SelectedGenre;
+}
+
+float URecordManagerSubsystem::ComputeRecordQuality(const TArray<FString>& SongIds, const FString& ArtistId) const
+{
+    FRecordData TempRecord;
+    TempRecord.ArtistId = ArtistId;
+    TempRecord.SongIds = SongIds;
+
+    const float SongQuality = EvaluateSongQuality(TempRecord);
+    const float ProductionFloor = 0.6f;
+    return DecayWithFloor(SongQuality, ProductionFloor);
+}
+
+FDateTime URecordManagerSubsystem::ResolveReleaseDate(const FRecordRecordingIntent& Intent, const FDateTime& DateRecorded) const
+{
+    if (Intent.DesiredReleaseDate.IsSet() && Intent.DesiredReleaseDate.GetValue() >= DateRecorded)
+    {
+        return Intent.DesiredReleaseDate.GetValue();
+    }
+
+    return DateRecorded;
+}
+
+FString URecordManagerSubsystem::ResolveLabelForArtist(const FString& ArtistId) const
+{
+    // Placeholder until labels are fully modeled. Using artist id helps downstream finance lookups stay deterministic.
+    return ArtistId;
 }

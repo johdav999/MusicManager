@@ -39,6 +39,8 @@ void USongManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     Songs.Reset();
     SongMap.Reset();
+    LockedSongIds.Reset();
+    SongToRecordMap.Reset();
 
     LoadSongsFromDataTable();
 }
@@ -48,6 +50,8 @@ void USongManagerSubsystem::Deinitialize()
     ensure(IsInGameThread());
     Songs.Reset();
     SongMap.Reset();
+    LockedSongIds.Reset();
+    SongToRecordMap.Reset();
     Super::Deinitialize();
 }
 
@@ -181,6 +185,138 @@ void USongManagerSubsystem::GetAllSongs(TArray<USong*>& OutSongs) const
         {
             OutSongs.Add(Pair.Value);
         }
+    }
+}
+
+void USongManagerSubsystem::GetEligibleSongsForRecording(const FString& ArtistId, TArray<USong*>& OutSongs) const
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<const USongManagerSubsystem> WeakThis(this);
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId, &OutSongs, SyncEvent]()
+        {
+            if (const USongManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->GetEligibleSongsForRecording(ArtistId, OutSongs);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return;
+    }
+
+    OutSongs.Reset();
+
+    for (const TPair<FString, TObjectPtr<USong>>& Pair : SongMap)
+    {
+        const USong* Song = Pair.Value.Get();
+        if (!Song)
+        {
+            continue;
+        }
+
+        const bool bArtistMatches = Song->ArtistId == ArtistId;
+        const bool bNotReleased = !Song->Data.bIsReleased;
+        const bool bUnlocked = !LockedSongIds.Contains(Song->SongId);
+
+        if (bArtistMatches && bNotReleased && bUnlocked)
+        {
+            OutSongs.Add(const_cast<USong*>(Song));
+        }
+    }
+}
+
+bool USongManagerSubsystem::LockSongsForRecording(const TArray<FString>& SongIds, FString& OutError)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<USongManagerSubsystem> WeakThis(this);
+        bool bLocked = false;
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, &SongIds, &OutError, &bLocked, SyncEvent]()
+        {
+            if (USongManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                bLocked = StrongThis->LockSongsForRecording(SongIds, OutError);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return bLocked;
+    }
+
+    for (const FString& SongId : SongIds)
+    {
+        if (LockedSongIds.Contains(SongId))
+        {
+            OutError = FString::Printf(TEXT("Song %s is already locked for recording."), *SongId);
+            return false;
+        }
+    }
+
+    for (const FString& SongId : SongIds)
+    {
+        LockedSongIds.Add(SongId);
+    }
+
+    return true;
+}
+
+void USongManagerSubsystem::UnlockSongs(const TArray<FString>& SongIds)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<USongManagerSubsystem> WeakThis(this);
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, SongIds, SyncEvent]()
+        {
+            if (USongManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->UnlockSongs(SongIds);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return;
+    }
+
+    for (const FString& SongId : SongIds)
+    {
+        LockedSongIds.Remove(SongId);
+    }
+}
+
+void USongManagerSubsystem::MarkSongsRecorded(const TArray<FString>& SongIds, const FString& RecordId)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<USongManagerSubsystem> WeakThis(this);
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, SongIds, RecordId, SyncEvent]()
+        {
+            if (USongManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->MarkSongsRecorded(SongIds, RecordId);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return;
+    }
+
+    for (const FString& SongId : SongIds)
+    {
+        SongToRecordMap.FindOrAdd(SongId) = RecordId;
     }
 }
 
