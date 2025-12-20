@@ -58,6 +58,18 @@ public:
     /** Retrieve all songs currently loaded in the subsystem. */
     void GetAllSongs(TArray<USong*>& OutSongs) const;
 
+    /** Query unreleased and unlocked songs for an artist that can be recorded. */
+    void GetEligibleSongsForRecording(const FString& ArtistId, TArray<USong*>& OutSongs) const;
+
+    /** Prevent a set of songs from being used in concurrent recordings. */
+    bool LockSongsForRecording(const TArray<FString>& SongIds, FString& OutError);
+
+    /** Release recording locks after completion or cancellation. */
+    void UnlockSongs(const TArray<FString>& SongIds);
+
+    /** Mark songs as attached to a recorded release (non-destructive to quality data). */
+    void MarkSongsRecorded(const TArray<FString>& SongIds, const FString& RecordId);
+
     /** Serialize the registry for a save game. */
     void SerializeForSave(TArray<FSongSaveRecord>& OutRecords) const;
 
@@ -73,4 +85,12 @@ private:
 
     UPROPERTY()
     TMap<FString, TObjectPtr<USong>> SongMap;
+
+    /** Simple lock table to avoid double-booking songs during recording. */
+    UPROPERTY()
+    TSet<FString> LockedSongIds;
+
+    /** Historical mapping of songs to the record they ended up on. */
+    UPROPERTY()
+    TMap<FString, FString> SongToRecordMap;
 };

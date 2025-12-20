@@ -21,6 +21,55 @@ enum class ERecordFormat : uint8
     Streaming
 };
 
+/** High-level lifecycle stages for a record. */
+UENUM()
+enum class ERecordLifecycleState : uint8
+{
+    Draft,
+    Recording,
+    Recorded,
+    Scheduled,
+    Released
+};
+
+/**
+ * Player request to record a new release. This is intentionally light-weight and
+ * never persisted; authoritative validation happens in subsystems.
+ */
+USTRUCT(BlueprintType)
+struct FRecordRecordingIntent
+{
+    GENERATED_BODY();
+
+    /** Owning artist for the release. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ArtistId;
+
+    /** Album/record display name requested by the player. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString AlbumName;
+
+    /** True if the player intends to release a single (one track). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsSingle = false;
+
+    /** True if the player intends to release an LP (multiple tracks). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsLP = false;
+
+    /** Ordered list of song ids in track order. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FString> SongIds;
+
+    /** Formats the player wants to support, before era filtering. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<ERecordFormat> RequestedFormats;
+
+    /** Optional requested release date; recording completion is still authoritative. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TOptional<FDateTime> DesiredReleaseDate;
+};
+
 /**
  * Era validity, pricing, and cost profile for a record format.
  */
@@ -155,6 +204,10 @@ public:
     UFUNCTION(BlueprintCallable)
     bool GetRecordById(const FString& RecordId, FRecordData& OutData) const;
 
+    /** Begin the recording lifecycle from player intent. */
+    UFUNCTION(BlueprintCallable, Category="Records|Recording")
+    bool SubmitRecordingIntent(const FRecordRecordingIntent& Intent, FString& OutError);
+
     /** TEMPORARY RADIO SIMULATION SUPPORT: REPLACE WITH REAL RADIO SYSTEM */
     void GetRecentlyReleasedArtists(const FDateTime& CurrentDate, int32 MonthsBack, TArray<FString>& OutArtistIds) const;
 
@@ -170,6 +223,16 @@ public:
     int32 GetLifetimeUnits(const FString& RecordId) const;
 
 private:
+    /** Track active recordings until the studio session is complete. */
+    void ProcessActiveRecordings(const FDateTime& CurrentDate);
+    void CompleteRecording(const FString& RecordingId, const FDateTime& CompletionDate);
+    bool ValidateRecordingIntent(const FRecordRecordingIntent& Intent, FString& OutError);
+    void ApplyFormatRules(const FDateTime& CurrentDate, TArray<ERecordFormat>& InOutFormats) const;
+    FString DerivePrimaryGenre(const TArray<FString>& SongIds) const;
+    float ComputeRecordQuality(const TArray<FString>& SongIds, const FString& ArtistId) const;
+    FDateTime ResolveReleaseDate(const FRecordRecordingIntent& Intent, const FDateTime& DateRecorded) const;
+    FString ResolveLabelForArtist(const FString& ArtistId) const;
+
     void SimulateMonthlySales(const FDateTime& CurrentDate);
     void ComputeRecordSalesForMarket(const FRecordData& Record, const FMarketDemandSnapshot& Demand, const FArtistMarketModifiers& ArtistImpact, const FDateTime& CurrentDate, TArray<FRecordSalesEntry>& OutEntries) const;
     float ComputeLifecycleFactor(const FDateTime& ReleaseDate, const FDateTime& CurrentDate) const;
@@ -188,4 +251,16 @@ private:
     /** Era rules and pricing for each available format. */
     UPROPERTY()
     TMap<ERecordFormat, FRecordFormatRule> FormatRules;
+
+    /** Internal tracking of lifecycle state per record id. */
+    UPROPERTY()
+    TMap<FString, ERecordLifecycleState> RecordStates;
+
+    /** Lightweight recording session bookkeeping keyed by a generated recording id. */
+    UPROPERTY()
+    TMap<FString, FRecordRecordingIntent> ActiveRecordingIntents;
+    UPROPERTY()
+    TMap<FString, FDateTime> RecordingStartDates;
+    UPROPERTY()
+    TMap<FString, FDateTime> RecordingCompletionDates;
 };

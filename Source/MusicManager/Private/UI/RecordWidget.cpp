@@ -39,26 +39,44 @@ void URecordWidget::OnConfirmPressed()
     const bool bSingleSelected = bIsSingle && bIsSingle->IsChecked();
     const bool bLPSelected = bIsLP && bIsLP->IsChecked();
 
-    FRecordData NewRecord;
-    NewRecord.ArtistId = CurrentArtistId;
-    if (AlbumNameBox)
+    if (bSingleSelected == bLPSelected)
     {
-        NewRecord.AlbumName = AlbumNameBox->GetText().ToString();
+        UE_LOG(LogTemp, Warning, TEXT("RecordWidget: Must choose Single or LP."));
+        return;
     }
-    NewRecord.bIsSingle = bSingleSelected;
-    NewRecord.bIsLP = bLPSelected;
-    NewRecord.SongIds.Reset();
-    for (const FString& Id : SelectedSongIds)
+
+    if (bSingleSelected && SelectedSongIds.Num() != 1)
     {
-        NewRecord.SongIds.Add(Id);
+        UE_LOG(LogTemp, Warning, TEXT("RecordWidget: Singles require exactly one song."));
+        return;
     }
-    NewRecord.DateRecorded = FDateTime::Now();
+
+    if (bLPSelected && SelectedSongIds.Num() < 2)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RecordWidget: LPs require more than one song."));
+        return;
+    }
+
+    FRecordRecordingIntent Intent;
+    Intent.ArtistId = CurrentArtistId;
+    Intent.AlbumName = AlbumNameBox ? AlbumNameBox->GetText().ToString() : TEXT("");
+    Intent.bIsSingle = bSingleSelected;
+    Intent.bIsLP = bLPSelected;
+    Intent.SongIds = SelectedSongIds;
+
+    // Default to digital availability; subsystem will filter by era and expand as needed.
+    Intent.RequestedFormats.Add(ERecordFormat::DigitalDownload);
 
     if (UGameInstance* GameInstance = GetGameInstance())
     {
         if (URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
         {
-            RecordSubsystem->CreateRecord(NewRecord);
+            FString Error;
+            if (!RecordSubsystem->SubmitRecordingIntent(Intent, Error))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("RecordWidget: Failed to submit recording intent - %s"), *Error);
+                return;
+            }
         }
     }
 
@@ -88,6 +106,7 @@ void URecordWidget::NotifySongSelectionChanged(const FString& SongId, bool bIsSe
 {
     if (bIsSelected)
     {
+        SelectedSongIds.Remove(SongId);
         SelectedSongIds.Add(SongId);
     }
     else
@@ -152,7 +171,7 @@ void URecordWidget::PopulateSongsForArtist(const FString& ArtistId)
     }
 
     TArray<USong*> Songs;
-    SongSubsystem->GetSongsForArtist(ArtistId, Songs);
+    SongSubsystem->GetEligibleSongsForRecording(ArtistId, Songs);
 
     for (USong* Song : Songs)
     {
@@ -162,12 +181,6 @@ void URecordWidget::PopulateSongsForArtist(const FString& ArtistId)
         }
 
         const FSongData& Data = Song->Data;
-
-        // Skip already released songs
-        if (Data.bIsReleased)
-        {
-            continue;
-        }
 
         // Create entry object for the list
         URecordSongListEntryObject* Entry = NewObject<URecordSongListEntryObject>(this);

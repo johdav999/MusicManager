@@ -87,5 +87,5 @@ private:
     FString CurrentArtistId;
 
     UPROPERTY()
-    TSet<FString> SelectedSongIds;
+    TArray<FString> SelectedSongIds;
 };
