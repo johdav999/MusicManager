@@ -6,6 +6,7 @@
 #include "ArtistManagerSubsystem.h"
 #include "Logging/LogMacros.h"
 #include "MusicPlayerComponent.h"
+#include "UI/StatusWidget.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUIManagerSubsystem, Log, All);
 
@@ -97,6 +98,32 @@ void UUIManagerSubsystem::RegisterMusicPlayerComponent(UMusicPlayerComponent* In
 
     MusicPlayerComponent = InComponent;
     UE_LOG(LogTemp, Log, TEXT("MusicPlayerComponent registered in UIManagerSubsystem."));
+}
+
+void UUIManagerSubsystem::RegisterStatusWidget(UStatusWidget* StatusWidget)
+{
+    const TWeakObjectPtr<UStatusWidget> WeakStatus(StatusWidget);
+    ExecuteOnGameThread([this, WeakStatus]()
+    {
+        ActiveStatusWidget = WeakStatus;
+    });
+}
+
+void UUIManagerSubsystem::UnregisterStatusWidget(UStatusWidget* StatusWidget)
+{
+    const TWeakObjectPtr<UStatusWidget> WeakStatus(StatusWidget);
+    ExecuteOnGameThread([this, WeakStatus]()
+    {
+        if (ActiveStatusWidget == WeakStatus)
+        {
+            ActiveStatusWidget.Reset();
+        }
+    });
+}
+
+FString UUIManagerSubsystem::GetCurrentLabelId() const
+{
+    return CurrentLabelId;
 }
 
 void UUIManagerSubsystem::StopAuditionMusic()

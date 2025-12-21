@@ -11,6 +11,7 @@
 
 class ULayout;
 class UMusicPlayerComponent;
+class UStatusWidget;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnNewsSelected, const FMusicNewsEvent&);
 
@@ -66,6 +67,15 @@ public:
     UFUNCTION(BlueprintCallable)
     UMusicPlayerComponent* GetMusicPlayerComponent() const { return MusicPlayerComponent; }
 
+    /** Register the active status widget so updates can be mediated through the UI manager. */
+    void RegisterStatusWidget(UStatusWidget* StatusWidget);
+
+    /** Unregister the status widget when it is removed from the layout. */
+    void UnregisterStatusWidget(UStatusWidget* StatusWidget);
+
+    /** Returns the label id to use for UI-bound financial displays. */
+    FString GetCurrentLabelId() const;
+
     UFUNCTION()
     void StopAuditionMusic();
 
@@ -93,12 +103,20 @@ public:
     void HandleCommandAction(const FString& CommandName);
 
 private:
+    /** Configurable label id used for finance lookups. */
+    UPROPERTY(EditAnywhere, Category="UI")
+    FString CurrentLabelId;
+
     UPROPERTY(EditAnywhere, Category="UI")
     TSubclassOf<ULayout> LayoutClass;
 
     /** Weak pointer to the active layout to avoid ownership over widgets. */
     UPROPERTY()
     TWeakObjectPtr<ULayout> ActiveLayout;
+
+    /** Weak pointer to the active status widget displayed in the layout. */
+    UPROPERTY()
+    TWeakObjectPtr<UStatusWidget> ActiveStatusWidget;
 
     UPROPERTY()
     UMusicPlayerComponent* MusicPlayerComponent;
