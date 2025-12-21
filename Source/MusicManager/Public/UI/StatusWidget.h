@@ -53,7 +53,7 @@ private:
     UUIManagerSubsystem* GetUIManagerSubsystem();
 
     static FText FormatMonthYear(const FDateTime& Date);
-    static FText FormatCurrency(float Value, bool bForceSign);
+    static FText FormatCurrency(float Value, bool bForceSign, const FString& CurrencySymbol, bool bAlwaysPositive);
 
     TWeakObjectPtr<UGameTimeSubsystem> CachedTimeSubsystem;
     TWeakObjectPtr<UFinanceManagerSubsystem> CachedFinanceSubsystem;

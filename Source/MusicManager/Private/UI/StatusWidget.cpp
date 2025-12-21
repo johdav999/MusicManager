@@ -10,6 +10,8 @@ void UStatusWidget::NativeConstruct()
 {
     ensure(IsInGameThread());
 
+    UE_LOG(LogTemp, Verbose, TEXT("StatusWidget constructed"));
+
     Super::NativeConstruct();
 
     CachedTimeSubsystem = GetTimeSubsystem();
@@ -23,6 +25,11 @@ void UStatusWidget::NativeConstruct()
 
     if (UGameTimeSubsystem* TimeSys = CachedTimeSubsystem.Get())
     {
+        if (TimeSys->OnMonthAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleMonthAdvanced))
+        {
+            TimeSys->OnMonthAdvanced.RemoveDynamic(this, &UStatusWidget::HandleMonthAdvanced);
+        }
+
         TimeSys->OnMonthAdvanced.AddDynamic(this, &UStatusWidget::HandleMonthAdvanced);
         HandleMonthAdvanced(TimeSys->GetCurrentGameDate());
     }
@@ -34,7 +41,10 @@ void UStatusWidget::NativeDestruct()
 
     if (UGameTimeSubsystem* TimeSys = CachedTimeSubsystem.Get())
     {
-        TimeSys->OnMonthAdvanced.RemoveDynamic(this, &UStatusWidget::HandleMonthAdvanced);
+        if (TimeSys->OnMonthAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleMonthAdvanced))
+        {
+            TimeSys->OnMonthAdvanced.RemoveDynamic(this, &UStatusWidget::HandleMonthAdvanced);
+        }
     }
 
     if (UUIManagerSubsystem* UIManager = CachedUIManagerSubsystem.Get())
@@ -47,6 +57,8 @@ void UStatusWidget::NativeDestruct()
 
 void UStatusWidget::HandleMonthAdvanced(const FDateTime& NewDate)
 {
+    UE_LOG(LogTemp, Verbose, TEXT("StatusWidget received month advanced: %s"), *NewDate.ToString());
+
     if (!IsInGameThread())
     {
         const TWeakObjectPtr<UStatusWidget> WeakThis(this);
@@ -78,6 +90,10 @@ void UStatusWidget::RefreshStatus(const FDateTime& CurrentDate)
         return;
     }
 
+    ensure(DateText);
+    ensure(MonthlyProfitText);
+    ensure(CashBalanceText);
+
     if (DateText)
     {
         DateText->SetText(FormatMonthYear(CurrentDate));
@@ -107,16 +123,24 @@ void UStatusWidget::RefreshStatus(const FDateTime& CurrentDate)
         LastMonthProfit = FinanceSubsystem->GetLastMonthProfit(LabelId, CurrentDate);
         Balance = FinanceSubsystem->GetLabelBalance(LabelId);
     }
+    else
+    {
+        ensureMsgf(false, TEXT("FinanceManagerSubsystem missing"));
+    }
 
     if (MonthlyProfitText)
     {
-        MonthlyProfitText->SetText(FormatCurrency(LastMonthProfit, true));
+        MonthlyProfitText->SetText(FormatCurrency(LastMonthProfit, true, TEXT(""), false));
     }
 
     if (CashBalanceText)
     {
-        CashBalanceText->SetText(FormatCurrency(Balance, false));
+        CashBalanceText->SetText(FormatCurrency(Balance, false, TEXT("€"), true));
     }
+
+    UE_LOG(LogTemp, Verbose, TEXT("StatusWidget finance updated: Profit=%s, Cash=%s"),
+        *FormatCurrency(LastMonthProfit, true, TEXT(""), false).ToString(),
+        *FormatCurrency(Balance, false, TEXT("€"), true).ToString());
 }
 
 FString UStatusWidget::ResolveLabelId()
@@ -216,24 +240,25 @@ FText UStatusWidget::FormatMonthYear(const FDateTime& Date)
     return FText::FromString(FString::Printf(TEXT("%s %d"), *MonthString, Year));
 }
 
-FText UStatusWidget::FormatCurrency(float Value, bool bForceSign)
+FText UStatusWidget::FormatCurrency(float Value, bool bForceSign, const FString& CurrencySymbol, bool bAlwaysPositive)
 {
     FNumberFormattingOptions FormatOptions;
     FormatOptions.MinimumIntegralDigits = 1;
     FormatOptions.MaximumFractionalDigits = 2;
     FormatOptions.MinimumFractionalDigits = 2;
 
-    const FString NumberString = FText::AsNumber(FMath::Abs(Value), &FormatOptions).ToString();
+    const float DisplayValue = bAlwaysPositive ? FMath::Abs(Value) : Value;
+    const FString NumberString = FText::AsNumber(FMath::Abs(DisplayValue), &FormatOptions).ToString();
 
     FString SignString;
     if (bForceSign)
     {
-        SignString = (Value >= 0.f) ? TEXT("+") : TEXT("-");
+        SignString = (DisplayValue >= 0.f) ? TEXT("+") : TEXT("-");
     }
-    else if (Value < 0.f)
+    else if (DisplayValue < 0.f)
     {
         SignString = TEXT("-");
     }
 
-    return FText::FromString(FString::Printf(TEXT("%s$%s"), *SignString, *NumberString));
+    return FText::FromString(FString::Printf(TEXT("%s%s%s"), *SignString, *CurrencySymbol, *NumberString));
 }
