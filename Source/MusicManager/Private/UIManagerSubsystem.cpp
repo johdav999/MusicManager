@@ -123,7 +123,24 @@ void UUIManagerSubsystem::UnregisterStatusWidget(UStatusWidget* StatusWidget)
 
 FString UUIManagerSubsystem::GetCurrentLabelId() const
 {
+    UE_LOG(LogUIManagerSubsystem, Verbose, TEXT("GetCurrentLabelId requested: %s"), *CurrentLabelId);
     return CurrentLabelId;
+}
+
+void UUIManagerSubsystem::SetCurrentLabelId(const FString& NewLabelId)
+{
+    ExecuteOnGameThread([this, NewLabelId]()
+    {
+        const bool bChanged = !CurrentLabelId.Equals(NewLabelId, ESearchCase::CaseSensitive);
+        CurrentLabelId = NewLabelId;
+
+        UE_LOG(LogUIManagerSubsystem, Log, TEXT("SetCurrentLabelId called: %s (changed: %s)"), *CurrentLabelId, bChanged ? TEXT("true") : TEXT("false"));
+
+        if (bChanged)
+        {
+            OnCurrentLabelChanged.Broadcast(CurrentLabelId);
+        }
+    });
 }
 
 void UUIManagerSubsystem::StopAuditionMusic()

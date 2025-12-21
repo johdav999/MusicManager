@@ -46,6 +46,8 @@ protected:
 private:
     UFUNCTION()
     void HandleMonthAdvanced(const FDateTime& NewDate);
+    UFUNCTION()
+    void HandleCurrentLabelChanged(const FString& NewLabelId);
 
     FString ResolveLabelId();
     UGameTimeSubsystem* GetTimeSubsystem();
