@@ -36,9 +36,21 @@ float UFinanceManagerSubsystem::GetLastMonthProfit(const FString& LabelId, const
         return 0.f;
     }
 
-    // Determine the window covering the entire previous calendar month.
+    // Start of current month
     const FDateTime StartOfCurrentMonth(CurrentDate.GetYear(), CurrentDate.GetMonth(), 1);
-    const FDateTime StartOfPreviousMonth = StartOfCurrentMonth.AddMonths(-1);
+
+    // Compute previous month manually
+    int32 PrevYear = StartOfCurrentMonth.GetYear();
+    int32 PrevMonth = StartOfCurrentMonth.GetMonth() - 1;
+
+    if (PrevMonth == 0)
+    {
+        PrevMonth = 12;
+        PrevYear -= 1;
+    }
+
+    const FDateTime StartOfPreviousMonth(PrevYear, PrevMonth, 1);
+
 
     float Profit = 0.f;
     for (const FCashFlowEntry& Entry : Account->Ledger)
