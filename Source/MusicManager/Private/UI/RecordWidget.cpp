@@ -6,10 +6,57 @@
 #include "Components/CheckBox.h"
 #include "Components/EditableTextBox.h"
 #include "Components/ListView.h"
+#include "GameTimeSubsystem.h"
 #include "RecordManagerSubsystem.h"
 #include "Song.h"
 #include "SongManagerSubsystem.h"
 #include "UI/RecordSongListItemWidget.h"
+
+namespace
+{
+    /**
+     * Temporary, coarse-grained mapping from game year to default record formats.
+     * The widget only suggests defaults; RecordManagerSubsystem will validate and prune.
+     */
+    TArray<ERecordFormat> GetDefaultFormatsForYear(const int32 CurrentYear)
+    {
+        TArray<ERecordFormat> Formats;
+
+        if (CurrentYear >= 1950 && CurrentYear <= 1969)
+        {
+            Formats.Add(ERecordFormat::Vinyl);
+        }
+        else if (CurrentYear >= 1970 && CurrentYear <= 1988)
+        {
+            Formats.Add(ERecordFormat::Vinyl);
+            Formats.Add(ERecordFormat::Cassette);
+        }
+        else if (CurrentYear >= 1989 && CurrentYear <= 1999)
+        {
+            Formats.Add(ERecordFormat::Cassette);
+            Formats.Add(ERecordFormat::CD);
+        }
+        else if (CurrentYear >= 2000 && CurrentYear <= 2009)
+        {
+            Formats.Add(ERecordFormat::CD);
+            Formats.Add(ERecordFormat::DigitalDownload);
+        }
+        else
+        {
+            // 2010 and beyond default to digital-first distribution.
+            Formats.Add(ERecordFormat::DigitalDownload);
+            Formats.Add(ERecordFormat::Streaming);
+        }
+
+        if (Formats.IsEmpty())
+        {
+            // Fallback to a modern-friendly format if year data is unavailable.
+            Formats.Add(ERecordFormat::DigitalDownload);
+        }
+
+        return Formats;
+    }
+}
 
 URecordWidget::URecordWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -64,8 +111,17 @@ void URecordWidget::OnConfirmPressed()
     Intent.bIsLP = bLPSelected;
     Intent.SongIds = SelectedSongIds;
 
-    // Default to digital availability; subsystem will filter by era and expand as needed.
-    Intent.RequestedFormats.Add(ERecordFormat::DigitalDownload);
+    int32 CurrentYear = 0;
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
+        {
+            CurrentYear = TimeSubsystem->GetCurrentGameDate().GetYear();
+        }
+    }
+
+    // Suggest coarse defaults based solely on the current era; validation remains in the subsystem.
+    Intent.RequestedFormats = GetDefaultFormatsForYear(CurrentYear);
 
     if (UGameInstance* GameInstance = GetGameInstance())
     {
