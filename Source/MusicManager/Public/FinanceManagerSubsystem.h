@@ -73,6 +73,14 @@ public:
     UFUNCTION(BlueprintCallable)
     void GetLabelLedger(const FString& LabelId, TArray<FCashFlowEntry>& OutEntries) const;
 
+    // Returns the net profit for the previous calendar month based on transaction timestamps.
+    UFUNCTION(BlueprintCallable)
+    float GetLastMonthProfit(const FString& LabelId, const FDateTime& CurrentDate) const;
+
+    // Returns the accumulated cash balance for the specified label.
+    UFUNCTION(BlueprintCallable)
+    float GetAccumulatedCash(const FString& LabelId) const;
+
     UFUNCTION()
     void RegisterRecordSalesRevenue(const FString& LabelId, const FString& RecordId, float Amount, const FDateTime& Timestamp);
 

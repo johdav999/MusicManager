@@ -27,6 +27,41 @@ void UFinanceManagerSubsystem::GetLabelLedger(const FString& LabelId, TArray<FCa
     }
 }
 
+float UFinanceManagerSubsystem::GetLastMonthProfit(const FString& LabelId, const FDateTime& CurrentDate) const
+{
+    const FLabelAccount* Account = LabelAccounts.Find(LabelId);
+    if (!Account)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("GetLastMonthProfit: Label %s not found."), *LabelId);
+        return 0.f;
+    }
+
+    // Determine the window covering the entire previous calendar month.
+    const FDateTime StartOfCurrentMonth(CurrentDate.GetYear(), CurrentDate.GetMonth(), 1);
+    const FDateTime StartOfPreviousMonth = StartOfCurrentMonth.AddMonths(-1);
+
+    float Profit = 0.f;
+    for (const FCashFlowEntry& Entry : Account->Ledger)
+    {
+        if (Entry.Timestamp >= StartOfPreviousMonth && Entry.Timestamp < StartOfCurrentMonth)
+        {
+            Profit += Entry.Amount;
+        }
+    }
+
+    return Profit;
+}
+
+float UFinanceManagerSubsystem::GetAccumulatedCash(const FString& LabelId) const
+{
+    if (const FLabelAccount* Account = LabelAccounts.Find(LabelId))
+    {
+        return Account->CurrentBalance;
+    }
+
+    return 0.f;
+}
+
 void UFinanceManagerSubsystem::RegisterRecordSalesRevenue(const FString& LabelId, const FString& RecordId, float Amount, const FDateTime& Timestamp)
 {
     FCashFlowEntry Entry;
