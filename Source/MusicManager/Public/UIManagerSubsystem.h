@@ -14,6 +14,7 @@ class UMusicPlayerComponent;
 class UStatusWidget;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnNewsSelected, const FMusicNewsEvent&);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCurrentLabelChanged, const FString&, LabelId);
 
 /**
  * Game-instance subsystem that orchestrates high-level UI interactions and ensures they run on the game thread.
@@ -76,11 +77,18 @@ public:
     /** Returns the label id to use for UI-bound financial displays. */
     FString GetCurrentLabelId() const;
 
+    /** Sets the label id to use for UI-bound financial displays and notifies listeners. */
+    void SetCurrentLabelId(const FString& NewLabelId);
+
     UFUNCTION()
     void StopAuditionMusic();
 
     /** Raised when a news card is selected anywhere in the UI. */
     FOnNewsSelected OnNewsSelected;
+
+    /** Raised when the current label id changes. */
+    UPROPERTY(BlueprintAssignable)
+    FOnCurrentLabelChanged OnCurrentLabelChanged;
 
     /** Handle selection events coming from news cards. */
 

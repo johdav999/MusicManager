@@ -21,6 +21,13 @@ void UStatusWidget::NativeConstruct()
     if (UUIManagerSubsystem* UIManager = CachedUIManagerSubsystem.Get())
     {
         UIManager->RegisterStatusWidget(this);
+
+        if (UIManager->OnCurrentLabelChanged.IsAlreadyBound(this, &UStatusWidget::HandleCurrentLabelChanged))
+        {
+            UIManager->OnCurrentLabelChanged.RemoveDynamic(this, &UStatusWidget::HandleCurrentLabelChanged);
+        }
+
+        UIManager->OnCurrentLabelChanged.AddDynamic(this, &UStatusWidget::HandleCurrentLabelChanged);
     }
 
     if (UGameTimeSubsystem* TimeSys = CachedTimeSubsystem.Get())
@@ -50,6 +57,11 @@ void UStatusWidget::NativeDestruct()
     if (UUIManagerSubsystem* UIManager = CachedUIManagerSubsystem.Get())
     {
         UIManager->UnregisterStatusWidget(this);
+
+        if (UIManager->OnCurrentLabelChanged.IsAlreadyBound(this, &UStatusWidget::HandleCurrentLabelChanged))
+        {
+            UIManager->OnCurrentLabelChanged.RemoveDynamic(this, &UStatusWidget::HandleCurrentLabelChanged);
+        }
     }
 
     Super::NativeDestruct();
@@ -102,6 +114,7 @@ void UStatusWidget::RefreshStatus(const FDateTime& CurrentDate)
     const FString LabelId = ResolveLabelId();
     if (LabelId.IsEmpty())
     {
+        UE_LOG(LogTemp, Verbose, TEXT("StatusWidget skipping finance refresh: label is empty for date %s"), *CurrentDate.ToString());
         if (MonthlyProfitText)
         {
             MonthlyProfitText->SetText(FText::FromString(TEXT("--")));
@@ -150,6 +163,7 @@ FString UStatusWidget::ResolveLabelId()
         const FString LabelId = UIManager->GetCurrentLabelId();
         if (!LabelId.IsEmpty())
         {
+            UE_LOG(LogTemp, Verbose, TEXT("StatusWidget ResolveLabelId using cached manager: %s"), *LabelId);
             return LabelId;
         }
     }
@@ -160,11 +174,23 @@ FString UStatusWidget::ResolveLabelId()
         if (!LabelId.IsEmpty())
         {
             CachedUIManagerSubsystem = UIManager;
+            UE_LOG(LogTemp, Verbose, TEXT("StatusWidget ResolveLabelId refreshed cache: %s"), *LabelId);
             return LabelId;
         }
     }
 
+    UE_LOG(LogTemp, Verbose, TEXT("StatusWidget ResolveLabelId could not resolve a label id."));
     return FString();
+}
+
+void UStatusWidget::HandleCurrentLabelChanged(const FString& NewLabelId)
+{
+    UE_LOG(LogTemp, Verbose, TEXT("StatusWidget observed label change: %s"), *NewLabelId);
+
+    if (UGameTimeSubsystem* TimeSubsystem = GetTimeSubsystem())
+    {
+        RefreshStatus(TimeSubsystem->GetCurrentGameDate());
+    }
 }
 
 UGameTimeSubsystem* UStatusWidget::GetTimeSubsystem()

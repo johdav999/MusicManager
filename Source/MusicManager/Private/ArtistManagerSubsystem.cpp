@@ -7,6 +7,7 @@
 #include "Song.h"
 #include "Async/Async.h"
 #include "HAL/PlatformProcess.h"
+#include "UIManagerSubsystem.h"
 
 UArtistManagerSubsystem::UArtistManagerSubsystem()
 {
@@ -208,6 +209,14 @@ void UArtistManagerSubsystem::SetSelectedArtist(const FString& ArtistId)
 
     SelectedArtistId = ArtistId;
     UE_LOG(LogTemp, Log, TEXT("Selected Artist Updated To: %s"), *ArtistId);
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+        {
+            UIManager->SetCurrentLabelId(ArtistId);
+        }
+    }
 }
 
 FString UArtistManagerSubsystem::GetSelectedArtist() const
@@ -291,6 +300,9 @@ void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal)
     ActiveContracts.Add(NewContract);
 
     UnsignedArtists.RemoveAt(0);
+
+    // Select the newly signed artist as the active label context.
+    SetSelectedArtist(NewContract.ArtistId);
 
     OnArtistSigned.Broadcast(NewContract);
     OnArtistListChanged.Broadcast();
@@ -447,6 +459,15 @@ void UArtistManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
     ExpiredContracts.Reset();
     OnMonthlyFinancialUpdate.Broadcast(ActiveContracts);
     OnArtistListChanged.Broadcast();
+
+    if (ActiveContracts.Num() > 0)
+    {
+        SetSelectedArtist(ActiveContracts[0].ArtistId);
+    }
+    else
+    {
+        SetSelectedArtist(FString());
+    }
 }
 
 void UArtistManagerSubsystem::GetArtistMarketModifiers(const FString& ArtistId, const FString& MarketId, const FMarketDemandSnapshot& MarketDemand, FArtistMarketModifiers& OutModifiers) const
