@@ -3,6 +3,7 @@
 #include "ArtistManagerSubsystem.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
+#include "Components/Border.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
 
@@ -14,7 +15,15 @@ void USignedArtistItemWidget::NativeConstruct()
     {
         ItemButton->OnClicked.RemoveDynamic(this, &USignedArtistItemWidget::HandleClicked);
         ItemButton->OnClicked.AddDynamic(this, &USignedArtistItemWidget::HandleClicked);
+
+        ItemButton->OnHovered.RemoveDynamic(this, &USignedArtistItemWidget::HandleHovered);
+        ItemButton->OnHovered.AddDynamic(this, &USignedArtistItemWidget::HandleHovered);
+
+        ItemButton->OnUnhovered.RemoveDynamic(this, &USignedArtistItemWidget::HandleUnhovered);
+        ItemButton->OnUnhovered.AddDynamic(this, &USignedArtistItemWidget::HandleUnhovered);
     }
+
+    UpdateVisualState();
 }
 
 void USignedArtistItemWidget::NativeDestruct()
@@ -22,6 +31,8 @@ void USignedArtistItemWidget::NativeDestruct()
     if (IsValid(ItemButton))
     {
         ItemButton->OnClicked.RemoveDynamic(this, &USignedArtistItemWidget::HandleClicked);
+        ItemButton->OnHovered.RemoveDynamic(this, &USignedArtistItemWidget::HandleHovered);
+        ItemButton->OnUnhovered.RemoveDynamic(this, &USignedArtistItemWidget::HandleUnhovered);
     }
     Super::NativeDestruct();
 }
@@ -53,6 +64,41 @@ void USignedArtistItemWidget::SetupItem(const FArtistData& InData, UTexture2D* P
     }
 }
 
+void USignedArtistItemWidget::SetHovered(bool bHovered)
+{
+    bIsHovered = bHovered;
+    UpdateVisualState();
+}
+
+void USignedArtistItemWidget::SetSelected(bool bSelected)
+{
+    bIsSelected = bSelected;
+    UpdateVisualState();
+}
+
+void USignedArtistItemWidget::UpdateVisualState()
+{
+    FLinearColor DesiredColor = NormalColor;
+
+    if (bIsSelected)
+    {
+        DesiredColor = SelectedColor;
+    }
+    else if (bIsHovered)
+    {
+        DesiredColor = HoveredColor;
+    }
+
+    if (IsValid(BackgroundBorder))
+    {
+        BackgroundBorder->SetBrushColor(DesiredColor);
+    }
+    else if (IsValid(ItemButton))
+    {
+        ItemButton->SetBackgroundColor(DesiredColor);
+    }
+}
+
 void USignedArtistItemWidget::HandleClicked()
 {
     if (!IsInGameThread())
@@ -70,4 +116,24 @@ void USignedArtistItemWidget::HandleClicked()
             ArtistSub->SetSelectedArtist(LocalArtistData.ArtistName);
         }
     }
+}
+
+void USignedArtistItemWidget::HandleHovered()
+{
+    if (!IsInGameThread())
+    {
+        return;
+    }
+
+    SetHovered(true);
+}
+
+void USignedArtistItemWidget::HandleUnhovered()
+{
+    if (!IsInGameThread())
+    {
+        return;
+    }
+
+    SetHovered(false);
 }

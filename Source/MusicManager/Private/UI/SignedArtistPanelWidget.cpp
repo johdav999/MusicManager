@@ -51,6 +51,9 @@ void USignedArtistPanelWidget::PopulateArtistList(const TArray<FArtistData>& Sig
     UWorld* World = GetWorld();
     if (!World) return;
 
+    const FString PreviousSelection = SelectedArtistId;
+    bool bSelectionStillValid = false;
+
     for (const FArtistData& Data : SignedArtists)
     {
         USignedArtistItemWidget* Item = CreateWidget<USignedArtistItemWidget>(World, ItemClass);
@@ -71,12 +74,50 @@ void USignedArtistPanelWidget::PopulateArtistList(const TArray<FArtistData>& Sig
 
         ArtistScrollBox->AddChild(Item);
         SpawnedItems.Add(Item);
+
+        if (!bSelectionStillValid && PreviousSelection == Data.ArtistName)
+        {
+            bSelectionStillValid = true;
+        }
     }
+
+    if (SignedArtists.Num() > 0)
+    {
+        if (bSelectionStillValid)
+        {
+            SelectedArtistId = PreviousSelection;
+        }
+        else
+        {
+            SelectedArtistId = SignedArtists.Last().ArtistName;
+        }
+    }
+    else
+    {
+        SelectedArtistId.Reset();
+    }
+
+    UpdateSelectionVisuals();
 }
 
 void USignedArtistPanelWidget::HandleArtistItemClicked(FString ArtistId)
 {
     if (!IsInGameThread()) return;
 
+    SelectedArtistId = ArtistId;
+    UpdateSelectionVisuals();
+
     OnArtistSelected.Broadcast(ArtistId);
+}
+
+void USignedArtistPanelWidget::UpdateSelectionVisuals()
+{
+    for (TWeakObjectPtr<USignedArtistItemWidget>& ItemPtr : SpawnedItems)
+    {
+        if (USignedArtistItemWidget* Item = ItemPtr.Get())
+        {
+            const bool bShouldSelect = Item->GetArtistId() == SelectedArtistId;
+            Item->SetSelected(bShouldSelect);
+        }
+    }
 }
