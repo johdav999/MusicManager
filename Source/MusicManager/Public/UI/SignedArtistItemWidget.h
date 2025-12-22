@@ -20,6 +20,14 @@ public:
 
     void SetupItem(const FArtistData& InData, UTexture2D* PortraitTexture);
 
+    void SetHovered(bool bHovered);
+
+    void SetSelected(bool bSelected);
+
+    FString GetArtistId() const { return LocalArtistData.ArtistName; }
+
+    void UpdateVisualState();
+
     UPROPERTY(BlueprintAssignable, Category="Events")
     FOnSignedArtistClicked OnArtistClicked;
 
@@ -30,8 +38,17 @@ protected:
     UFUNCTION()
     void HandleClicked();
 
+    UFUNCTION()
+    void HandleHovered();
+
+    UFUNCTION()
+    void HandleUnhovered();
+
     UPROPERTY(meta=(BindWidget))
     class UButton* ItemButton;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    class UBorder* BackgroundBorder;
 
     UPROPERTY(meta=(BindWidget))
     class UImage* PortraitImage;
@@ -41,4 +58,16 @@ protected:
 
     UPROPERTY(meta=(BindWidget))
     class UTextBlock* ArtistGenreText;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    FLinearColor NormalColor = FLinearColor::White;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    FLinearColor HoveredColor = FLinearColor(0.9f, 0.9f, 0.9f, 1.0f);
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    FLinearColor SelectedColor = FLinearColor(0.75f, 0.85f, 1.0f, 1.0f);
+
+    bool bIsHovered = false;
+    bool bIsSelected = false;
 };

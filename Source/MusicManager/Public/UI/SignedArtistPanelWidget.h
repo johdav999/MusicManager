@@ -32,4 +32,8 @@ protected:
     TSubclassOf<class USignedArtistItemWidget> ItemClass;
 
     TArray<TWeakObjectPtr<USignedArtistItemWidget>> SpawnedItems;
+
+    FString SelectedArtistId;
+
+    void UpdateSelectionVisuals();
 };

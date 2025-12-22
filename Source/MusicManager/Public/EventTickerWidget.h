@@ -74,10 +74,26 @@ private:
     UFUNCTION()
     void OnClickButton();
 
+    UFUNCTION()
+    void HandleHovered();
+
+    UFUNCTION()
+    void HandleUnhovered();
+
+    void UpdateHoverVisuals();
+
     void HandleUpcomingArtistAudition();
 
     EMusicNewsType CurrentNewsType = EMusicNewsType::None;
 
     UPROPERTY()
     TWeakObjectPtr<ULayout> LayoutRef;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    FLinearColor NormalBackgroundColor = FLinearColor::White;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    FLinearColor HoveredBackgroundColor = FLinearColor(0.9f, 0.9f, 0.9f, 1.0f);
+
+    bool bIsHovered = false;
 };

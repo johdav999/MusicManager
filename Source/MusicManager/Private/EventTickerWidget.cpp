@@ -26,9 +26,16 @@ void UEventTickerWidget::NativeConstruct()
     {
         ClickButton->OnClicked.Clear();
         ClickButton->OnClicked.AddDynamic(this, &UEventTickerWidget::OnClickButton);
+
+        ClickButton->OnHovered.RemoveDynamic(this, &UEventTickerWidget::HandleHovered);
+        ClickButton->OnHovered.AddDynamic(this, &UEventTickerWidget::HandleHovered);
+
+        ClickButton->OnUnhovered.RemoveDynamic(this, &UEventTickerWidget::HandleUnhovered);
+        ClickButton->OnUnhovered.AddDynamic(this, &UEventTickerWidget::HandleUnhovered);
     }
 
     Refresh();
+    UpdateHoverVisuals();
 }
 
 void UEventTickerWidget::SetNewsEvent(const FMusicNewsEvent& InEvent)
@@ -233,5 +240,62 @@ void UEventTickerWidget::HandleUpcomingArtistAudition()
                 break;
             }
         }
+    }
+}
+
+void UEventTickerWidget::HandleHovered()
+{
+    if (!IsInGameThread())
+    {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis = TWeakObjectPtr<UEventTickerWidget>(this)]()
+        {
+            if (UEventTickerWidget* Self = WeakThis.Get())
+            {
+                Self->HandleHovered();
+            }
+        });
+        return;
+    }
+
+    bIsHovered = true;
+    UpdateHoverVisuals();
+}
+
+void UEventTickerWidget::HandleUnhovered()
+{
+    if (!IsInGameThread())
+    {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis = TWeakObjectPtr<UEventTickerWidget>(this)]()
+        {
+            if (UEventTickerWidget* Self = WeakThis.Get())
+            {
+                Self->HandleUnhovered();
+            }
+        });
+        return;
+    }
+
+    bIsHovered = false;
+    UpdateHoverVisuals();
+}
+
+void UEventTickerWidget::UpdateHoverVisuals()
+{
+    if (!IsInGameThread())
+    {
+        AsyncTask(ENamedThreads::GameThread, [WeakThis = TWeakObjectPtr<UEventTickerWidget>(this)]()
+        {
+            if (UEventTickerWidget* Self = WeakThis.Get())
+            {
+                Self->UpdateHoverVisuals();
+            }
+        });
+        return;
+    }
+
+    if (IsValid(ClickButton))
+    {
+        const FLinearColor DesiredColor = bIsHovered ? HoveredBackgroundColor : NormalBackgroundColor;
+        ClickButton->SetBackgroundColor(DesiredColor);
     }
 }
