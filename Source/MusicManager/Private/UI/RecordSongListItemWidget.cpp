@@ -34,6 +34,9 @@ void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& 
         SongNameText->SetText(FText::FromString(SongData.SongName));
     }
 
+    DisplaySongMetadata(SongData);
+    UpdateSelectionVisuals(bSelected);
+
     if (PlayButton)
     {
         PlayButton->OnClicked.Clear();
@@ -41,6 +44,18 @@ void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& 
     }
 
     BindButtonDelegates();
+}
+
+void URecordSongListItemWidget::NotifySelectionChanged(bool bIsSelected)
+{
+    bSelected = bIsSelected;
+
+    UpdateSelectionVisuals(bSelected);
+
+    if (URecordWidget* OwnerPtr = OwningRecordWidget.Get())
+    {
+        OwnerPtr->NotifySongSelectionChanged(SongId, bSelected);
+    }
 }
 
 void URecordSongListItemWidget::OnPlayClicked()
@@ -90,11 +105,7 @@ void URecordSongListItemWidget::OnPlayClicked()
 
 void URecordSongListItemWidget::OnAddClicked()
 {
-    bSelected = !bSelected;
-    if (URecordWidget* OwnerPtr = OwningRecordWidget.Get())
-    {
-        OwnerPtr->NotifySongSelectionChanged(SongId, bSelected);
-    }
+    NotifySelectionChanged(!bSelected);
 }
 
 void URecordSongListItemWidget::SetOwningRecordWidget(URecordWidget* InOwner)

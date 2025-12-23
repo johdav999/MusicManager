@@ -21,6 +21,12 @@ public:
 
     void Setup(const FString& InSongId, const FSongData& SongData);
 
+    /**
+     * Blueprint widgets should call this when their selection UI changes.
+     */
+    UFUNCTION(BlueprintCallable, Category = "Record")
+    void NotifySelectionChanged(bool bIsSelected);
+
     UFUNCTION()
     void OnPlayClicked();
 
@@ -28,6 +34,19 @@ public:
     void OnAddClicked();
 
     void SetOwningRecordWidget(class URecordWidget* InOwner);
+
+protected:
+    /**
+     * Allow Blueprints to render song metadata however they like.
+     */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Record")
+    void DisplaySongMetadata(const FSongData& SongData);
+
+    /**
+     * Allow Blueprints to update visual state (checkboxes, highlights, etc.).
+     */
+    UFUNCTION(BlueprintImplementableEvent, Category = "Record")
+    void UpdateSelectionVisuals(bool bIsSelected);
 
 protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
