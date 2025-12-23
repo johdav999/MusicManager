@@ -25,6 +25,8 @@ void UCommandPanelWidget::NativeConstruct()
 
     bPanelActive = true;
 
+    SelectedItem.Reset();
+
     if (!IsValid(CommandPanel))
     {
         UE_LOG(LogTemp, Error, TEXT("CommandPanelWidget: CommandPanel binding is missing. Cannot add commands."));
@@ -93,6 +95,22 @@ void UCommandPanelWidget::HandleCommandClicked(const FString& CommandName)
 
 void UCommandPanelWidget::HandleChildCommandClicked(const FString& CommandName)
 {
+    UCommandItemWidget* ClickedItem = nullptr;
+
+    for (TWeakObjectPtr<UCommandItemWidget>& ItemPtr : SpawnedCommandItems)
+    {
+        if (UCommandItemWidget* Item = ItemPtr.Get())
+        {
+            if (Item->GetCommandName() == CommandName)
+            {
+                ClickedItem = Item;
+                break;
+            }
+        }
+    }
+
+    UpdateSelection(ClickedItem);
+
     HandleCommandClicked(CommandName);
 }
 
@@ -230,6 +248,7 @@ void UCommandPanelWidget::HandleIconLoaded(FCommandDefinition Definition)
     }
 
     NewItem->SetCommandName(Definition.CommandName);
+    NewItem->SetVisualState(ECommandItemVisualState::Normal);
 
     if (UTexture2D* ResolvedTexture = Definition.IconTexture.Get())
     {
@@ -242,6 +261,11 @@ void UCommandPanelWidget::HandleIconLoaded(FCommandDefinition Definition)
     CommandPanel->AddChildToHorizontalBox(NewItem);
 
     SpawnedCommandItems.Add(NewItem);
+
+    if (!LastSelectedCommandName.IsEmpty() && Definition.CommandName == LastSelectedCommandName)
+    {
+        UpdateSelection(NewItem);
+    }
 }
 
 void UCommandPanelWidget::ApplyIconToItem(UCommandItemWidget* Item, UTexture2D* Texture)
@@ -269,4 +293,46 @@ void UCommandPanelWidget::CleanupChildBindings()
     }
 
     SpawnedCommandItems.Reset();
+
+    SelectedItem.Reset();
+}
+
+void UCommandPanelWidget::UpdateSelection(UCommandItemWidget* ClickedItem)
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<UCommandPanelWidget> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ClickedItem]()
+        {
+            if (UCommandPanelWidget* StrongThis = WeakThis.Get())
+            {
+                StrongThis->UpdateSelection(ClickedItem);
+            }
+        });
+        return;
+    }
+
+    if (!IsValid(ClickedItem))
+    {
+        if (UCommandItemWidget* CurrentSelected = SelectedItem.Get())
+        {
+            CurrentSelected->SetVisualState(ECommandItemVisualState::Normal);
+        }
+
+        SelectedItem.Reset();
+        LastSelectedCommandName.Reset();
+        return;
+    }
+
+    if (UCommandItemWidget* CurrentSelected = SelectedItem.Get())
+    {
+        if (CurrentSelected != ClickedItem)
+        {
+            CurrentSelected->SetVisualState(ECommandItemVisualState::Normal);
+        }
+    }
+
+    ClickedItem->SetVisualState(ECommandItemVisualState::Selected);
+    SelectedItem = ClickedItem;
+    LastSelectedCommandName = ClickedItem->GetCommandName();
 }
