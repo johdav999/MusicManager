@@ -78,6 +78,14 @@ private:
     UPROPERTY(Transient)
     TArray<TWeakObjectPtr<UCommandItemWidget>> SpawnedCommandItems;
 
+    /** Tracks the currently selected item so visuals can be updated. */
+    UPROPERTY()
+    TWeakObjectPtr<UCommandItemWidget> SelectedItem;
+
+    /** Stores the name of the last selected command to restore after rebuilds. */
+    UPROPERTY(Transient)
+    FString LastSelectedCommandName;
+
     /** Indicates whether the panel is currently constructed and ready to accept UI updates. */
     UPROPERTY(Transient)
     bool bPanelActive = false;
@@ -103,4 +111,7 @@ private:
 
     /** Utility to remove bindings when this widget goes away. */
     void CleanupChildBindings();
+
+    /** Handles selection and deselection of command items. */
+    void UpdateSelection(UCommandItemWidget* ClickedItem);
 };
