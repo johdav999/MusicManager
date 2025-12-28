@@ -6,6 +6,7 @@
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
+#include "RecordManagerSubsystem.h"
 
 void USignedArtistItemWidget::NativeConstruct()
 {
@@ -23,11 +24,50 @@ void USignedArtistItemWidget::NativeConstruct()
         ItemButton->OnUnhovered.AddDynamic(this, &USignedArtistItemWidget::HandleUnhovered);
     }
 
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (URecordManagerSubsystem* Subsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
+        {
+            RecordSubsystem = Subsystem;
+            TWeakObjectPtr<USignedArtistItemWidget> WeakThis(this);
+            RecordCreatedHandle = Subsystem->OnArtistRecordCreated.AddLambda([WeakThis](const FString& ArtistId)
+            {
+                if (!IsInGameThread())
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("SignedArtistItemWidget: Record created callback invoked off the game thread."));
+                    return;
+                }
+
+                if (USignedArtistItemWidget* StrongThis = WeakThis.Get())
+                {
+                    if (ArtistId == StrongThis->GetArtistId())
+                    {
+                        StrongThis->RefreshRecordCount();
+                    }
+                }
+            });
+        }
+    }
+
+    if (!LocalArtistData.ArtistName.IsEmpty())
+    {
+        RefreshRecordCount();
+    }
+
     UpdateVisualState();
 }
 
 void USignedArtistItemWidget::NativeDestruct()
 {
+    if (RecordCreatedHandle.IsValid())
+    {
+        if (URecordManagerSubsystem* Subsystem = RecordSubsystem.Get())
+        {
+            Subsystem->OnArtistRecordCreated.Remove(RecordCreatedHandle);
+        }
+        RecordCreatedHandle.Reset();
+    }
+
     if (IsValid(ItemButton))
     {
         ItemButton->OnClicked.RemoveDynamic(this, &USignedArtistItemWidget::HandleClicked);
@@ -62,6 +102,8 @@ void USignedArtistItemWidget::SetupItem(const FArtistData& InData, UTexture2D* P
             PortraitImage->SetBrushFromTexture(nullptr, true);
         }
     }
+
+    RefreshRecordCount();
 }
 
 void USignedArtistItemWidget::SetHovered(bool bHovered)
@@ -97,6 +139,45 @@ void USignedArtistItemWidget::UpdateVisualState()
     {
         ItemButton->SetBackgroundColor(DesiredColor);
     }
+}
+
+void USignedArtistItemWidget::RefreshRecordCount()
+{
+    if (!IsInGameThread())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SignedArtistItemWidget: RefreshRecordCount called off the game thread."));
+        return;
+    }
+
+    if (!IsValid(RecordsNumText))
+    {
+        return;
+    }
+
+    if (LocalArtistData.ArtistName.IsEmpty())
+    {
+        RecordsNumText->SetText(FText::AsNumber(0));
+        return;
+    }
+
+    URecordManagerSubsystem* Subsystem = RecordSubsystem.Get();
+    if (!Subsystem)
+    {
+        if (UGameInstance* GameInstance = GetGameInstance())
+        {
+            Subsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>();
+            RecordSubsystem = Subsystem;
+        }
+    }
+
+    if (!Subsystem)
+    {
+        RecordsNumText->SetText(FText::AsNumber(0));
+        return;
+    }
+
+    const int32 RecordCount = Subsystem->GetRecordCountForArtist(LocalArtistData.ArtistName);
+    RecordsNumText->SetText(FText::AsNumber(RecordCount));
 }
 
 void USignedArtistItemWidget::HandleClicked()

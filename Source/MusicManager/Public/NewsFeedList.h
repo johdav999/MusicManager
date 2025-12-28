@@ -7,6 +7,7 @@
 #include "NewsFeedList.generated.h"
 
 class UVerticalBox;
+class UScrollBox;
 class UEventTickerWidget;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNewsFeedList, Log, All);
@@ -37,6 +38,9 @@ public:
 protected:
     UPROPERTY(meta=(BindWidget))
     UVerticalBox* FeedContainer;
+
+    UPROPERTY(meta=(BindWidget))
+    UScrollBox* FeedScrollBox;
 
     UPROPERTY(EditDefaultsOnly, Category="News")
     TSubclassOf<class UEventTickerWidget> EventTickerWidgetClass;

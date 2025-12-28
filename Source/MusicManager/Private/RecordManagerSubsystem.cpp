@@ -62,6 +62,25 @@ bool URecordManagerSubsystem::GetRecordById(const FString& RecordId, FRecordData
     return false;
 }
 
+int32 URecordManagerSubsystem::GetRecordCountForArtist(const FString& ArtistId) const
+{
+    if (ArtistId.IsEmpty())
+    {
+        return 0;
+    }
+
+    int32 Count = 0;
+    for (const TPair<FString, FRecordData>& Pair : Records)
+    {
+        if (Pair.Value.ArtistId == ArtistId)
+        {
+            ++Count;
+        }
+    }
+
+    return Count;
+}
+
 void URecordManagerSubsystem::GetRecentlyReleasedArtists(const FDateTime& CurrentDate, int32 MonthsBack, TArray<FString>& OutArtistIds) const
 {
     OutArtistIds.Reset();
@@ -408,6 +427,9 @@ void URecordManagerSubsystem::CompleteRecording(const FString& RecordingId, cons
 
     const FString NewRecordId = CreateRecord(NewRecord);
     RecordStates.FindOrAdd(NewRecordId) = ERecordLifecycleState::Recorded;
+
+    ensureMsgf(IsInGameThread(), TEXT("RecordManagerSubsystem: Record creation must occur on the game thread."));
+    OnArtistRecordCreated.Broadcast(Intent->ArtistId);
 
     SongSubsystem->MarkSongsRecorded(Intent->SongIds, NewRecordId);
     SongSubsystem->UnlockSongs(Intent->SongIds);

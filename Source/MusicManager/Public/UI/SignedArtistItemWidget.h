@@ -8,6 +8,7 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSignedArtistClicked, FString, ArtistId);
 
 class UTexture2D;
+class URecordManagerSubsystem;
 
 UCLASS()
 class MUSICMANAGER_API USignedArtistItemWidget : public UUserWidget
@@ -28,11 +29,15 @@ public:
 
     void UpdateVisualState();
 
+    void RefreshRecordCount();
+
     UPROPERTY(BlueprintAssignable, Category="Events")
     FOnSignedArtistClicked OnArtistClicked;
 
 private:
     FArtistData LocalArtistData;
+    TWeakObjectPtr<URecordManagerSubsystem> RecordSubsystem;
+    FDelegateHandle RecordCreatedHandle;
 
 protected:
     UFUNCTION()
@@ -58,6 +63,9 @@ protected:
 
     UPROPERTY(meta=(BindWidget))
     class UTextBlock* ArtistGenreText;
+
+    UPROPERTY(meta=(BindWidget))
+    class UTextBlock* RecordsNumText;
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
     FLinearColor NormalColor = FLinearColor::White;

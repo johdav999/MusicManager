@@ -11,6 +11,8 @@
 class USongManagerSubsystem;
 class UGameTimeSubsystem;
 
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnArtistRecordCreated, FString /* ArtistId */);
+
 UENUM(BlueprintType)
 enum class ERecordFormat : uint8
 {
@@ -198,11 +200,16 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
+    FOnArtistRecordCreated OnArtistRecordCreated;
+
     UFUNCTION()
     FString CreateRecord(const FRecordData& Data);
 
     UFUNCTION(BlueprintCallable)
     bool GetRecordById(const FString& RecordId, FRecordData& OutData) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records")
+    int32 GetRecordCountForArtist(const FString& ArtistId) const;
 
     /** Begin the recording lifecycle from player intent. */
     UFUNCTION(BlueprintCallable, Category="Records|Recording")
