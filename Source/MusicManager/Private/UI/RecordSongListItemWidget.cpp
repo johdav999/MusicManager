@@ -18,6 +18,7 @@ void URecordSongListItemWidget::NativeOnListItemObjectSet(UObject* ListItemObjec
     {
         OwningRecordWidget = Entry->OwningWidget;
         ArtistId = Entry->ArtistId;
+        bIsRecordListItem = Entry->bIsRecordList;
 
         Setup(Entry->SongId, Entry->SongData);
     }
@@ -27,7 +28,6 @@ void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& 
 {
     SongId = InSongId;
     CachedSongData = SongData;
-    bSelected = false;
 
     if (IsValid(SongNameText))
     {
@@ -35,7 +35,16 @@ void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& 
     }
 
     DisplaySongMetadata(SongData);
-    UpdateSelectionVisuals(bSelected);
+
+    if (IsValid(AddButton))
+    {
+        AddButton->SetVisibility(bIsRecordListItem ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+    }
+
+    if (IsValid(RemoveButton))
+    {
+        RemoveButton->SetVisibility(bIsRecordListItem ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    }
 
     if (PlayButton)
     {
@@ -44,18 +53,6 @@ void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& 
     }
 
     BindButtonDelegates();
-}
-
-void URecordSongListItemWidget::NotifySelectionChanged(bool bIsSelected)
-{
-    bSelected = bIsSelected;
-
-    UpdateSelectionVisuals(bSelected);
-
-    if (URecordWidget* OwnerPtr = OwningRecordWidget.Get())
-    {
-        OwnerPtr->NotifySongSelectionChanged(SongId, bSelected);
-    }
 }
 
 void URecordSongListItemWidget::OnPlayClicked()
@@ -105,7 +102,18 @@ void URecordSongListItemWidget::OnPlayClicked()
 
 void URecordSongListItemWidget::OnAddClicked()
 {
-    NotifySelectionChanged(!bSelected);
+    if (URecordWidget* OwnerPtr = OwningRecordWidget.Get())
+    {
+        OwnerPtr->AddSongToRecord(SongId);
+    }
+}
+
+void URecordSongListItemWidget::OnRemoveClicked()
+{
+    if (URecordWidget* OwnerPtr = OwningRecordWidget.Get())
+    {
+        OwnerPtr->RemoveSongFromRecord(SongId);
+    }
 }
 
 void URecordSongListItemWidget::SetOwningRecordWidget(URecordWidget* InOwner)
@@ -125,5 +133,11 @@ void URecordSongListItemWidget::BindButtonDelegates()
     {
         AddButton->OnClicked.RemoveDynamic(this, &URecordSongListItemWidget::OnAddClicked);
         AddButton->OnClicked.AddDynamic(this, &URecordSongListItemWidget::OnAddClicked);
+    }
+
+    if (IsValid(RemoveButton))
+    {
+        RemoveButton->OnClicked.RemoveDynamic(this, &URecordSongListItemWidget::OnRemoveClicked);
+        RemoveButton->OnClicked.AddDynamic(this, &URecordSongListItemWidget::OnRemoveClicked);
     }
 }

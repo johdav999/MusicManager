@@ -72,12 +72,23 @@ void URecordWidget::NativeConstruct()
     {
         SongListView->OnEntryWidgetGenerated().AddUObject(this, &URecordWidget::HandleEntryGenerated);
     }
+
+    if (IsValid(RecordSongListView))
+    {
+        RecordSongListView->OnEntryWidgetGenerated().AddUObject(this, &URecordWidget::HandleEntryGenerated);
+    }
 }
 
 void URecordWidget::InitializeForArtist(const FString& ArtistId)
 {
     CurrentArtistId = ArtistId;
-    SelectedSongIds.Reset();
+    ArtistSongIds.Reset();
+    RecordSongIds.Reset();
+    SongDataById.Reset();
+    if (IsValid(RecordSongListView))
+    {
+        RecordSongListView->ClearListItems();
+    }
     PopulateSongsForArtist(ArtistId);
 }
 
@@ -92,13 +103,13 @@ void URecordWidget::OnConfirmPressed()
         return;
     }
 
-    if (bSingleSelected && SelectedSongIds.Num() != 1)
+    if (bSingleSelected && RecordSongIds.Num() != 1)
     {
         UE_LOG(LogTemp, Warning, TEXT("RecordWidget: Singles require exactly one song."));
         return;
     }
 
-    if (bLPSelected && SelectedSongIds.Num() < 2)
+    if (bLPSelected && RecordSongIds.Num() < 2)
     {
         UE_LOG(LogTemp, Warning, TEXT("RecordWidget: LPs require more than one song."));
         return;
@@ -109,7 +120,7 @@ void URecordWidget::OnConfirmPressed()
     Intent.AlbumName = AlbumNameBox ? AlbumNameBox->GetText().ToString() : TEXT("");
     Intent.bIsSingle = bSingleSelected;
     Intent.bIsLP = bLPSelected;
-    Intent.SongIds = SelectedSongIds;
+    Intent.SongIds = RecordSongIds;
 
     int32 CurrentYear = 0;
     if (UGameInstance* GameInstance = GetGameInstance())
@@ -158,16 +169,89 @@ void URecordWidget::OnCancelPressed()
     }
 }
 
-void URecordWidget::NotifySongSelectionChanged(const FString& SongId, bool bIsSelected)
+void URecordWidget::AddSongToRecord(const FString& SongId)
 {
-    if (bIsSelected)
+    if (!IsInGameThread())
     {
-        SelectedSongIds.Remove(SongId);
-        SelectedSongIds.Add(SongId);
+        TWeakObjectPtr<URecordWidget> WeakThis(this);
+        const FString CopyId = SongId;
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, CopyId]()
+        {
+            if (URecordWidget* Strong = WeakThis.Get())
+            {
+                Strong->AddSongToRecord(CopyId);
+            }
+        });
+        return;
     }
-    else
+
+    if (RecordSongIds.Contains(SongId))
     {
-        SelectedSongIds.Remove(SongId);
+        return;
+    }
+
+    if (!SongDataById.Contains(SongId))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RecordWidget: Tried to add unknown song %s."), *SongId);
+        return;
+    }
+
+    RecordSongIds.Add(SongId);
+    RefreshRecordSongList();
+}
+
+void URecordWidget::RemoveSongFromRecord(const FString& SongId)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<URecordWidget> WeakThis(this);
+        const FString CopyId = SongId;
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, CopyId]()
+        {
+            if (URecordWidget* Strong = WeakThis.Get())
+            {
+                Strong->RemoveSongFromRecord(CopyId);
+            }
+        });
+        return;
+    }
+
+    if (!RecordSongIds.Remove(SongId))
+    {
+        return;
+    }
+
+    RefreshRecordSongList();
+}
+
+void URecordWidget::RefreshRecordSongList()
+{
+    if (!IsValid(RecordSongListView))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RefreshRecordSongList: RecordSongListView not bound."));
+        return;
+    }
+
+    RecordSongListView->ClearListItems();
+
+    for (const FString& SongId : RecordSongIds)
+    {
+        const FSongData* SongData = SongDataById.Find(SongId);
+        if (!SongData)
+        {
+            continue;
+        }
+
+        URecordSongListEntryObject* Entry = NewObject<URecordSongListEntryObject>(this);
+        Entry->SongId = SongId;
+        Entry->SongData = *SongData;
+        Entry->ArtistId = CurrentArtistId;
+        Entry->OwningWidget = this;
+        Entry->bIsRecordList = true;
+
+        RecordSongListView->AddItem(Entry);
     }
 }
 
@@ -213,6 +297,8 @@ void URecordWidget::PopulateSongsForArtist(const FString& ArtistId)
     }
 
     SongListView->ClearListItems();
+    ArtistSongIds.Reset();
+    SongDataById.Reset();
 
     UGameInstance* GameInstance = GetGameInstance();
     if (!IsValid(GameInstance))
@@ -244,7 +330,10 @@ void URecordWidget::PopulateSongsForArtist(const FString& ArtistId)
         Entry->SongData = Data;
         Entry->ArtistId = ArtistId;
         Entry->OwningWidget = this;
+        Entry->bIsRecordList = false;
 
+        ArtistSongIds.Add(Song->SongId);
+        SongDataById.Add(Song->SongId, Data);
         SongListView->AddItem(Entry);
     }
 }

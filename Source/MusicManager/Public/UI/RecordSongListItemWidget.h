@@ -21,17 +21,14 @@ public:
 
     void Setup(const FString& InSongId, const FSongData& SongData);
 
-    /**
-     * Blueprint widgets should call this when their selection UI changes.
-     */
-    UFUNCTION(BlueprintCallable, Category = "Record")
-    void NotifySelectionChanged(bool bIsSelected);
-
     UFUNCTION()
     void OnPlayClicked();
 
     UFUNCTION()
     void OnAddClicked();
+
+    UFUNCTION()
+    void OnRemoveClicked();
 
     void SetOwningRecordWidget(class URecordWidget* InOwner);
 
@@ -41,12 +38,6 @@ protected:
      */
     UFUNCTION(BlueprintImplementableEvent, Category = "Record")
     void DisplaySongMetadata(const FSongData& SongData);
-
-    /**
-     * Allow Blueprints to update visual state (checkboxes, highlights, etc.).
-     */
-    UFUNCTION(BlueprintImplementableEvent, Category = "Record")
-    void UpdateSelectionVisuals(bool bIsSelected);
 
 protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
@@ -58,6 +49,9 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UButton* AddButton;
 
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UButton* RemoveButton;
+
     UPROPERTY(BlueprintReadWrite)
     FString SongId;
 
@@ -65,7 +59,7 @@ protected:
     FString ArtistId;
 
     UPROPERTY(BlueprintReadWrite)
-    bool bSelected = false;
+    bool bIsRecordListItem = false;
 
     UPROPERTY()
     FSongData CachedSongData;

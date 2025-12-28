@@ -2,6 +2,7 @@
 
 #include "Blueprint/IUserObjectListEntry.h"
 #include "Blueprint/UserWidget.h"
+#include "Containers/Map.h"
 #include "FSongData.h"
 #include "RecordWidget.generated.h"
 
@@ -29,6 +30,9 @@ public:
 
     UPROPERTY()
     TWeakObjectPtr<class URecordWidget> OwningWidget;
+
+    UPROPERTY()
+    bool bIsRecordList = false;
 };
 
 UCLASS(BlueprintType, Blueprintable)
@@ -49,7 +53,8 @@ public:
     UFUNCTION(BlueprintCallable)
     void OnCancelPressed();
 
-    void NotifySongSelectionChanged(const FString& SongId, bool bIsSelected);
+    void AddSongToRecord(const FString& SongId);
+    void RemoveSongFromRecord(const FString& SongId);
 
 protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
@@ -70,6 +75,9 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UListView* SongListView;
 
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UListView* RecordSongListView;
+
 private:
     UFUNCTION()
     void HandleConfirmClicked();
@@ -82,10 +90,17 @@ private:
 
     UFUNCTION()
     void PopulateSongsForArtist(const FString& ArtistId);
+    void RefreshRecordSongList();
     void BindButtonDelegates();
 
     FString CurrentArtistId;
 
     UPROPERTY()
-    TArray<FString> SelectedSongIds;
+    TArray<FString> ArtistSongIds;
+
+    UPROPERTY()
+    TArray<FString> RecordSongIds;
+
+    UPROPERTY()
+    TMap<FString, FSongData> SongDataById;
 };
