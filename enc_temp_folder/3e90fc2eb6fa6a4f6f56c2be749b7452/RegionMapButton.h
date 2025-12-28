@@ -34,7 +34,7 @@ public:
 
     /** Font size for the button text. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Style")
-    int32 FontSize = 12;
+    int32 FontSize = 24;
 
     /** Optional button size applied when a root SizeBox is present. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Style")
