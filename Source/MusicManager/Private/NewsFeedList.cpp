@@ -1,6 +1,9 @@
 // File: Private/NewsFeedList.cpp
 #include "NewsFeedList.h"
 
+#include "Async/Async.h"
+#include "Components/PanelWidget.h"
+#include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "EventTickerWidget.h"
@@ -17,6 +20,35 @@ UNewsFeedList::UNewsFeedList(const FObjectInitializer& ObjectInitializer)
 void UNewsFeedList::NativeConstruct()
 {
     Super::NativeConstruct();
+
+    if (!IsValid(FeedScrollBox))
+    {
+        UE_LOG(LogNewsFeedList, Warning, TEXT("NativeConstruct: FeedScrollBox binding is missing."));
+    }
+
+    if (!IsValid(FeedContainer))
+    {
+        UE_LOG(LogNewsFeedList, Warning, TEXT("NativeConstruct: FeedContainer binding is missing."));
+    }
+
+    if (IsValid(FeedScrollBox))
+    {
+        FeedScrollBox->SetAnimateWheelScrolling(true);
+        FeedScrollBox->SetScrollBarVisibility(ESlateVisibility::Visible);
+    }
+
+    if (IsValid(FeedScrollBox) && IsValid(FeedContainer))
+    {
+        if (FeedContainer->GetParent() != FeedScrollBox)
+        {
+            if (UPanelWidget* const ExistingParent = FeedContainer->GetParent())
+            {
+                ExistingParent->RemoveChild(FeedContainer);
+            }
+
+            FeedScrollBox->AddChild(FeedContainer);
+        }
+    }
 }
 
 void UNewsFeedList::NativeDestruct()
@@ -29,6 +61,14 @@ UEventTickerWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
     if (!ensure(IsInGameThread()))
     {
         UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard called off the game thread."));
+        TWeakObjectPtr<UNewsFeedList> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, Event]()
+        {
+            if (WeakThis.IsValid())
+            {
+                WeakThis->AddNewsCard(Event);
+            }
+        });
         return nullptr;
     }
 
@@ -42,6 +82,11 @@ UEventTickerWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
     {
         UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: EventTickerWidgetClass is not set."));
         return nullptr;
+    }
+
+    if (!IsValid(FeedScrollBox))
+    {
+        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: FeedScrollBox is invalid."));
     }
 
     UWorld* const World = GetWorld();
@@ -60,9 +105,16 @@ UEventTickerWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
 
     NewCard->SetNewsEvent(Event);
 
-    if (UVerticalBoxSlot* const slot = FeedContainer->AddChildToVerticalBox(NewCard))
+    if (UPanelSlot* PanelSlot = FeedContainer->InsertChildAt(0, NewCard))
     {
-       slot->SetHorizontalAlignment(HAlign_Fill);
+        if (UVerticalBoxSlot* const slot = Cast<UVerticalBoxSlot>(PanelSlot))
+        {
+            slot->SetHorizontalAlignment(HAlign_Fill);
+        }
+        if (IsValid(FeedScrollBox))
+        {
+            FeedScrollBox->ScrollToStart();
+        }
         return NewCard;
     }
 
@@ -80,6 +132,15 @@ bool UNewsFeedList::RemoveNewsCard(UEventTickerWidget* Card)
     if (!ensure(IsInGameThread()))
     {
         UE_LOG(LogNewsFeedList, Warning, TEXT("RemoveNewsCard called off the game thread."));
+        TWeakObjectPtr<UNewsFeedList> WeakThis(this);
+        TWeakObjectPtr<UEventTickerWidget> WeakCard(Card);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakCard]()
+        {
+            if (WeakThis.IsValid())
+            {
+                WeakThis->RemoveNewsCard(WeakCard.Get());
+            }
+        });
         return false;
     }
 
@@ -109,6 +170,15 @@ bool UNewsFeedList::MoveNewsCardToTop(UEventTickerWidget* Card)
     if (!ensure(IsInGameThread()))
     {
         UE_LOG(LogNewsFeedList, Warning, TEXT("MoveNewsCardToTop called off the game thread."));
+        TWeakObjectPtr<UNewsFeedList> WeakThis(this);
+        TWeakObjectPtr<UEventTickerWidget> WeakCard(Card);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakCard]()
+        {
+            if (WeakThis.IsValid())
+            {
+                WeakThis->MoveNewsCardToTop(WeakCard.Get());
+            }
+        });
         return false;
     }
 
@@ -153,6 +223,10 @@ bool UNewsFeedList::MoveNewsCardToTop(UEventTickerWidget* Card)
         if (UVerticalBoxSlot* slot = Cast<UVerticalBoxSlot>(PanelSlot))
         {
             slot->SetHorizontalAlignment(HAlign_Fill);
+        }
+        if (IsValid(FeedScrollBox))
+        {
+            FeedScrollBox->ScrollToStart();
         }
         return true;
     }
