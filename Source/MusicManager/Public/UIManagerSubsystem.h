@@ -136,6 +136,13 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI|Layer2")
     void HideHoverTooltip();
 
+    /** Show or hide artist hover detail widgets on layer-2. */
+    UFUNCTION(BlueprintCallable, Category="UI|Layer2")
+    void ShowArtistHover(const FArtistData& ArtistData, FVector2D ScreenPosition);
+
+    UFUNCTION(BlueprintCallable, Category="UI|Layer2")
+    void HideArtistHover();
+
 private:
     /** Configurable label id used for finance lookups. */
     UPROPERTY(EditAnywhere, Category="UI")

@@ -1,12 +1,13 @@
 #include "UI/SignedArtistItemWidget.h"
 
 #include "ArtistManagerSubsystem.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
-#include "Components/Border.h"
-#include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
-#include "RecordManagerSubsystem.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "UIManagerSubsystem.h"
 
 void USignedArtistItemWidget::NativeConstruct()
 {
@@ -24,34 +25,13 @@ void USignedArtistItemWidget::NativeConstruct()
         ItemButton->OnUnhovered.AddDynamic(this, &USignedArtistItemWidget::HandleUnhovered);
     }
 
-    if (UGameInstance* GameInstance = GetGameInstance())
+    if (IsValid(FrameImage))
     {
-        if (URecordManagerSubsystem* Subsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
+        if (UMaterialInterface* BaseMaterial = Cast<UMaterialInterface>(FrameImage->GetBrush().GetResourceObject()))
         {
-            RecordSubsystem = Subsystem;
-            TWeakObjectPtr<USignedArtistItemWidget> WeakThis(this);
-            RecordCreatedHandle = Subsystem->OnArtistRecordCreated.AddLambda([WeakThis](const FString& ArtistId)
-            {
-                if (!IsInGameThread())
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("SignedArtistItemWidget: Record created callback invoked off the game thread."));
-                    return;
-                }
-
-                if (USignedArtistItemWidget* StrongThis = WeakThis.Get())
-                {
-                    if (ArtistId == StrongThis->GetArtistId())
-                    {
-                        StrongThis->RefreshRecordCount();
-                    }
-                }
-            });
+            FrameMID = UMaterialInstanceDynamic::Create(BaseMaterial, this);
+            FrameImage->SetBrushFromMaterial(FrameMID);
         }
-    }
-
-    if (!LocalArtistData.ArtistName.IsEmpty())
-    {
-        RefreshRecordCount();
     }
 
     UpdateVisualState();
@@ -59,15 +39,6 @@ void USignedArtistItemWidget::NativeConstruct()
 
 void USignedArtistItemWidget::NativeDestruct()
 {
-    if (RecordCreatedHandle.IsValid())
-    {
-        if (URecordManagerSubsystem* Subsystem = RecordSubsystem.Get())
-        {
-            Subsystem->OnArtistRecordCreated.Remove(RecordCreatedHandle);
-        }
-        RecordCreatedHandle.Reset();
-    }
-
     if (IsValid(ItemButton))
     {
         ItemButton->OnClicked.RemoveDynamic(this, &USignedArtistItemWidget::HandleClicked);
@@ -81,16 +52,6 @@ void USignedArtistItemWidget::SetupItem(const FArtistData& InData, UTexture2D* P
 {
     LocalArtistData = InData;
 
-    if (IsValid(ArtistNameText))
-    {
-        ArtistNameText->SetText(FText::FromString(InData.ArtistName));
-    }
-
-    if (IsValid(ArtistGenreText))
-    {
-        ArtistGenreText->SetText(FText::FromString(InData.Genre));
-    }
-
     if (IsValid(PortraitImage))
     {
         if (PortraitTexture)
@@ -103,7 +64,7 @@ void USignedArtistItemWidget::SetupItem(const FArtistData& InData, UTexture2D* P
         }
     }
 
-    RefreshRecordCount();
+    UpdateVisualState();
 }
 
 void USignedArtistItemWidget::SetHovered(bool bHovered)
@@ -120,64 +81,43 @@ void USignedArtistItemWidget::SetSelected(bool bSelected)
 
 void USignedArtistItemWidget::UpdateVisualState()
 {
-    FLinearColor DesiredColor = NormalColor;
+    if (!FrameMID)
+    {
+        return;
+    }
 
+    const EArtistVisualState VisualState = DetermineVisualState();
+
+    FLinearColor StateColor = IdleStateColor;
+    switch (VisualState)
+    {
+    case EArtistVisualState::Rising:
+        StateColor = RisingStateColor;
+        break;
+    case EArtistVisualState::Stable:
+        StateColor = StableStateColor;
+        break;
+    case EArtistVisualState::Declining:
+        StateColor = DecliningStateColor;
+        break;
+    case EArtistVisualState::Idle:
+    default:
+        StateColor = IdleStateColor;
+        break;
+    }
+
+    float RimIntensity = BaseRimIntensity;
+    if (bIsHovered)
+    {
+        RimIntensity += HoverRimBoost;
+    }
     if (bIsSelected)
     {
-        DesiredColor = SelectedColor;
-    }
-    else if (bIsHovered)
-    {
-        DesiredColor = HoveredColor;
+        RimIntensity += SelectedRimBoost;
     }
 
-    if (IsValid(BackgroundBorder))
-    {
-        BackgroundBorder->SetBrushColor(DesiredColor);
-    }
-    else if (IsValid(ItemButton))
-    {
-        ItemButton->SetBackgroundColor(DesiredColor);
-    }
-}
-
-void USignedArtistItemWidget::RefreshRecordCount()
-{
-    if (!IsInGameThread())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("SignedArtistItemWidget: RefreshRecordCount called off the game thread."));
-        return;
-    }
-
-    if (!IsValid(RecordsNumText))
-    {
-        return;
-    }
-
-    if (LocalArtistData.ArtistName.IsEmpty())
-    {
-        RecordsNumText->SetText(FText::AsNumber(0));
-        return;
-    }
-
-    URecordManagerSubsystem* Subsystem = RecordSubsystem.Get();
-    if (!Subsystem)
-    {
-        if (UGameInstance* GameInstance = GetGameInstance())
-        {
-            Subsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>();
-            RecordSubsystem = Subsystem;
-        }
-    }
-
-    if (!Subsystem)
-    {
-        RecordsNumText->SetText(FText::AsNumber(0));
-        return;
-    }
-
-    const int32 RecordCount = Subsystem->GetRecordCountForArtist(LocalArtistData.ArtistName);
-    RecordsNumText->SetText(FText::AsNumber(RecordCount));
+    FrameMID->SetVectorParameterValue(TEXT("StateColor"), StateColor);
+    FrameMID->SetScalarParameterValue(TEXT("RimIntensity"), RimIntensity);
 }
 
 void USignedArtistItemWidget::HandleClicked()
@@ -207,6 +147,13 @@ void USignedArtistItemWidget::HandleHovered()
     }
 
     SetHovered(true);
+
+    if (UUIManagerSubsystem* UIManager = GetGameInstance() ? GetGameInstance()->GetSubsystem<UUIManagerSubsystem>() : nullptr)
+    {
+        // Layer-1 items never spawn widgets directly; route to the UI manager (Layer-2).
+        const FVector2D MousePosition = UWidgetLayoutLibrary::GetMousePositionOnViewport(this);
+        UIManager->ShowArtistHover(LocalArtistData, MousePosition);
+    }
 }
 
 void USignedArtistItemWidget::HandleUnhovered()
@@ -217,4 +164,36 @@ void USignedArtistItemWidget::HandleUnhovered()
     }
 
     SetHovered(false);
+
+    if (UUIManagerSubsystem* UIManager = GetGameInstance() ? GetGameInstance()->GetSubsystem<UUIManagerSubsystem>() : nullptr)
+    {
+        // Layer-2 hover details are dismissed centrally through the UI manager.
+        UIManager->HideArtistHover();
+    }
+}
+
+EArtistVisualState USignedArtistItemWidget::DetermineVisualState() const
+{
+    const float CombinedScore = (LocalArtistData.PerformanceScore
+        + LocalArtistData.StagePresence
+        + LocalArtistData.AudienceEngagement
+        + LocalArtistData.VocalQuality
+        + LocalArtistData.SongwritingQuality) / 5.0f;
+
+    if (CombinedScore >= 80.0f)
+    {
+        return EArtistVisualState::Rising;
+    }
+
+    if (CombinedScore >= 55.0f)
+    {
+        return EArtistVisualState::Stable;
+    }
+
+    if (CombinedScore >= 30.0f)
+    {
+        return EArtistVisualState::Declining;
+    }
+
+    return EArtistVisualState::Idle;
 }

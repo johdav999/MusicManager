@@ -8,7 +8,17 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSignedArtistClicked, FString, ArtistId);
 
 class UTexture2D;
-class URecordManagerSubsystem;
+class UMaterialInstanceDynamic;
+
+/** Semantic visual intent for Layer-1 signed artist portrait items. */
+UENUM()
+enum class EArtistVisualState : uint8
+{
+    Rising,
+    Stable,
+    Declining,
+    Idle
+};
 
 UCLASS()
 class MUSICMANAGER_API USignedArtistItemWidget : public UUserWidget
@@ -29,15 +39,13 @@ public:
 
     void UpdateVisualState();
 
-    void RefreshRecordCount();
+    EArtistVisualState DetermineVisualState() const;
 
     UPROPERTY(BlueprintAssignable, Category="Events")
     FOnSignedArtistClicked OnArtistClicked;
 
 private:
     FArtistData LocalArtistData;
-    TWeakObjectPtr<URecordManagerSubsystem> RecordSubsystem;
-    FDelegateHandle RecordCreatedHandle;
 
 protected:
     UFUNCTION()
@@ -52,29 +60,35 @@ protected:
     UPROPERTY(meta=(BindWidget))
     class UButton* ItemButton;
 
-    UPROPERTY(meta=(BindWidgetOptional))
-    class UBorder* BackgroundBorder;
-
     UPROPERTY(meta=(BindWidget))
     class UImage* PortraitImage;
 
     UPROPERTY(meta=(BindWidget))
-    class UTextBlock* ArtistNameText;
+    class UImage* FrameImage;
 
-    UPROPERTY(meta=(BindWidget))
-    class UTextBlock* ArtistGenreText;
-
-    UPROPERTY(meta=(BindWidget))
-    class UTextBlock* RecordsNumText;
+    UPROPERTY(Transient)
+    UMaterialInstanceDynamic* FrameMID = nullptr;
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
-    FLinearColor NormalColor = FLinearColor::White;
+    FLinearColor RisingStateColor = FLinearColor(0.55f, 0.85f, 1.0f, 1.0f);
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
-    FLinearColor HoveredColor = FLinearColor(0.9f, 0.9f, 0.9f, 1.0f);
+    FLinearColor StableStateColor = FLinearColor(0.75f, 0.9f, 0.7f, 1.0f);
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
-    FLinearColor SelectedColor = FLinearColor(0.75f, 0.85f, 1.0f, 1.0f);
+    FLinearColor DecliningStateColor = FLinearColor(1.0f, 0.7f, 0.55f, 1.0f);
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    FLinearColor IdleStateColor = FLinearColor(0.6f, 0.6f, 0.65f, 1.0f);
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    float BaseRimIntensity = 0.25f;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    float HoverRimBoost = 0.35f;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    float SelectedRimBoost = 0.6f;
 
     bool bIsHovered = false;
     bool bIsSelected = false;
