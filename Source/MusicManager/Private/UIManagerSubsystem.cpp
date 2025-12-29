@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "Layout.h"
 #include "ArtistManagerSubsystem.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Logging/LogMacros.h"
 #include "MusicPlayerComponent.h"
 #include "UI/StatusWidget.h"
@@ -573,9 +574,9 @@ void UUIManagerSubsystem::HideHoverTooltip()
     });
 }
 
-void UUIManagerSubsystem::ShowArtistHover(const FArtistData& ArtistData, FVector2D ScreenPosition)
+void UUIManagerSubsystem::ShowArtistHover(const FArtistData& ArtistData)
 {
-    ExecuteOnGameThread([this, ArtistData, ScreenPosition]()
+    ExecuteOnGameThread([this, ArtistData]()
     {
         if (ULayout* Layout = ActiveLayout.Get())
         {
@@ -587,7 +588,28 @@ void UUIManagerSubsystem::ShowArtistHover(const FArtistData& ArtistData, FVector
                 }
             }
 
-            Layout->ShowArtistHoverDetail(ArtistData, ScreenPosition);
+            FVector2D MousePosition = UWidgetLayoutLibrary::GetMousePositionOnViewport(this);
+            FVector2D ViewportSize = UWidgetLayoutLibrary::GetViewportSize(this);
+            const float ViewportScale = UWidgetLayoutLibrary::GetViewportScale(this);
+            if (ViewportScale > 0.f)
+            {
+                MousePosition /= ViewportScale;
+                ViewportSize /= ViewportScale;
+            }
+
+            const FVector2D HoverOffset(24.0f, 24.0f);
+            const float SafePadding = 24.0f;
+            FVector2D TargetPosition = MousePosition + HoverOffset;
+
+            if (ViewportSize.X > 0.0f && ViewportSize.Y > 0.0f)
+            {
+                const float MaxX = FMath::Max(SafePadding, ViewportSize.X - SafePadding);
+                const float MaxY = FMath::Max(SafePadding, ViewportSize.Y - SafePadding);
+                TargetPosition.X = FMath::Clamp(TargetPosition.X, SafePadding, MaxX);
+                TargetPosition.Y = FMath::Clamp(TargetPosition.Y, SafePadding, MaxY);
+            }
+
+            Layout->ShowArtistHoverDetail(ArtistData, TargetPosition);
         }
     });
 }

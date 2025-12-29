@@ -136,9 +136,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="UI|Layer2")
     void HideHoverTooltip();
 
-    /** Show or hide artist hover detail widgets on layer-2. */
+    /** Layer-2 hover detail widgets are positioned and managed centrally. */
     UFUNCTION(BlueprintCallable, Category="UI|Layer2")
-    void ShowArtistHover(const FArtistData& ArtistData, FVector2D ScreenPosition);
+    void ShowArtistHover(const FArtistData& ArtistData);
 
     UFUNCTION(BlueprintCallable, Category="UI|Layer2")
     void HideArtistHover();

@@ -224,6 +224,60 @@ FString UArtistManagerSubsystem::GetSelectedArtist() const
     return SelectedArtistId;
 }
 
+EArtistVisualState UArtistManagerSubsystem::GetArtistVisualState(const FString& ArtistId) const
+{
+    const FArtistContract* Contract = GetContractByArtistId(ArtistId);
+    if (!Contract)
+    {
+        Contract = FindContractByArtistName(ArtistId);
+    }
+
+    const FArtistData* ArtistData = nullptr;
+    if (Contract)
+    {
+        ArtistData = &Contract->ArtistData;
+    }
+    else
+    {
+        for (const FArtistData& Artist : UnsignedArtists)
+        {
+            if (Artist.ArtistId == ArtistId || Artist.ArtistName == ArtistId)
+            {
+                ArtistData = &Artist;
+                break;
+            }
+        }
+    }
+
+    if (!ArtistData)
+    {
+        return EArtistVisualState::Idle;
+    }
+
+    const float CombinedScore = (ArtistData->PerformanceScore
+        + ArtistData->StagePresence
+        + ArtistData->AudienceEngagement
+        + ArtistData->VocalQuality
+        + ArtistData->SongwritingQuality) / 5.0f;
+
+    if (CombinedScore >= 80.0f)
+    {
+        return EArtistVisualState::Rising;
+    }
+
+    if (CombinedScore >= 55.0f)
+    {
+        return EArtistVisualState::Stable;
+    }
+
+    if (CombinedScore >= 30.0f)
+    {
+        return EArtistVisualState::Declining;
+    }
+
+    return EArtistVisualState::Idle;
+}
+
 void UArtistManagerSubsystem::LoadArtistsFromDataTable()
 {
     ensure(IsInGameThread());

@@ -37,6 +37,16 @@ struct FArtistData : public FTableRowBase
     FString ImageAssetRef = TEXT("");
 };
 
+/** Semantic visual intent for signed artist portraits. */
+UENUM()
+enum class EArtistVisualState : uint8
+{
+    Rising,
+    Stable,
+    Declining,
+    Idle
+};
+
 USTRUCT(BlueprintType)
 struct FDealData
 {
