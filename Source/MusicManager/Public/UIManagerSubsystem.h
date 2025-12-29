@@ -7,11 +7,14 @@
 #include "FArtistContract.h"
 #include "Async/Async.h"
 #include "Templates/UnrealTemplate.h"
+#include "UI/MainCanvasHost.h"
+#include "UI/TooltipData.h"
 #include "UIManagerSubsystem.generated.h"
 
 class ULayout;
 class UMusicPlayerComponent;
 class UStatusWidget;
+class UUserWidget;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnNewsSelected, const FMusicNewsEvent&);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCurrentLabelChanged, const FString&, LabelId);
@@ -110,6 +113,29 @@ public:
      */
     void HandleCommandAction(const FString& CommandName);
 
+    /** Selects an entity and updates the persistent inspector panel. */
+    UFUNCTION(BlueprintCallable, Category="UI|Selection")
+    void SetSelectedEntity(UObject* Entity);
+
+    /** Display a layer-3 screen (decision UI) via the main canvas host. */
+    UFUNCTION(BlueprintCallable, Category="UI|Layer3")
+    void ShowLayer3Screen(TSubclassOf<UUserWidget> ScreenClass);
+
+    /** Close the active layer-3 screen. */
+    UFUNCTION(BlueprintCallable, Category="UI|Layer3")
+    void CloseLayer3Screen();
+
+    /** Update the canvas state (scene + decision context). */
+    UFUNCTION(BlueprintCallable, Category="UI|Canvas")
+    void SetCanvasState(ECanvasState NewState);
+
+    /** Show or hide hover tooltips on layer-2. */
+    UFUNCTION(BlueprintCallable, Category="UI|Layer2")
+    void ShowHoverTooltip(const FTooltipData& Data);
+
+    UFUNCTION(BlueprintCallable, Category="UI|Layer2")
+    void HideHoverTooltip();
+
 private:
     /** Configurable label id used for finance lookups. */
     UPROPERTY(EditAnywhere, Category="UI")
@@ -125,6 +151,9 @@ private:
     /** Weak pointer to the active status widget displayed in the layout. */
     UPROPERTY()
     TWeakObjectPtr<UStatusWidget> ActiveStatusWidget;
+
+    UPROPERTY()
+    TWeakObjectPtr<UObject> SelectedEntity;
 
     UPROPERTY()
     UMusicPlayerComponent* MusicPlayerComponent;
@@ -148,4 +177,3 @@ private:
         });
     }
 };
-
