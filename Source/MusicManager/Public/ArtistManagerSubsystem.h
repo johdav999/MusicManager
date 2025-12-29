@@ -101,6 +101,9 @@ public:
     UFUNCTION()
     FString GetSelectedArtist() const;
 
+    /** Centralized visual state evaluation for UI-layer queries. */
+    EArtistVisualState GetArtistVisualState(const FString& ArtistId) const;
+
     const FArtistContract* GetContractByArtistId(const FString& ArtistId) const;
 
     void GetSignedArtistData(TArray<FArtistData>& OutArtistData) const;

@@ -10,16 +10,6 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSignedArtistClicked, FString, Art
 class UTexture2D;
 class UMaterialInstanceDynamic;
 
-/** Semantic visual intent for Layer-1 signed artist portrait items. */
-UENUM()
-enum class EArtistVisualState : uint8
-{
-    Rising,
-    Stable,
-    Declining,
-    Idle
-};
-
 UCLASS()
 class MUSICMANAGER_API USignedArtistItemWidget : public UUserWidget
 {
@@ -29,6 +19,7 @@ public:
     virtual void NativeConstruct() override;
     virtual void NativeDestruct() override;
 
+    /** Layer-1 widget: never spawns widgets, never calculates business rules, never displays text-heavy info. */
     void SetupItem(const FArtistData& InData, UTexture2D* PortraitTexture);
 
     void SetHovered(bool bHovered);
@@ -89,6 +80,9 @@ protected:
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
     float SelectedRimBoost = 0.6f;
+
+    FLinearColor CachedStateColor = FLinearColor::Transparent;
+    float CachedRimIntensity = -1.0f;
 
     bool bIsHovered = false;
     bool bIsSelected = false;

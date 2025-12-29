@@ -1,7 +1,6 @@
 #include "UI/SignedArtistItemWidget.h"
 
 #include "ArtistManagerSubsystem.h"
-#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Engine/Texture2D.h"
@@ -116,8 +115,17 @@ void USignedArtistItemWidget::UpdateVisualState()
         RimIntensity += SelectedRimBoost;
     }
 
-    FrameMID->SetVectorParameterValue(TEXT("StateColor"), StateColor);
-    FrameMID->SetScalarParameterValue(TEXT("RimIntensity"), RimIntensity);
+    if (StateColor != CachedStateColor)
+    {
+        FrameMID->SetVectorParameterValue(TEXT("StateColor"), StateColor);
+        CachedStateColor = StateColor;
+    }
+
+    if (!FMath::IsNearlyEqual(RimIntensity, CachedRimIntensity))
+    {
+        FrameMID->SetScalarParameterValue(TEXT("RimIntensity"), RimIntensity);
+        CachedRimIntensity = RimIntensity;
+    }
 }
 
 void USignedArtistItemWidget::HandleClicked()
@@ -150,9 +158,8 @@ void USignedArtistItemWidget::HandleHovered()
 
     if (UUIManagerSubsystem* UIManager = GetGameInstance() ? GetGameInstance()->GetSubsystem<UUIManagerSubsystem>() : nullptr)
     {
-        // Layer-1 items never spawn widgets directly; route to the UI manager (Layer-2).
-        const FVector2D MousePosition = UWidgetLayoutLibrary::GetMousePositionOnViewport(this);
-        UIManager->ShowArtistHover(LocalArtistData, MousePosition);
+        // Layer-1 items express intent only; layout decisions live in the UI manager (Layer-2).
+        UIManager->ShowArtistHover(LocalArtistData);
     }
 }
 
@@ -174,26 +181,12 @@ void USignedArtistItemWidget::HandleUnhovered()
 
 EArtistVisualState USignedArtistItemWidget::DetermineVisualState() const
 {
-    const float CombinedScore = (LocalArtistData.PerformanceScore
-        + LocalArtistData.StagePresence
-        + LocalArtistData.AudienceEngagement
-        + LocalArtistData.VocalQuality
-        + LocalArtistData.SongwritingQuality) / 5.0f;
-
-    if (CombinedScore >= 80.0f)
+    if (const UGameInstance* GI = GetGameInstance())
     {
-        return EArtistVisualState::Rising;
+        if (const UArtistManagerSubsystem* Sub = GI->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            return Sub->GetArtistVisualState(LocalArtistData.ArtistName);
+        }
     }
-
-    if (CombinedScore >= 55.0f)
-    {
-        return EArtistVisualState::Stable;
-    }
-
-    if (CombinedScore >= 30.0f)
-    {
-        return EArtistVisualState::Declining;
-    }
-
     return EArtistVisualState::Idle;
 }
