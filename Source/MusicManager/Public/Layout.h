@@ -21,6 +21,7 @@ class UUIManagerSubsystem;
 class USignedArtistPanelWidget;
 class UArtistManagerSubsystem;
 class URegionMapWidget;
+class UArtistHoverDetailWidget;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
@@ -93,6 +94,8 @@ public:
     /** Layer-2 hover tooltip routing (UI manager only). */
     void ShowHoverTooltip(const FTooltipData& Data);
     void HideHoverTooltip();
+    void ShowArtistHoverDetail(const FArtistData& ArtistData, const FVector2D& ScreenPosition);
+    void HideArtistHoverDetail();
 
     /** Toggle the layer-2 root to enforce hover-only interactions. */
     void SetLayer2Enabled(bool bEnabled);
@@ -112,6 +115,9 @@ protected:
 
     UPROPERTY(meta=(BindWidgetOptional))
     UHoverTooltipManagerWidget* HoverTooltipManager;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UArtistHoverDetailWidget* ArtistHoverDetailWidget;
 
     UPROPERTY(meta=(BindWidgetOptional))
     UNewsFeedList* NewsFeedList;

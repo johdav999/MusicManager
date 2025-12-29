@@ -573,6 +573,36 @@ void UUIManagerSubsystem::HideHoverTooltip()
     });
 }
 
+void UUIManagerSubsystem::ShowArtistHover(const FArtistData& ArtistData, FVector2D ScreenPosition)
+{
+    ExecuteOnGameThread([this, ArtistData, ScreenPosition]()
+    {
+        if (ULayout* Layout = ActiveLayout.Get())
+        {
+            if (UMainCanvasHost* CanvasHost = Layout->GetMainCanvasHost())
+            {
+                if (CanvasHost->IsLayer3Active())
+                {
+                    return;
+                }
+            }
+
+            Layout->ShowArtistHoverDetail(ArtistData, ScreenPosition);
+        }
+    });
+}
+
+void UUIManagerSubsystem::HideArtistHover()
+{
+    ExecuteOnGameThread([this]()
+    {
+        if (ULayout* Layout = ActiveLayout.Get())
+        {
+            Layout->HideArtistHoverDetail();
+        }
+    });
+}
+
 void UUIManagerSubsystem::RebuildUI()
 {
     ExecuteOnGameThread([this]()

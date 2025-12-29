@@ -13,10 +13,12 @@
 #include "ArtistManagerSubsystem.h"
 #include "UIManagerSubsystem.h"
 #include "UI/HoverTooltipManagerWidget.h"
+#include "UI/ArtistHoverDetailWidget.h"
 #include "UI/InspectorPanelWidget.h"
 #include "UI/MainCanvasHost.h"
 #include "UI/SignedArtistPanelWidget.h"
 #include "UI/RegionMapWidget.h"
+#include "Components/CanvasPanelSlot.h"
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -464,6 +466,37 @@ void ULayout::HideHoverTooltip()
     {
         HoverTooltipManager->HideTooltip();
     }
+}
+
+void ULayout::ShowArtistHoverDetail(const FArtistData& ArtistData, const FVector2D& ScreenPosition)
+{
+    if (!IsValid(ArtistHoverDetailWidget))
+    {
+        return;
+    }
+
+    // Layer-2 only: informational hover details, no actions.
+    ArtistHoverDetailWidget->SetupFromArtistData(ArtistData);
+    ArtistHoverDetailWidget->SetVisibility(ESlateVisibility::Visible);
+
+    if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(ArtistHoverDetailWidget->Slot))
+    {
+        CanvasSlot->SetPosition(ScreenPosition);
+    }
+    else
+    {
+        ArtistHoverDetailWidget->SetPositionInViewport(ScreenPosition, false);
+    }
+}
+
+void ULayout::HideArtistHoverDetail()
+{
+    if (!IsValid(ArtistHoverDetailWidget))
+    {
+        return;
+    }
+
+    ArtistHoverDetailWidget->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 void ULayout::SetLayer2Enabled(bool bEnabled)
