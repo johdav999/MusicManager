@@ -7,12 +7,16 @@
 #include "EventTickerWidget.h"
 #include "UI/RecordWidget.h"
 #include "AuditionTypes.h"
+#include "UI/TooltipData.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "Layout.generated.h"
 
 class UNewsFeedList;
 class UUserWidget;
 class UAuditionWidget;
+class UHoverTooltipManagerWidget;
+class UInspectorPanelWidget;
+class UMainCanvasHost;
 class UUIManagerSubsystem;
 class USignedArtistPanelWidget;
 class UArtistManagerSubsystem;
@@ -80,7 +84,35 @@ public:
     UFUNCTION(BlueprintCallable, Category="Layout")
     UAuditionWidget* GetAuditionWidget() const;
 
+    UFUNCTION(BlueprintCallable, Category="Layout")
+    UMainCanvasHost* GetMainCanvasHost() const { return MainCanvasHost; }
+
+    UFUNCTION(BlueprintCallable, Category="Layout")
+    UInspectorPanelWidget* GetInspectorPanel() const { return InspectorPanelWidget; }
+
+    /** Layer-2 hover tooltip routing (UI manager only). */
+    void ShowHoverTooltip(const FTooltipData& Data);
+    void HideHoverTooltip();
+
+    /** Toggle the layer-2 root to enforce hover-only interactions. */
+    void SetLayer2Enabled(bool bEnabled);
+
 protected:
+    UPROPERTY(meta=(BindWidgetOptional))
+    UWidget* Layer1_Root;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UWidget* Layer2_Root;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UInspectorPanelWidget* InspectorPanelWidget;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UMainCanvasHost* MainCanvasHost;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UHoverTooltipManagerWidget* HoverTooltipManager;
+
     UPROPERTY(meta=(BindWidgetOptional))
     UNewsFeedList* NewsFeedList;
 

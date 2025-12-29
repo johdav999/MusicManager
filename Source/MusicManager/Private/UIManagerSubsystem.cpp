@@ -7,6 +7,8 @@
 #include "Logging/LogMacros.h"
 #include "MusicPlayerComponent.h"
 #include "UI/StatusWidget.h"
+#include "UI/InspectorPanelWidget.h"
+#include "UI/MainCanvasHost.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogUIManagerSubsystem, Log, All);
 
@@ -454,6 +456,123 @@ void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
     });
 }
 
+void UUIManagerSubsystem::SetSelectedEntity(UObject* Entity)
+{
+    const TWeakObjectPtr<UObject> WeakEntity(Entity);
+    ExecuteOnGameThread([this, WeakEntity]()
+    {
+        SelectedEntity = WeakEntity;
+
+        if (ULayout* Layout = ActiveLayout.Get())
+        {
+            if (UInspectorPanelWidget* InspectorPanel = Layout->GetInspectorPanel())
+            {
+                InspectorPanel->SetSelectedEntity(WeakEntity.Get());
+            }
+        }
+    });
+}
+
+void UUIManagerSubsystem::ShowLayer3Screen(TSubclassOf<UUserWidget> ScreenClass)
+{
+    ExecuteOnGameThread([this, ScreenClass]()
+    {
+        if (!ScreenClass)
+        {
+            return;
+        }
+
+        UGameInstance* GameInstance = GetGameInstance();
+        if (!IsValid(GameInstance))
+        {
+            return;
+        }
+
+        ULayout* Layout = ActiveLayout.Get();
+        if (!IsValid(Layout))
+        {
+            return;
+        }
+
+        UMainCanvasHost* CanvasHost = Layout->GetMainCanvasHost();
+        if (!IsValid(CanvasHost))
+        {
+            return;
+        }
+
+        UUserWidget* Screen = CreateWidget<UUserWidget>(GameInstance, ScreenClass);
+        if (!IsValid(Screen))
+        {
+            return;
+        }
+
+        // Layer-3 screens are only mounted by the UI manager to enforce strict layer boundaries.
+        CanvasHost->SetLayer3Widget(Screen);
+        Layout->SetLayer2Enabled(false);
+    });
+}
+
+void UUIManagerSubsystem::CloseLayer3Screen()
+{
+    ExecuteOnGameThread([this]()
+    {
+        if (ULayout* Layout = ActiveLayout.Get())
+        {
+            if (UMainCanvasHost* CanvasHost = Layout->GetMainCanvasHost())
+            {
+                CanvasHost->ClearLayer3Widget();
+            }
+
+            // Re-enable Layer-2 hover once the decision screen is closed.
+            Layout->SetLayer2Enabled(true);
+        }
+    });
+}
+
+void UUIManagerSubsystem::SetCanvasState(ECanvasState NewState)
+{
+    ExecuteOnGameThread([this, NewState]()
+    {
+        if (ULayout* Layout = ActiveLayout.Get())
+        {
+            if (UMainCanvasHost* CanvasHost = Layout->GetMainCanvasHost())
+            {
+                CanvasHost->SetCanvasState(NewState);
+            }
+        }
+    });
+}
+
+void UUIManagerSubsystem::ShowHoverTooltip(const FTooltipData& Data)
+{
+    ExecuteOnGameThread([this, Data]()
+    {
+        if (ULayout* Layout = ActiveLayout.Get())
+        {
+            if (UMainCanvasHost* CanvasHost = Layout->GetMainCanvasHost())
+            {
+                if (CanvasHost->IsLayer3Active())
+                {
+                    return;
+                }
+            }
+
+            Layout->ShowHoverTooltip(Data);
+        }
+    });
+}
+
+void UUIManagerSubsystem::HideHoverTooltip()
+{
+    ExecuteOnGameThread([this]()
+    {
+        if (ULayout* Layout = ActiveLayout.Get())
+        {
+            Layout->HideHoverTooltip();
+        }
+    });
+}
+
 void UUIManagerSubsystem::RebuildUI()
 {
     ExecuteOnGameThread([this]()
@@ -499,4 +618,3 @@ void UUIManagerSubsystem::RebuildUI()
         NewLayout->AddToViewport();
     });
 }
-

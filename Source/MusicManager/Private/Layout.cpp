@@ -12,6 +12,9 @@
 #include "Engine/GameInstance.h"
 #include "ArtistManagerSubsystem.h"
 #include "UIManagerSubsystem.h"
+#include "UI/HoverTooltipManagerWidget.h"
+#include "UI/InspectorPanelWidget.h"
+#include "UI/MainCanvasHost.h"
 #include "UI/SignedArtistPanelWidget.h"
 #include "UI/RegionMapWidget.h"
 
@@ -24,12 +27,23 @@ void ULayout::NativeConstruct()
 {
     Super::NativeConstruct();
 
+    // Root layout registers with the UI manager; widgets should not spawn other widgets directly.
     if (UUIManagerSubsystem* UIManager = GetUIManagerSubsystem())
     {
         if (IsValid(UIManager))
         {
             UIManager->RegisterLayout(this);
         }
+    }
+
+    if (Layer2_Root)
+    {
+        Layer2_Root->SetVisibility(ESlateVisibility::Visible);
+    }
+
+    if (MainCanvasHost)
+    {
+        MainCanvasHost->SetCanvasState(ECanvasState::Overview);
     }
 
     if (!RegionMapWidget && WidgetTree)
@@ -436,6 +450,32 @@ UAuditionWidget* ULayout::GetAuditionWidget() const
     return AuditionWidget;
 }
 
+void ULayout::ShowHoverTooltip(const FTooltipData& Data)
+{
+    if (IsValid(HoverTooltipManager))
+    {
+        HoverTooltipManager->ShowTooltip(Data);
+    }
+}
+
+void ULayout::HideHoverTooltip()
+{
+    if (IsValid(HoverTooltipManager))
+    {
+        HoverTooltipManager->HideTooltip();
+    }
+}
+
+void ULayout::SetLayer2Enabled(bool bEnabled)
+{
+    if (!Layer2_Root)
+    {
+        return;
+    }
+
+    Layer2_Root->SetVisibility(bEnabled ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+}
+
 void ULayout::HandleArtistSelected(FString ArtistId)
 {
     if (!IsInGameThread())
@@ -451,9 +491,15 @@ void ULayout::HandleArtistSelected(FString ArtistId)
         return;
     }
 
+    if (UArtistManagerSubsystem* ArtistSubsystem = GetArtistManagerSubsystem())
+    {
+        ArtistSubsystem->SetSelectedArtist(ArtistId);
+    }
+
     if (UUIManagerSubsystem* UI = GetUIManagerSubsystem())
     {
-        UI->ShowContractForArtist(ArtistId);
+        // Route selection through the UI manager so the inspector panel can update.
+        UI->SetSelectedEntity(GetArtistManagerSubsystem());
     }
 }
 
