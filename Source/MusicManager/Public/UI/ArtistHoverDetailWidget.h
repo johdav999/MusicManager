@@ -28,6 +28,9 @@ protected:
     UTextBlock* GenreText;
 
     UPROPERTY(meta=(BindWidgetOptional))
+    UTextBlock* PerformanceValueText;
+
+    UPROPERTY(meta = (BindWidgetOptional))
     UTextBlock* PopularityValueText;
 
     UPROPERTY(meta=(BindWidgetOptional))
