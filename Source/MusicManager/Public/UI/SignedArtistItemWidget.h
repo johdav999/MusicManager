@@ -3,12 +3,15 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "AuditionTypes.h"
+#include "ArtistActionAvailability.h"
+#include "TimerManager.h"
 #include "SignedArtistItemWidget.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSignedArtistClicked, FString, ArtistId);
 
 class UTexture2D;
 class UMaterialInstanceDynamic;
+class UArtistActionIconSet;
 
 UCLASS()
 class MUSICMANAGER_API USignedArtistItemWidget : public UUserWidget
@@ -48,6 +51,13 @@ protected:
     UFUNCTION()
     void HandleUnhovered();
 
+    void HandleActionAvailabilityChanged(const FString& ArtistId, EArtistActionAvailability NewAvailability);
+    void ApplyActionAvailability(EArtistActionAvailability NewAvailability, bool bTriggerAttention);
+    void RefreshActionAvailabilityFromSubsystem(bool bTriggerAttention);
+    const UTexture2D* ResolveActionIcon(EArtistActionAvailability Availability) const;
+    void TriggerAttentionBoost();
+    void ResetAttentionBoost();
+
     UPROPERTY(meta=(BindWidget))
     class UButton* ItemButton;
 
@@ -57,8 +67,20 @@ protected:
     UPROPERTY(meta=(BindWidget))
     class UImage* FrameImage;
 
+    UPROPERTY(meta=(BindWidget))
+    class UImage* ActionIconImage;
+
     UPROPERTY(Transient)
     UMaterialInstanceDynamic* FrameMID = nullptr;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    UArtistActionIconSet* ActionIconSet = nullptr;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    float AttentionBoostValue = 1.3f;
+
+    UPROPERTY(EditDefaultsOnly, Category="Appearance")
+    float AttentionBoostResetDelay = 0.7f;
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
     FLinearColor RisingStateColor = FLinearColor(0.55f, 0.85f, 1.0f, 1.0f);
@@ -83,6 +105,10 @@ protected:
 
     FLinearColor CachedStateColor = FLinearColor::Transparent;
     float CachedRimIntensity = -1.0f;
+    EArtistActionAvailability CachedAvailability = EArtistActionAvailability::None;
+
+    FTimerHandle AttentionBoostTimerHandle;
+    FDelegateHandle ActionAvailabilityHandle;
 
     bool bIsHovered = false;
     bool bIsSelected = false;

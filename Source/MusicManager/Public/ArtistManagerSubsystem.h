@@ -5,6 +5,7 @@
 #include "FArtistContract.h"
 #include "Engine/DataTable.h"
 #include "MarketManagerSubsystem.h"
+#include "ArtistActionAvailability.h"
 #include "ArtistManagerSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArtistSigned, const FArtistContract&, SignedContract);
@@ -12,6 +13,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnArtistRejected, const FString&, A
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnContractExpired, const FArtistContract&, ExpiredContract);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnContractsUpdated, const TArray<FArtistContract>&, UpdatedContracts);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnArtistListChanged);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnArtistActionAvailabilityChanged, const FString& /*ArtistId*/, EArtistActionAvailability /*NewAvailability*/);
 
 class UMusicSaveGame;
 class USong;
@@ -55,6 +57,7 @@ struct FArtistMarketModifiers
 public:
     UArtistManagerSubsystem();
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+    virtual void Deinitialize() override;
 
     UFUNCTION(BlueprintCallable, Category="Artists")
     void GetUnsignedArtists(TArray<FArtistData>& OutArtists) const;
@@ -70,6 +73,15 @@ public:
     void GetSongsForArtist(const FString& ArtistId, TArray<USong*>& OutSongs) const;
 
     void RegisterSongToArtist(const FString& ArtistId, const FString& SongId);
+
+    /** Determine if the artist has unrecorded songs available for recording. */
+    bool IsArtistReadyToRecord(const FString& ArtistId) const;
+
+    /** Returns the current action availability for UI consumption. */
+    EArtistActionAvailability GetArtistActionAvailability(const FString& ArtistId) const;
+
+    /** Refresh cached action availability and emit change notifications when needed. */
+    void RefreshArtistActionAvailability(const FString& ArtistId);
 
     UFUNCTION(BlueprintCallable, Category="Artists")
     void LoadArtistsFromDataTable();
@@ -158,6 +170,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category="Contracts")
     FOnArtistListChanged OnArtistListChanged;
 
+    /** Fired when action availability changes (state transitions only). */
+    FOnArtistActionAvailabilityChanged OnArtistActionAvailabilityChanged;
+
     /** Runtime momentum tracking per artist. */
     UPROPERTY()
     TMap<FString, float> ArtistMomentum;
@@ -172,4 +187,14 @@ public:
 
 protected:
     int32 CalculateContractDurationMonths(const FArtistDealTerms& Deal) const;
+
+    void RefreshAllArtistActionAvailability();
+    EArtistActionAvailability EvaluateArtistActionAvailability(const FString& ArtistId) const;
+    void UpdateArtistActionAvailability(const FString& ArtistId);
+    void HandleArtistRecordCreated(const FString& ArtistId);
+
+    UPROPERTY()
+    TMap<FString, EArtistActionAvailability> ArtistActionAvailability;
+
+    FDelegateHandle RecordCreatedHandle;
 };

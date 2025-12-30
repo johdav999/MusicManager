@@ -146,6 +146,11 @@ bool URecordManagerSubsystem::SubmitRecordingIntent(const FRecordRecordingIntent
         return false;
     }
 
+    if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+    {
+        ArtistSubsystem->RefreshArtistActionAvailability(SanitizedIntent.ArtistId);
+    }
+
     const FString RecordingId = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens);
     ActiveRecordingIntents.Add(RecordingId, SanitizedIntent);
 
@@ -428,11 +433,11 @@ void URecordManagerSubsystem::CompleteRecording(const FString& RecordingId, cons
     const FString NewRecordId = CreateRecord(NewRecord);
     RecordStates.FindOrAdd(NewRecordId) = ERecordLifecycleState::Recorded;
 
-    ensureMsgf(IsInGameThread(), TEXT("RecordManagerSubsystem: Record creation must occur on the game thread."));
-    OnArtistRecordCreated.Broadcast(Intent->ArtistId);
-
     SongSubsystem->MarkSongsRecorded(Intent->SongIds, NewRecordId);
     SongSubsystem->UnlockSongs(Intent->SongIds);
+
+    ensureMsgf(IsInGameThread(), TEXT("RecordManagerSubsystem: Record creation must occur on the game thread."));
+    OnArtistRecordCreated.Broadcast(Intent->ArtistId);
 
     ActiveRecordingIntents.Remove(RecordingId);
     RecordingStartDates.Remove(RecordingId);
