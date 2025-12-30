@@ -191,7 +191,7 @@ protected:
     void RefreshAllArtistActionAvailability();
     EArtistActionAvailability EvaluateArtistActionAvailability(const FString& ArtistId) const;
     void UpdateArtistActionAvailability(const FString& ArtistId);
-    void HandleArtistRecordCreated(const FString& ArtistId);
+    void HandleArtistRecordCreated( FString ArtistId);
 
     UPROPERTY()
     TMap<FString, EArtistActionAvailability> ArtistActionAvailability;

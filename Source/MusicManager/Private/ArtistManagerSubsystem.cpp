@@ -740,7 +740,7 @@ void UArtistManagerSubsystem::UpdateArtistActionAvailability(const FString& Arti
     OnArtistActionAvailabilityChanged.Broadcast(ArtistId, NewAvailability);
 }
 
-void UArtistManagerSubsystem::HandleArtistRecordCreated(const FString& ArtistId)
+void UArtistManagerSubsystem::HandleArtistRecordCreated(FString ArtistId)
 {
     UpdateArtistActionAvailability(ArtistId);
 }

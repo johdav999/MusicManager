@@ -11,7 +11,10 @@
 class USongManagerSubsystem;
 class UGameTimeSubsystem;
 
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnArtistRecordCreated, FString /* ArtistId */);
+DECLARE_MULTICAST_DELEGATE_OneParam(
+    FOnArtistRecordCreated,
+    FString /* ArtistId */
+);
 
 UENUM(BlueprintType)
 enum class ERecordFormat : uint8
