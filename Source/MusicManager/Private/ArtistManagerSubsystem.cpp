@@ -3,6 +3,7 @@
 #include "Engine/Engine.h"
 #include "GameTimeSubsystem.h"
 #include "MusicSaveGame.h"
+#include "RecordManagerSubsystem.h"
 #include "SongManagerSubsystem.h"
 #include "Song.h"
 #include "Async/Async.h"
@@ -32,6 +33,7 @@ void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     ActiveContracts.Reset();
     ExpiredContracts.Reset();
+    ArtistActionAvailability.Reset();
     //static ConstructorHelpers::FObjectFinder<UDataTable> ArtistDataObj(
     //    TEXT("/Game/Data/ArtistData.ArtistData")
     //);
@@ -53,7 +55,29 @@ void UArtistManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
         {
             CurrentGameDate = TimeSubsystem->GetCurrentGameDate();
         }
+
+        if (URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
+        {
+            RecordCreatedHandle = RecordSubsystem->OnArtistRecordCreated.AddUObject(this, &UArtistManagerSubsystem::HandleArtistRecordCreated);
+        }
     }
+}
+
+void UArtistManagerSubsystem::Deinitialize()
+{
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
+        {
+            if (RecordCreatedHandle.IsValid())
+            {
+                RecordSubsystem->OnArtistRecordCreated.Remove(RecordCreatedHandle);
+            }
+        }
+    }
+
+    ArtistActionAvailability.Reset();
+    Super::Deinitialize();
 }
 
 void UArtistManagerSubsystem::GetUnsignedArtists(TArray<FArtistData>& OutArtists) const
@@ -188,6 +212,53 @@ void UArtistManagerSubsystem::RegisterSongToArtist(const FString& ArtistId, cons
             }
         }
     }
+
+    UpdateArtistActionAvailability(ArtistId);
+}
+
+bool UArtistManagerSubsystem::IsArtistReadyToRecord(const FString& ArtistId) const
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<const UArtistManagerSubsystem> WeakThis(this);
+        bool bReady = false;
+        FEvent* SyncEvent = FPlatformProcess::GetSynchEventFromPool(true);
+
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId, &bReady, SyncEvent]()
+        {
+            if (const UArtistManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                bReady = StrongThis->IsArtistReadyToRecord(ArtistId);
+            }
+            SyncEvent->Trigger();
+        });
+
+        SyncEvent->Wait();
+        FPlatformProcess::ReturnSynchEventToPool(SyncEvent);
+        return bReady;
+    }
+
+    if (const UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (const USongManagerSubsystem* SongManager = GameInstance->GetSubsystem<USongManagerSubsystem>())
+        {
+            TArray<USong*> EligibleSongs;
+            SongManager->GetEligibleSongsForRecording(ArtistId, EligibleSongs);
+            return EligibleSongs.Num() > 0;
+        }
+    }
+
+    return false;
+}
+
+EArtistActionAvailability UArtistManagerSubsystem::GetArtistActionAvailability(const FString& ArtistId) const
+{
+    return EvaluateArtistActionAvailability(ArtistId);
+}
+
+void UArtistManagerSubsystem::RefreshArtistActionAvailability(const FString& ArtistId)
+{
+    UpdateArtistActionAvailability(ArtistId);
 }
 
 void UArtistManagerSubsystem::SetSelectedArtist(const FString& ArtistId)
@@ -360,6 +431,8 @@ void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal)
 
     OnArtistSigned.Broadcast(NewContract);
     OnArtistListChanged.Broadcast();
+
+    UpdateArtistActionAvailability(NewContract.ArtistId);
 }
 
 void UArtistManagerSubsystem::RejectArtist(const FString& ArtistId)
@@ -522,6 +595,8 @@ void UArtistManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
     {
         SetSelectedArtist(FString());
     }
+
+    RefreshAllArtistActionAvailability();
 }
 
 void UArtistManagerSubsystem::GetArtistMarketModifiers(const FString& ArtistId, const FString& MarketId, const FMarketDemandSnapshot& MarketDemand, FArtistMarketModifiers& OutModifiers) const
@@ -611,4 +686,61 @@ void UArtistManagerSubsystem::SetConcurrentReleaseCount(const FString& ArtistId,
 void UArtistManagerSubsystem::ClearConcurrentReleaseCache()
 {
     ConcurrentReleasesCache.Empty();
+}
+
+void UArtistManagerSubsystem::RefreshAllArtistActionAvailability()
+{
+    for (const FArtistContract& Contract : ActiveContracts)
+    {
+        UpdateArtistActionAvailability(Contract.ArtistId);
+    }
+}
+
+EArtistActionAvailability UArtistManagerSubsystem::EvaluateArtistActionAvailability(const FString& ArtistId) const
+{
+    if (IsArtistReadyToRecord(ArtistId))
+    {
+        return EArtistActionAvailability::RecordReady;
+    }
+
+    return EArtistActionAvailability::None;
+}
+
+void UArtistManagerSubsystem::UpdateArtistActionAvailability(const FString& ArtistId)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<UArtistManagerSubsystem> WeakThis(this);
+        const FString ArtistIdCopy = ArtistId;
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistIdCopy]()
+        {
+            if (UArtistManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->UpdateArtistActionAvailability(ArtistIdCopy);
+            }
+        });
+        return;
+    }
+
+    const EArtistActionAvailability NewAvailability = EvaluateArtistActionAvailability(ArtistId);
+    const EArtistActionAvailability* PreviousAvailability = ArtistActionAvailability.Find(ArtistId);
+
+    if (PreviousAvailability && *PreviousAvailability == NewAvailability)
+    {
+        return;
+    }
+
+    ArtistActionAvailability.FindOrAdd(ArtistId) = NewAvailability;
+
+    if (!PreviousAvailability && NewAvailability == EArtistActionAvailability::None)
+    {
+        return;
+    }
+
+    OnArtistActionAvailabilityChanged.Broadcast(ArtistId, NewAvailability);
+}
+
+void UArtistManagerSubsystem::HandleArtistRecordCreated(const FString& ArtistId)
+{
+    UpdateArtistActionAvailability(ArtistId);
 }

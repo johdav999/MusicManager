@@ -6,6 +6,7 @@
 #include "Engine/Texture2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "UI/ArtistActionIconSet.h"
 #include "UIManagerSubsystem.h"
 
 void USignedArtistItemWidget::NativeConstruct()
@@ -33,7 +34,29 @@ void USignedArtistItemWidget::NativeConstruct()
         }
     }
 
+    if (FrameMID)
+    {
+        FrameMID->SetScalarParameterValue(TEXT("AttentionBoost"), 1.0f);
+    }
+
+    if (IsValid(ActionIconImage))
+    {
+        ActionIconImage->SetVisibility(ESlateVisibility::Collapsed);
+    }
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            ActionAvailabilityHandle = ArtistSubsystem->OnArtistActionAvailabilityChanged.AddUObject(
+                this,
+                &USignedArtistItemWidget::HandleActionAvailabilityChanged
+            );
+        }
+    }
+
     UpdateVisualState();
+    RefreshActionAvailabilityFromSubsystem(false);
 }
 
 void USignedArtistItemWidget::NativeDestruct()
@@ -43,6 +66,22 @@ void USignedArtistItemWidget::NativeDestruct()
         ItemButton->OnClicked.RemoveDynamic(this, &USignedArtistItemWidget::HandleClicked);
         ItemButton->OnHovered.RemoveDynamic(this, &USignedArtistItemWidget::HandleHovered);
         ItemButton->OnUnhovered.RemoveDynamic(this, &USignedArtistItemWidget::HandleUnhovered);
+    }
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            if (ActionAvailabilityHandle.IsValid())
+            {
+                ArtistSubsystem->OnArtistActionAvailabilityChanged.Remove(ActionAvailabilityHandle);
+            }
+        }
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(AttentionBoostTimerHandle);
     }
     Super::NativeDestruct();
 }
@@ -64,6 +103,7 @@ void USignedArtistItemWidget::SetupItem(const FArtistData& InData, UTexture2D* P
     }
 
     UpdateVisualState();
+    RefreshActionAvailabilityFromSubsystem(false);
 }
 
 void USignedArtistItemWidget::SetHovered(bool bHovered)
@@ -176,6 +216,121 @@ void USignedArtistItemWidget::HandleUnhovered()
     {
         // Layer-2 hover details are dismissed centrally through the UI manager.
         UIManager->HideArtistHover();
+    }
+}
+
+void USignedArtistItemWidget::HandleActionAvailabilityChanged(const FString& ArtistId, EArtistActionAvailability NewAvailability)
+{
+    if (LocalArtistData.ArtistName.IsEmpty() || LocalArtistData.ArtistName != ArtistId)
+    {
+        return;
+    }
+
+    ApplyActionAvailability(NewAvailability, true);
+}
+
+void USignedArtistItemWidget::ApplyActionAvailability(EArtistActionAvailability NewAvailability, bool bTriggerAttention)
+{
+    if (CachedAvailability == NewAvailability)
+    {
+        return;
+    }
+
+    CachedAvailability = NewAvailability;
+
+    if (NewAvailability == EArtistActionAvailability::None)
+    {
+        if (IsValid(ActionIconImage))
+        {
+            ActionIconImage->SetVisibility(ESlateVisibility::Collapsed);
+        }
+        ResetAttentionBoost();
+        return;
+    }
+
+    if (IsValid(ActionIconImage))
+    {
+        const UTexture2D* IconTexture = ResolveActionIcon(NewAvailability);
+        if (IconTexture)
+        {
+            ActionIconImage->SetBrushFromTexture(const_cast<UTexture2D*>(IconTexture), true);
+            ActionIconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+        }
+        else
+        {
+            ActionIconImage->SetVisibility(ESlateVisibility::Collapsed);
+        }
+    }
+
+    if (bTriggerAttention)
+    {
+        TriggerAttentionBoost();
+    }
+}
+
+void USignedArtistItemWidget::RefreshActionAvailabilityFromSubsystem(bool bTriggerAttention)
+{
+    if (LocalArtistData.ArtistName.IsEmpty())
+    {
+        return;
+    }
+
+    // Layer-1 widgets only reflect subsystem state; business rules live in subsystems.
+    if (const UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (const UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            const EArtistActionAvailability Availability = ArtistSubsystem->GetArtistActionAvailability(LocalArtistData.ArtistName);
+            ApplyActionAvailability(Availability, bTriggerAttention);
+        }
+    }
+}
+
+const UTexture2D* USignedArtistItemWidget::ResolveActionIcon(EArtistActionAvailability Availability) const
+{
+    if (!ActionIconSet)
+    {
+        return nullptr;
+    }
+
+    for (const FArtistActionIconData& Entry : ActionIconSet->Icons)
+    {
+        if (Entry.Availability == Availability)
+        {
+            return Entry.IconTexture;
+        }
+    }
+
+    return nullptr;
+}
+
+void USignedArtistItemWidget::TriggerAttentionBoost()
+{
+    if (!FrameMID)
+    {
+        return;
+    }
+
+    FrameMID->SetScalarParameterValue(TEXT("AttentionBoost"), AttentionBoostValue);
+
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(AttentionBoostTimerHandle);
+        World->GetTimerManager().SetTimer(
+            AttentionBoostTimerHandle,
+            this,
+            &USignedArtistItemWidget::ResetAttentionBoost,
+            AttentionBoostResetDelay,
+            false
+        );
+    }
+}
+
+void USignedArtistItemWidget::ResetAttentionBoost()
+{
+    if (FrameMID)
+    {
+        FrameMID->SetScalarParameterValue(TEXT("AttentionBoost"), 1.0f);
     }
 }
 
