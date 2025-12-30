@@ -1,4 +1,4 @@
-#include "ArtistManagerSubsystem.h"
+﻿#include "ArtistManagerSubsystem.h"
 
 #include "Engine/Engine.h"
 #include "GameTimeSubsystem.h"
@@ -705,6 +705,13 @@ EArtistActionAvailability UArtistManagerSubsystem::EvaluateArtistActionAvailabil
 
     return EArtistActionAvailability::None;
 }
+static FString ArtistActionAvailabilityToString(EArtistActionAvailability Value)
+{
+    const UEnum* Enum = StaticEnum<EArtistActionAvailability>();
+    return Enum
+        ? Enum->GetNameStringByValue(static_cast<int64>(Value))
+        : TEXT("Invalid");
+}
 
 void UArtistManagerSubsystem::UpdateArtistActionAvailability(const FString& ArtistId)
 {
@@ -724,6 +731,16 @@ void UArtistManagerSubsystem::UpdateArtistActionAvailability(const FString& Arti
 
     const EArtistActionAvailability NewAvailability = EvaluateArtistActionAvailability(ArtistId);
     const EArtistActionAvailability* PreviousAvailability = ArtistActionAvailability.Find(ArtistId);
+    UE_LOG(
+        LogTemp,
+        Log,
+        TEXT("Artist [%s] action availability: Previous=%s → New=%s"),
+        *ArtistId,
+        PreviousAvailability
+        ? *ArtistActionAvailabilityToString(*PreviousAvailability)
+        : TEXT("None"),
+        *ArtistActionAvailabilityToString(NewAvailability)
+    );
 
     if (PreviousAvailability && *PreviousAvailability == NewAvailability)
     {

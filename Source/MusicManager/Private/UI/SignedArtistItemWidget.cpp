@@ -25,6 +25,17 @@ void USignedArtistItemWidget::NativeConstruct()
         ItemButton->OnUnhovered.AddDynamic(this, &USignedArtistItemWidget::HandleUnhovered);
     }
 
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+        {
+            ActionAvailabilityHandle = ArtistSubsystem->OnArtistActionAvailabilityChanged.AddUObject(
+                this,
+                &USignedArtistItemWidget::HandleActionAvailabilityChanged
+            );
+        }
+    }
+
     if (IsValid(FrameImage))
     {
         if (UMaterialInterface* BaseMaterial = Cast<UMaterialInterface>(FrameImage->GetBrush().GetResourceObject()))
@@ -39,21 +50,12 @@ void USignedArtistItemWidget::NativeConstruct()
         FrameMID->SetScalarParameterValue(TEXT("AttentionBoost"), 1.0f);
     }
 
-    if (IsValid(ActionIconImage))
-    {
-        ActionIconImage->SetVisibility(ESlateVisibility::Collapsed);
-    }
+    //if (IsValid(ActionIconImage))
+    //{
+    //    ActionIconImage->SetVisibility(ESlateVisibility::Collapsed);
+    //}
 
-    if (UGameInstance* GameInstance = GetGameInstance())
-    {
-        if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
-        {
-            ActionAvailabilityHandle = ArtistSubsystem->OnArtistActionAvailabilityChanged.AddUObject(
-                this,
-                &USignedArtistItemWidget::HandleActionAvailabilityChanged
-            );
-        }
-    }
+
 
     UpdateVisualState();
     RefreshActionAvailabilityFromSubsystem(false);
@@ -254,7 +256,7 @@ void USignedArtistItemWidget::ApplyActionAvailability(EArtistActionAvailability 
         if (IconTexture)
         {
             ActionIconImage->SetBrushFromTexture(const_cast<UTexture2D*>(IconTexture), true);
-            ActionIconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+            ActionIconImage->SetVisibility(ESlateVisibility::Visible);
         }
         else
         {
@@ -262,7 +264,7 @@ void USignedArtistItemWidget::ApplyActionAvailability(EArtistActionAvailability 
         }
     }
 
-    if (bTriggerAttention)
+    //if (bTriggerAttention)
     {
         TriggerAttentionBoost();
     }
