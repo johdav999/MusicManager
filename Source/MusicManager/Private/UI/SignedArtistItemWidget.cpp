@@ -55,10 +55,13 @@ void USignedArtistItemWidget::NativeConstruct()
     //    ActionIconImage->SetVisibility(ESlateVisibility::Collapsed);
     //}
 
+    bIsInitialized = true;
 
-
-    UpdateVisualState();
-    RefreshActionAvailabilityFromSubsystem(false);
+    // Apply any deferred setup data after construction is complete.
+    if (bHasPendingSetupData)
+    {
+        ApplySetupData();
+    }
 }
 
 void USignedArtistItemWidget::NativeDestruct()
@@ -90,22 +93,28 @@ void USignedArtistItemWidget::NativeDestruct()
 
 void USignedArtistItemWidget::SetupItem(const FArtistData& InData, UTexture2D* PortraitTexture)
 {
-    LocalArtistData = InData;
+    PendingArtistData = InData;
+    PendingPortraitTexture = PortraitTexture;
+    bHasPendingSetupData = true;
+
+    if (bIsInitialized)
+    {
+        ApplySetupData();
+    }
+}
+
+void USignedArtistItemWidget::ApplySetupData()
+{
+    LocalArtistData = PendingArtistData;
 
     if (IsValid(PortraitImage))
     {
-        if (PortraitTexture)
-        {
-            PortraitImage->SetBrushFromTexture(PortraitTexture, true);
-        }
-        else
-        {
-            PortraitImage->SetBrushFromTexture(nullptr, true);
-        }
+        PortraitImage->SetBrushFromTexture(PendingPortraitTexture, true);
     }
 
     UpdateVisualState();
     RefreshActionAvailabilityFromSubsystem(false);
+    bHasPendingSetupData = false;
 }
 
 void USignedArtistItemWidget::SetHovered(bool bHovered)

@@ -39,7 +39,15 @@ public:
     FOnSignedArtistClicked OnArtistClicked;
 
 private:
+    void ApplySetupData();
+
     FArtistData LocalArtistData;
+    FArtistData PendingArtistData;
+
+    UTexture2D* PendingPortraitTexture = nullptr;
+
+    bool bIsInitialized = false;
+    bool bHasPendingSetupData = false;
 
 protected:
     UFUNCTION()
