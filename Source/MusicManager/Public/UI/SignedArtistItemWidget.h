@@ -85,10 +85,10 @@ protected:
     UArtistActionIconSet* ActionIconSet = nullptr;
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
-    float AttentionBoostValue = 1.3f;
+    float AttentionBoostValue = 2.3f;
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
-    float AttentionBoostResetDelay = 2.7f;
+    float AttentionBoostResetDelay = 0.7f;
 
     UPROPERTY(EditDefaultsOnly, Category="Appearance")
     FLinearColor RisingStateColor = FLinearColor(0.55f, 0.85f, 1.0f, 1.0f);
