@@ -37,6 +37,12 @@ void UArtistHoverDetailWidget::SetupFromArtistData(const FArtistData& ArtistData
         PerformanceBar->SetPercent(FMath::Clamp(ArtistData.PerformanceScore / 100.0f, 0.0f, 1.0f));
     }
 
+    if (PerformanceValueText)
+    {
+        const float PerformancePercent = FMath::Clamp(ArtistData.PerformanceScore, 0.0f, 100.0f);
+        PerformanceValueText->SetText(FText::AsNumber(FMath::RoundToInt(PerformancePercent)));
+    }
+
     if (MomentumText)
     {
         const FString MomentumLabel = PopularityScore >= 0.75f ? TEXT("Rising")
