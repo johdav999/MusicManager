@@ -4,8 +4,9 @@
 #include "Async/Async.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Widget.h"
-#include "EventTickerWidget.h"
 #include "NewsFeedList.h"
+#include "EventTickerWidget.h"
+#include "NewsFeedItemWidget.h"
 #include "AuditionWidget.h"
 #include "Types/SlateEnums.h"
 #include "UObject/WeakObjectPtrTemplates.h"
@@ -140,9 +141,9 @@ void ULayout::AddNewsCardToFeed(const FMusicNewsEvent& Event)
         return;
     }
 
-    if (UEventTickerWidget* NewTicker = NewsFeedList->AddNewsCard(Event))
+    if (UNewsFeedItemWidget* NewItem = NewsFeedList->AddNewsCard(Event))
     {
-        BindTickerEvents(NewTicker);
+        BindTickerEvents(NewItem);
     }
     else
     {
@@ -150,7 +151,7 @@ void ULayout::AddNewsCardToFeed(const FMusicNewsEvent& Event)
     }
 }
 
-void ULayout::RemoveNewsCardFromFeed(UEventTickerWidget* Card)
+void ULayout::RemoveNewsCardFromFeed(UNewsFeedItemWidget* Card)
 {
     if (!ensure(IsInGameThread()))
     {
@@ -176,7 +177,7 @@ void ULayout::RemoveNewsCardFromFeed(UEventTickerWidget* Card)
     }
 }
 
-void ULayout::BindTickerEvents(UEventTickerWidget* NewTicker)
+void ULayout::BindTickerEvents(UNewsFeedItemWidget* NewItem)
 {
     UE_LOG(LogTemp, Display, TEXT("Bind ticker event!"));
     if (!ensure(IsInGameThread()))
@@ -184,14 +185,21 @@ void ULayout::BindTickerEvents(UEventTickerWidget* NewTicker)
         return;
     }
 
-    if (!IsValid(NewTicker))
+    if (!IsValid(NewItem))
     {
         return;
     }
 
-    NewTicker->OnNewsCardClicked.Clear();
-    NewTicker->OnNewsCardClicked.AddDynamic(this, &ULayout::HandleTickerClicked);
-    NewTicker->SetLayoutReference(this);
+    UEventTickerWidget* Ticker = NewItem->GetHoverTicker();
+    if (!IsValid(Ticker))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BindTickerEvents: Hover ticker missing for news feed item."));
+        return;
+    }
+
+    Ticker->OnNewsCardClicked.Clear();
+    Ticker->OnNewsCardClicked.AddDynamic(this, &ULayout::HandleTickerClicked);
+    Ticker->SetLayoutReference(this);
 }
 
 void ULayout::HandleTickerClicked(UEventTickerWidget* ClickedTicker)

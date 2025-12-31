@@ -5,6 +5,7 @@
 #include "EventSubsystem.h"
 #include "ContractWidget.h"
 #include "EventTickerWidget.h"
+#include "NewsFeedItemWidget.h"
 #include "UI/RecordWidget.h"
 #include "AuditionTypes.h"
 #include "UI/TooltipData.h"
@@ -47,7 +48,7 @@ public:
     void AddNewsCardToFeed(const FMusicNewsEvent& Event);
 
     UFUNCTION(BlueprintCallable, Category="News")
-    void RemoveNewsCardFromFeed(UEventTickerWidget* Card);
+    void RemoveNewsCardFromFeed(UNewsFeedItemWidget* Card);
 
     /** Raised when any card in the feed is clicked */
     UPROPERTY(BlueprintAssignable, Category="News")
@@ -55,7 +56,7 @@ public:
 
     /** Called when a ticker widget is created and added to the feed */
     UFUNCTION(BlueprintCallable, Category="News")
-    void BindTickerEvents(UEventTickerWidget* NewTicker);
+    void BindTickerEvents(UNewsFeedItemWidget* NewItem);
 
     UFUNCTION(BlueprintCallable, Category="Layout")
     void ShowAuditionWidget();
