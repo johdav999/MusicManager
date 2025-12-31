@@ -6,7 +6,7 @@
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
-#include "EventTickerWidget.h"
+#include "NewsFeedItemWidget.h"
 #include "Types/SlateEnums.h"
 #include "Engine/World.h"
 
@@ -53,10 +53,11 @@ void UNewsFeedList::NativeConstruct()
 
 void UNewsFeedList::NativeDestruct()
 {
+    ActiveHoverItem = nullptr;
     Super::NativeDestruct();
 }
 
-UEventTickerWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
+UNewsFeedItemWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
 {
     if (!ensure(IsInGameThread()))
     {
@@ -78,9 +79,9 @@ UEventTickerWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
         return nullptr;
     }
 
-    if (!EventTickerWidgetClass)
+    if (!NewsFeedItemWidgetClass)
     {
-        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: EventTickerWidgetClass is not set."));
+        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: NewsFeedItemWidgetClass is not set."));
         return nullptr;
     }
 
@@ -96,14 +97,15 @@ UEventTickerWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
         return nullptr;
     }
 
-    UEventTickerWidget* const NewCard = CreateWidget<UEventTickerWidget>(World, EventTickerWidgetClass);
+    UNewsFeedItemWidget* const NewCard = CreateWidget<UNewsFeedItemWidget>(World, NewsFeedItemWidgetClass);
     if (!IsValid(NewCard))
     {
-        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: Failed to create event ticker widget."));
+        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: Failed to create news feed item widget."));
         return nullptr;
     }
 
-    NewCard->SetNewsEvent(Event);
+    NewCard->SetOwnerList(this);
+    NewCard->SetupFromEvent(Event);
 
     if (UPanelSlot* PanelSlot = FeedContainer->InsertChildAt(0, NewCard))
     {
@@ -127,13 +129,13 @@ UEventTickerWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
     return nullptr;
 }
 
-bool UNewsFeedList::RemoveNewsCard(UEventTickerWidget* Card)
+bool UNewsFeedList::RemoveNewsCard(UNewsFeedItemWidget* Card)
 {
     if (!ensure(IsInGameThread()))
     {
         UE_LOG(LogNewsFeedList, Warning, TEXT("RemoveNewsCard called off the game thread."));
         TWeakObjectPtr<UNewsFeedList> WeakThis(this);
-        TWeakObjectPtr<UEventTickerWidget> WeakCard(Card);
+        TWeakObjectPtr<UNewsFeedItemWidget> WeakCard(Card);
         AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakCard]()
         {
             if (WeakThis.IsValid())
@@ -156,6 +158,11 @@ bool UNewsFeedList::RemoveNewsCard(UEventTickerWidget* Card)
         return false;
     }
 
+    if (ActiveHoverItem.Get() == Card)
+    {
+        ActiveHoverItem = nullptr;
+    }
+
     if (!FeedContainer->HasChild(Card))
     {
         UE_LOG(LogNewsFeedList, Verbose, TEXT("RemoveNewsCard: Card is not a child of the feed."));
@@ -165,13 +172,13 @@ bool UNewsFeedList::RemoveNewsCard(UEventTickerWidget* Card)
     return FeedContainer->RemoveChild(Card);
 }
 
-bool UNewsFeedList::MoveNewsCardToTop(UEventTickerWidget* Card)
+bool UNewsFeedList::MoveNewsCardToTop(UNewsFeedItemWidget* Card)
 {
     if (!ensure(IsInGameThread()))
     {
         UE_LOG(LogNewsFeedList, Warning, TEXT("MoveNewsCardToTop called off the game thread."));
         TWeakObjectPtr<UNewsFeedList> WeakThis(this);
-        TWeakObjectPtr<UEventTickerWidget> WeakCard(Card);
+        TWeakObjectPtr<UNewsFeedItemWidget> WeakCard(Card);
         AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakCard]()
         {
             if (WeakThis.IsValid())
@@ -231,8 +238,58 @@ bool UNewsFeedList::MoveNewsCardToTop(UEventTickerWidget* Card)
         return true;
     }
 
-
-
     UE_LOG(LogNewsFeedList, Warning, TEXT("MoveNewsCardToTop: Failed to insert card at top."));
     return false;
+}
+
+void UNewsFeedList::HandleItemHovered(UNewsFeedItemWidget* Item)
+{
+    if (!IsValid(Item))
+    {
+        return;
+    }
+
+    if (ActiveHoverItem.IsValid() && ActiveHoverItem.Get() != Item)
+    {
+        ActiveHoverItem->SetHoverTickerVisible(false);
+    }
+
+    ActiveHoverItem = Item;
+    Item->SetHoverTickerVisible(true);
+}
+
+void UNewsFeedList::HandleItemUnhovered(UNewsFeedItemWidget* Item)
+{
+    if (!IsValid(Item))
+    {
+        return;
+    }
+
+    if (ActiveHoverItem.Get() == Item)
+    {
+        Item->SetHoverTickerVisible(false);
+        ActiveHoverItem = nullptr;
+    }
+}
+
+void UNewsFeedList::HandleItemToggled(UNewsFeedItemWidget* Item)
+{
+    if (!IsValid(Item))
+    {
+        return;
+    }
+
+    const bool bIsVisible = Item->IsHoverTickerVisible();
+    if (bIsVisible)
+    {
+        Item->SetHoverTickerVisible(false);
+        if (ActiveHoverItem.Get() == Item)
+        {
+            ActiveHoverItem = nullptr;
+        }
+    }
+    else
+    {
+        HandleItemHovered(Item);
+    }
 }

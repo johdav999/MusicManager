@@ -8,7 +8,7 @@
 
 class UVerticalBox;
 class UScrollBox;
-class UEventTickerWidget;
+class UNewsFeedItemWidget;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNewsFeedList, Log, All);
 
@@ -27,13 +27,17 @@ public:
     virtual void NativeDestruct() override;
 
     UFUNCTION(BlueprintCallable, Category="News")
-    UEventTickerWidget* AddNewsCard(const FMusicNewsEvent& Event);
+    UNewsFeedItemWidget* AddNewsCard(const FMusicNewsEvent& Event);
 
     UFUNCTION(BlueprintCallable, Category="News")
-    bool RemoveNewsCard(UEventTickerWidget* Card);
+    bool RemoveNewsCard(UNewsFeedItemWidget* Card);
 
     UFUNCTION(BlueprintCallable, Category="News")
-    bool MoveNewsCardToTop(UEventTickerWidget* Card);
+    bool MoveNewsCardToTop(UNewsFeedItemWidget* Card);
+
+    void HandleItemHovered(UNewsFeedItemWidget* Item);
+    void HandleItemUnhovered(UNewsFeedItemWidget* Item);
+    void HandleItemToggled(UNewsFeedItemWidget* Item);
 
 protected:
     UPROPERTY(meta=(BindWidget))
@@ -43,7 +47,8 @@ protected:
     UScrollBox* FeedScrollBox;
 
     UPROPERTY(EditDefaultsOnly, Category="News")
-    TSubclassOf<class UEventTickerWidget> EventTickerWidgetClass;
+    TSubclassOf<class UNewsFeedItemWidget> NewsFeedItemWidgetClass;
 
 private:
+    TWeakObjectPtr<UNewsFeedItemWidget> ActiveHoverItem;
 };
