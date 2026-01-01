@@ -143,7 +143,7 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
     UE_LOG(LogEventSubsystem, Verbose, TEXT("Processing simulated date change to %s."), *NewDate.ToString());
 
     const FMusicNewsEvent NewEvent = BuildMonthlyNews(NewDate);
-    if (NewEvent.BodyText != "")
+    if (NewEvent.Headline != "")
     {
         // Build stable event key
         const FString EventKey = BuildNewsKey(NewEvent);
@@ -222,7 +222,7 @@ FMusicNewsEvent UEventSubsystem::BuildMonthlyNews(const FDateTime& NewDate) cons
                                 NewEvent.SubjectName = Artist.Genre;
 
                                 NewEvent.Headline = FString::Printf(
-                                    TEXT("%s preparing for an upcoming performance"),
+                                    TEXT("%s local gig"),
                                     *Artist.ArtistName);
 
                                 NewEvent.BodyText = FString::Printf(

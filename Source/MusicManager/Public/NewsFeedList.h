@@ -46,7 +46,7 @@ protected:
     UPROPERTY(meta=(BindWidget))
     UScrollBox* FeedScrollBox;
 
-    UPROPERTY(EditDefaultsOnly, Category="News")
+    UPROPERTY(EditAnywhere, Category="News")
     TSubclassOf<class UNewsFeedItemWidget> NewsFeedItemWidgetClass;
 
 private:

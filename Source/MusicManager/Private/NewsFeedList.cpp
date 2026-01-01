@@ -49,6 +49,13 @@ void UNewsFeedList::NativeConstruct()
             FeedScrollBox->AddChild(FeedContainer);
         }
     }
+    UE_LOG(LogNewsFeedList, Warning,
+        TEXT("NewsFeedItemWidgetClass = %s"),
+        *GetNameSafe(NewsFeedItemWidgetClass));
+
+    UE_LOG(LogNewsFeedList, Warning,
+        TEXT("NewsFeedList runtime class = %s"),
+        *GetClass()->GetPathName());
 }
 
 void UNewsFeedList::NativeDestruct()
