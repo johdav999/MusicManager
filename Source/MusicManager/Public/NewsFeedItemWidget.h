@@ -6,13 +6,11 @@
 #include "NewsFeedItemWidget.generated.h"
 
 class UImage;
-class UPanelWidget;
 class UTextBlock;
-class UEventTickerWidget;
 class UNewsFeedList;
 
 /**
- * Lightweight news feed list item that owns a hover ticker detail widget.
+ * Lightweight news feed list item that reports hover state to the owning list.
  */
 UCLASS(BlueprintType, Blueprintable)
 class UNewsFeedItemWidget : public UUserWidget
@@ -26,13 +24,9 @@ public:
     void SetupFromEvent(const FMusicNewsEvent& Event);
 
     UFUNCTION(BlueprintCallable, Category="News")
-    UEventTickerWidget* GetHoverTicker() const;
-
-    UFUNCTION(BlueprintCallable, Category="News")
-    bool IsHoverTickerVisible() const;
+    const FMusicNewsEvent& GetNewsEvent() const;
 
     void SetOwnerList(UNewsFeedList* InOwnerList);
-    void SetHoverTickerVisible(bool bVisible);
 
 protected:
     virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
@@ -45,20 +39,10 @@ protected:
     UPROPERTY(meta=(BindWidget))
     UImage* NewsTypeIcon;
 
-    UPROPERTY(meta=(BindWidgetOptional))
-    UPanelWidget* TickerContainer;
-
-    UPROPERTY(EditDefaultsOnly, Category="News")
-    TSubclassOf<UEventTickerWidget> HoverTickerWidgetClass;
-
 private:
-    void EnsureHoverTicker();
     void ApplyNewsTypeIcon(EMusicNewsType NewsType);
 
-    bool bHoverVisible = false;
-
-    UPROPERTY()
-    UEventTickerWidget* HoverTicker;
+    FMusicNewsEvent CachedEvent;
 
     UPROPERTY()
     TWeakObjectPtr<UNewsFeedList> OwnerList;

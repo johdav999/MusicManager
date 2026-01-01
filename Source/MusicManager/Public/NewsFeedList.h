@@ -8,7 +8,9 @@
 
 class UVerticalBox;
 class UScrollBox;
+class UCanvasPanel;
 class UNewsFeedItemWidget;
+class UEventTickerWidget;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogNewsFeedList, Log, All);
 
@@ -39,6 +41,8 @@ public:
     void HandleItemUnhovered(UNewsFeedItemWidget* Item);
     void HandleItemToggled(UNewsFeedItemWidget* Item);
 
+    UEventTickerWidget* GetHoverTicker();
+
 protected:
     UPROPERTY(meta=(BindWidget))
     UVerticalBox* FeedContainer;
@@ -46,9 +50,22 @@ protected:
     UPROPERTY(meta=(BindWidget))
     UScrollBox* FeedScrollBox;
 
+    UPROPERTY(meta=(BindWidget))
+    UCanvasPanel* HoverCanvas;
+
     UPROPERTY(EditAnywhere, Category="News")
     TSubclassOf<class UNewsFeedItemWidget> NewsFeedItemWidgetClass;
 
+    UPROPERTY(EditDefaultsOnly, Category="News")
+    TSubclassOf<UEventTickerWidget> HoverTickerWidgetClass;
+
 private:
+    void EnsureHoverTicker();
+    void ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNewsEvent& Event, const FGeometry& ItemGeometry);
+    void HideHover();
+
+    UPROPERTY()
+    UEventTickerWidget* ActiveHoverTicker = nullptr;
+
     TWeakObjectPtr<UNewsFeedItemWidget> ActiveHoverItem;
 };

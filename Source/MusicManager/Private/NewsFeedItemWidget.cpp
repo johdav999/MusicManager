@@ -2,9 +2,7 @@
 #include "NewsFeedItemWidget.h"
 
 #include "Components/Image.h"
-#include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
-#include "EventTickerWidget.h"
 #include "NewsFeedList.h"
 #include "Input/Reply.h"
 #include "Input/Events.h"
@@ -17,47 +15,23 @@ UNewsFeedItemWidget::UNewsFeedItemWidget(const FObjectInitializer& ObjectInitial
 
 void UNewsFeedItemWidget::SetupFromEvent(const FMusicNewsEvent& Event)
 {
+    CachedEvent = Event;
     if (HeadlineText)
     {
         HeadlineText->SetText(Event.Headline.IsEmpty() ? FText::GetEmpty() : FText::FromString(Event.Headline));
     }
 
     ApplyNewsTypeIcon(Event.NewsType);
-
-    EnsureHoverTicker();
-    if (HoverTicker)
-    {
-        HoverTicker->SetNewsEvent(Event);
-        HoverTicker->SetVisibility(ESlateVisibility::Collapsed);
-        bHoverVisible = false;
-    }
 }
 
-UEventTickerWidget* UNewsFeedItemWidget::GetHoverTicker() const
+const FMusicNewsEvent& UNewsFeedItemWidget::GetNewsEvent() const
 {
-    return HoverTicker;
-}
-
-bool UNewsFeedItemWidget::IsHoverTickerVisible() const
-{
-    return bHoverVisible;
+    return CachedEvent;
 }
 
 void UNewsFeedItemWidget::SetOwnerList(UNewsFeedList* InOwnerList)
 {
     OwnerList = InOwnerList;
-}
-
-void UNewsFeedItemWidget::SetHoverTickerVisible(bool bVisible)
-{
-    EnsureHoverTicker();
-    if (!HoverTicker)
-    {
-        return;
-    }
-
-    bHoverVisible = bVisible;
-    HoverTicker->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
 
 void UNewsFeedItemWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
@@ -67,10 +41,6 @@ void UNewsFeedItemWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const 
     if (UNewsFeedList* List = OwnerList.Get())
     {
         List->HandleItemHovered(this);
-    }
-    else
-    {
-        SetHoverTickerVisible(true);
     }
 }
 
@@ -82,10 +52,6 @@ void UNewsFeedItemWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
     {
         List->HandleItemUnhovered(this);
     }
-    else
-    {
-        SetHoverTickerVisible(false);
-    }
 }
 
 FReply UNewsFeedItemWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
@@ -96,48 +62,11 @@ FReply UNewsFeedItemWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
         {
             List->HandleItemToggled(this);
         }
-        else
-        {
-            SetHoverTickerVisible(!bHoverVisible);
-        }
 
         return FReply::Handled();
     }
 
     return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
-}
-
-void UNewsFeedItemWidget::EnsureHoverTicker()
-{
-    if (HoverTicker)
-    {
-        return;
-    }
-
-    UWorld* World = GetWorld();
-    if (!World || !HoverTickerWidgetClass)
-    {
-        return;
-    }
-
-    HoverTicker = CreateWidget<UEventTickerWidget>(World, HoverTickerWidgetClass);
-    if (!HoverTicker)
-    {
-        return;
-    }
-
-    HoverTicker->SetVisibility(ESlateVisibility::Collapsed);
-
-    UPanelWidget* TargetContainer = TickerContainer;
-    if (!TargetContainer)
-    {
-        TargetContainer = Cast<UPanelWidget>(GetRootWidget());
-    }
-
-    if (TargetContainer)
-    {
-        TargetContainer->AddChild(HoverTicker);
-    }
 }
 
 void UNewsFeedItemWidget::ApplyNewsTypeIcon(EMusicNewsType NewsType)

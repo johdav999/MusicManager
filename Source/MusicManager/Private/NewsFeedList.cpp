@@ -2,10 +2,14 @@
 #include "NewsFeedList.h"
 
 #include "Async/Async.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/ScrollBox.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "EventTickerWidget.h"
 #include "NewsFeedItemWidget.h"
 #include "Types/SlateEnums.h"
 #include "Engine/World.h"
@@ -29,6 +33,11 @@ void UNewsFeedList::NativeConstruct()
     if (!IsValid(FeedContainer))
     {
         UE_LOG(LogNewsFeedList, Warning, TEXT("NativeConstruct: FeedContainer binding is missing."));
+    }
+
+    if (!IsValid(HoverCanvas))
+    {
+        UE_LOG(LogNewsFeedList, Warning, TEXT("NativeConstruct: HoverCanvas binding is missing."));
     }
 
     if (IsValid(FeedScrollBox))
@@ -56,10 +65,13 @@ void UNewsFeedList::NativeConstruct()
     UE_LOG(LogNewsFeedList, Warning,
         TEXT("NewsFeedList runtime class = %s"),
         *GetClass()->GetPathName());
+
+    EnsureHoverTicker();
 }
 
 void UNewsFeedList::NativeDestruct()
 {
+    HideHover();
     ActiveHoverItem = nullptr;
     Super::NativeDestruct();
 }
@@ -167,7 +179,7 @@ bool UNewsFeedList::RemoveNewsCard(UNewsFeedItemWidget* Card)
 
     if (ActiveHoverItem.Get() == Card)
     {
-        ActiveHoverItem = nullptr;
+        HideHover();
     }
 
     if (!FeedContainer->HasChild(Card))
@@ -256,13 +268,12 @@ void UNewsFeedList::HandleItemHovered(UNewsFeedItemWidget* Item)
         return;
     }
 
-    if (ActiveHoverItem.IsValid() && ActiveHoverItem.Get() != Item)
+    if (ActiveHoverItem.Get() == Item)
     {
-        ActiveHoverItem->SetHoverTickerVisible(false);
+        return;
     }
 
-    ActiveHoverItem = Item;
-    Item->SetHoverTickerVisible(true);
+    ShowHoverForItem(Item, Item->GetNewsEvent(), Item->GetCachedGeometry());
 }
 
 void UNewsFeedList::HandleItemUnhovered(UNewsFeedItemWidget* Item)
@@ -274,8 +285,7 @@ void UNewsFeedList::HandleItemUnhovered(UNewsFeedItemWidget* Item)
 
     if (ActiveHoverItem.Get() == Item)
     {
-        Item->SetHoverTickerVisible(false);
-        ActiveHoverItem = nullptr;
+        HideHover();
     }
 }
 
@@ -286,17 +296,81 @@ void UNewsFeedList::HandleItemToggled(UNewsFeedItemWidget* Item)
         return;
     }
 
-    const bool bIsVisible = Item->IsHoverTickerVisible();
-    if (bIsVisible)
+    if (ActiveHoverItem.Get() == Item && ActiveHoverTicker && ActiveHoverTicker->IsVisible())
     {
-        Item->SetHoverTickerVisible(false);
-        if (ActiveHoverItem.Get() == Item)
-        {
-            ActiveHoverItem = nullptr;
-        }
+        HideHover();
+        return;
     }
-    else
+
+    ShowHoverForItem(Item, Item->GetNewsEvent(), Item->GetCachedGeometry());
+}
+
+UEventTickerWidget* UNewsFeedList::GetHoverTicker()
+{
+    EnsureHoverTicker();
+    return ActiveHoverTicker;
+}
+
+void UNewsFeedList::EnsureHoverTicker()
+{
+    if (ActiveHoverTicker || !HoverCanvas || !HoverTickerWidgetClass)
     {
-        HandleItemHovered(Item);
+        return;
     }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    ActiveHoverTicker = CreateWidget<UEventTickerWidget>(World, HoverTickerWidgetClass);
+    if (!ActiveHoverTicker)
+    {
+        return;
+    }
+
+    UCanvasPanelSlot* Slot = HoverCanvas->AddChildToCanvas(ActiveHoverTicker);
+    Slot->SetAutoSize(true);
+    Slot->SetAnchors(FAnchors(1.f, 0.f, 1.f, 0.f));
+    Slot->SetAlignment(FVector2D(1.f, 0.f));
+
+    ActiveHoverTicker->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNewsEvent& Event, const FGeometry& ItemGeometry)
+{
+    EnsureHoverTicker();
+
+    if (!ActiveHoverTicker)
+    {
+        return;
+    }
+
+    ActiveHoverItem = Item;
+    ActiveHoverTicker->SetNewsEvent(Event);
+
+    const FVector2D ItemScreenPos = ItemGeometry.GetAbsolutePosition();
+    const FVector2D ViewportSize = UWidgetLayoutLibrary::GetViewportSize(this);
+
+    constexpr float HoverOffsetX = 20.f;
+    const float DesiredRightEdge = ItemScreenPos.X - HoverOffsetX;
+
+    if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(ActiveHoverTicker->Slot))
+    {
+        const FVector2D DesiredPos(DesiredRightEdge - ViewportSize.X, ItemScreenPos.Y);
+        Slot->SetPosition(DesiredPos);
+    }
+
+    ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UNewsFeedList::HideHover()
+{
+    if (ActiveHoverTicker)
+    {
+        ActiveHoverTicker->SetVisibility(ESlateVisibility::Collapsed);
+    }
+
+    ActiveHoverItem = nullptr;
 }
