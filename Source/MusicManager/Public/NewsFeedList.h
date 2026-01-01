@@ -64,7 +64,7 @@ private:
     void ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNewsEvent& Event, const FGeometry& ItemGeometry);
     void HideHover();
 
-    UPROPERTY()
+    UPROPERTY(EditAnywhere)
     UEventTickerWidget* ActiveHoverTicker = nullptr;
 
     TWeakObjectPtr<UNewsFeedItemWidget> ActiveHoverItem;

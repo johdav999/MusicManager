@@ -330,12 +330,12 @@ void UNewsFeedList::EnsureHoverTicker()
         return;
     }
 
-    UCanvasPanelSlot* Slot = HoverCanvas->AddChildToCanvas(ActiveHoverTicker);
-    Slot->SetAutoSize(true);
-    Slot->SetAnchors(FAnchors(1.f, 0.f, 1.f, 0.f));
-    Slot->SetAlignment(FVector2D(1.f, 0.f));
+    UCanvasPanelSlot* slot = HoverCanvas->AddChildToCanvas(ActiveHoverTicker);
+    slot->SetAutoSize(true);
+    slot->SetAnchors(FAnchors(1.f, 0.f, 1.f, 0.f));
+    slot->SetAlignment(FVector2D(1.f, 0.f));
 
-    ActiveHoverTicker->SetVisibility(ESlateVisibility::Collapsed);
+    ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
 }
 
 void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNewsEvent& Event, const FGeometry& ItemGeometry)
@@ -356,13 +356,18 @@ void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNews
     constexpr float HoverOffsetX = 20.f;
     const float DesiredRightEdge = ItemScreenPos.X - HoverOffsetX;
 
-    if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(ActiveHoverTicker->Slot))
+    if (UCanvasPanelSlot* slot = Cast<UCanvasPanelSlot>(ActiveHoverTicker->Slot))
     {
         const FVector2D DesiredPos(DesiredRightEdge - ViewportSize.X, ItemScreenPos.Y);
-        Slot->SetPosition(DesiredPos);
+        slot->SetPosition(DesiredPos);
+        ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
+        ActiveHoverTicker->SetRenderOpacity(0.2f);
+        slot->SetAnchors(FAnchors(0.f, 0.f));
+        slot->SetAlignment(FVector2D(0.f, 0.f));
+        slot->SetPosition(FVector2D(100.f, 100.f));
     }
 
-    ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
+
 }
 
 void UNewsFeedList::HideHover()
