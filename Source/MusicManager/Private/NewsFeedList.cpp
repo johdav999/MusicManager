@@ -335,7 +335,7 @@ void UNewsFeedList::EnsureHoverTicker()
     Slot->SetAnchors(FAnchors(0.f, 0.f));
     Slot->SetAlignment(FVector2D(0.f, 0.f));
 
-    ActiveHoverTicker->SetVisibility(ESlateVisibility::Collapsed);
+    ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
 }
 
 void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNewsEvent& Event, const FGeometry& ItemGeometry)
@@ -359,12 +359,12 @@ void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNews
         ItemScreenPos.Y
     );
 
-    if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(ActiveHoverTicker->Slot))
+    if (UCanvasPanelSlot* slot = Cast<UCanvasPanelSlot>(ActiveHoverTicker->Slot))
     {
         Slot->SetPosition(DesiredPos);
     }
 
-    ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
+
 }
 
 void UNewsFeedList::HideHover()
