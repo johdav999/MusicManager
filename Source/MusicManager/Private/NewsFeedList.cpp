@@ -330,10 +330,10 @@ void UNewsFeedList::EnsureHoverTicker()
         return;
     }
 
-    UCanvasPanelSlot* Slot = HoverCanvas->AddChildToCanvas(ActiveHoverTicker);
-    Slot->SetAutoSize(true);
-    Slot->SetAnchors(FAnchors(0.f, 0.f));
-    Slot->SetAlignment(FVector2D(0.f, 0.f));
+    UCanvasPanelSlot* slot = HoverCanvas->AddChildToCanvas(ActiveHoverTicker);
+    slot->SetAutoSize(true);
+    slot->SetAnchors(FAnchors(0.f, 0.f));
+    slot->SetAlignment(FVector2D(0.f, 0.f));
 
     ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
 }
@@ -361,7 +361,7 @@ void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNews
 
     if (UCanvasPanelSlot* slot = Cast<UCanvasPanelSlot>(ActiveHoverTicker->Slot))
     {
-        Slot->SetPosition(DesiredPos);
+        slot->SetPosition(DesiredPos);
     }
 
 
