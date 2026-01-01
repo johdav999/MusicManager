@@ -190,7 +190,12 @@ void ULayout::BindTickerEvents(UNewsFeedItemWidget* NewItem)
         return;
     }
 
-    UEventTickerWidget* Ticker = NewItem->GetHoverTicker();
+    if (!IsValid(NewsFeedList))
+    {
+        return;
+    }
+
+    UEventTickerWidget* Ticker = NewsFeedList->GetHoverTicker();
     if (!IsValid(Ticker))
     {
         UE_LOG(LogTemp, Warning, TEXT("BindTickerEvents: Hover ticker missing for news feed item."));
