@@ -2,15 +2,66 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "TimerManager.h"
 #include "GameTimeSubsystem.generated.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogMusicSimTime, Log, All);
+
+UENUM(BlueprintType)
+enum class EMusicWeeklySimulationPhase : uint8
+{
+    TrendDrift UMETA(DisplayName = "Trend Drift"),
+    ArtistStateUpdate UMETA(DisplayName = "Artist State Update"),
+    ProductionProgress UMETA(DisplayName = "Production Progress"),
+    ReleaseLaunchProcessing UMETA(DisplayName = "Release Launch Processing"),
+    MarketExposureUpdate UMETA(DisplayName = "Market Exposure Update"),
+    ChartCalculation UMETA(DisplayName = "Chart Calculation"),
+    TourResolution UMETA(DisplayName = "Tour Resolution"),
+    FinanceSettlement UMETA(DisplayName = "Finance Settlement"),
+    CriticNewsGeneration UMETA(DisplayName = "Critic News Generation"),
+    Notifications UMETA(DisplayName = "Notifications")
+};
+
+USTRUCT(BlueprintType)
+struct FMonthlyCloseSummary
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 ClosedYear = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 ClosedMonth = 0;
+
+    /** Inclusive first day of the closed month. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime PeriodStart;
+
+    /** Exclusive first day of the next month. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime PeriodEnd;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime PreviousDate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime NewDate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString MonthKey;
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeekAdvanced, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnMonthClosed, int32, ClosedYear, int32, ClosedMonth, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthlySummaryClosed, const FMonthlyCloseSummary&, Summary);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnYearAdvanced, int32, NewYear, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthAdvanced, const FDateTime&, NewDate);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTimeBatchAdvanced, int32, WeeksAdvanced, const FDateTime&, NewDate);
 
 class UMusicSaveGame;
 
 /**
- * Centralized time simulation subsystem that controls the passage of in-game months.
+ * Centralized time simulation subsystem that directs deterministic weekly advancement.
+ * Month-end delegates remain as compatibility hooks for UI/listeners while monthly systems migrate.
  */
 UCLASS()
 class UGameTimeSubsystem : public UGameInstanceSubsystem
@@ -24,13 +75,25 @@ public:
     virtual void Deinitialize() override;
 
     /**
-     * Manually advance the simulation by one month.
+     * Advance the simulation by one deterministic weekly step.
+     */
+    UFUNCTION(BlueprintCallable, Category="Time")
+    void AdvanceOneWeek();
+
+    /**
+     * Advance multiple deterministic weekly steps in fixed order.
+     */
+    UFUNCTION(BlueprintCallable, Category="Time")
+    int32 AdvanceWeeks(int32 NumWeeks);
+
+    /**
+     * Compatibility entry point for existing monthly callers. Advances weekly until the next month boundary is crossed.
      */
     UFUNCTION(BlueprintCallable, Category="Time")
     void AdvanceMonth();
 
     /**
-     * Pause or resume the automatic time advancement timer.
+     * Legacy compatibility hook. Time now advances only through explicit AdvanceOneWeek/AdvanceWeeks calls.
      */
     UFUNCTION(BlueprintCallable, Category="Time")
     void PauseTime(bool bPause);
@@ -41,31 +104,90 @@ public:
     UFUNCTION(BlueprintPure, Category="Time")
     FDateTime GetCurrentGameDate() const { return CurrentGameDate; }
 
+    /**
+     * True while AdvanceWeeks is processing more than one weekly step in a single deterministic batch.
+     */
+    UFUNCTION(BlueprintPure, Category="Time")
+    bool IsBatchAdvancing() const { return bIsBatchAdvancing; }
+
+    const TArray<EMusicWeeklySimulationPhase>& GetWeeklyPhaseOrder() const { return WeeklyPhaseOrder; }
+    const TArray<EMusicWeeklySimulationPhase>& GetLastExecutedWeeklyPhases() const { return LastExecutedWeeklyPhases; }
+
     void SaveState(class UMusicSaveGame* SaveObject);
     void LoadState(const class UMusicSaveGame* SaveObject);
 
     /**
-     * Fired each time the subsystem successfully advances one month.
+     * Fired each time the subsystem successfully advances one week.
+     */
+    UPROPERTY(BlueprintAssignable, Category="Time")
+    FOnWeekAdvanced OnWeekAdvanced;
+
+    /**
+     * Fired when a weekly step crosses into a new month. ClosedYear and ClosedMonth identify the month being closed.
+     */
+    UPROPERTY(BlueprintAssignable, Category="Time")
+    FOnMonthClosed OnMonthClosed;
+
+    /**
+     * Fired once per closed month with a stable month key and date range for summary/report consumers.
+     */
+    UPROPERTY(BlueprintAssignable, Category="Time")
+    FOnMonthlySummaryClosed OnMonthlySummaryClosed;
+
+    /**
+     * Compatibility delegate for existing month-end listeners. Mirrors OnMonthClosed with the new date only.
      */
     UPROPERTY(BlueprintAssignable, Category="Time")
     FOnMonthAdvanced OnMonthAdvanced;
 
+    /**
+     * Fired when a weekly step crosses into a new year.
+     */
+    UPROPERTY(BlueprintAssignable, Category="Time")
+    FOnYearAdvanced OnYearAdvanced;
+
+    /**
+     * Fired after a multi-week batch completes so UI can refresh once after deferred monthly summaries.
+     */
+    UPROPERTY(BlueprintAssignable, Category="Time")
+    FOnTimeBatchAdvanced OnTimeBatchAdvanced;
+
+#if WITH_AUTOMATION_TESTS
+    /** Test-only date hook for boundary-focused cadence tests. */
+    void AdvanceToDateForTesting(const FDateTime& NewDate);
+#endif
+
 protected:
-    void StartTimer();
-    void StopTimer();
-
     bool HasSimulationEnded() const;
+    bool WouldEndSimulation(const FDateTime& CandidateDate) const;
+    bool DidCrossMonthBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const;
+    void ProcessClosedMonths(const FDateTime& PreviousDate, const FDateTime& NewDate);
+    void CloseMonth(const FMonthlyCloseSummary& Summary);
+    FMonthlyCloseSummary BuildMonthlyCloseSummary(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PreviousDate, const FDateTime& NewDate) const;
+    bool DidCrossYearBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const;
+    void RunWeeklySimulation(const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth);
+    void RunWeeklySimulationPhase(EMusicWeeklySimulationPhase Phase, const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth);
+    void RunMonthlyCompatibilityPass(const FMonthlyCloseSummary& Summary);
 
-    /** Current simulated date. Always normalized to the first day of the month. */
+    /** Current simulated date. Weekly cadence means this may fall inside a month. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
     FDateTime CurrentGameDate;
 
-    /** Whether the automatic timer is actively advancing months. */
+    /** Legacy state retained for Blueprint compatibility. Explicit advancement keeps this false. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
     bool bIsTimeRunning;
 
-    /** Internal repeating timer that fires once every ten real seconds. */
-    FTimerHandle TimeAdvanceHandle;
+    /** Suppresses repeated UI refreshes while deterministic fast-forward batches are still running. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+    bool bIsBatchAdvancing;
+
+    /** Fixed weekly phase order for save/load replay determinism. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+    TArray<EMusicWeeklySimulationPhase> WeeklyPhaseOrder;
+
+    /** Last weekly phase sequence executed; exposed for lightweight cadence validation. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+    TArray<EMusicWeeklySimulationPhase> LastExecutedWeeklyPhases;
 
     /** True after the timeline surpasses the year 2026, preventing further advancement. */
     bool bHasReachedSimulationEnd;

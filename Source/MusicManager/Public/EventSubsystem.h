@@ -95,6 +95,31 @@ struct FMusicNewsEvent
     TMap<FString, FString> Metadata;
 };
 
+USTRUCT(BlueprintType)
+struct FMonthlyNewsSummary
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Year = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Month = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime PeriodStart;
+
+    /** Exclusive first day of the next month. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime PeriodEnd;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString SummaryKey;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FGuid> GeneratedNewsIds;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNewsEventGenerated, const FMusicNewsEvent&, Event);
 
 class ULayout;
@@ -117,6 +142,13 @@ public:
 
     UFUNCTION()
     void HandleMonthAdvanced(const FDateTime& NewDate);
+    UFUNCTION()
+    void HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd, const FDateTime& NewDate);
+    UFUNCTION(BlueprintCallable)
+    void GetMonthlyNewsSummaries(TArray<FMonthlyNewsSummary>& OutSummaries) const;
+
+    UFUNCTION()
+    void HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTime& NewDate);
 
     UGameTimeSubsystem* GetOrCreateGameTimeSubsystem();
 
@@ -128,7 +160,9 @@ private:
     void HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS);
 
     void ProcessMonthAdvanced(const FDateTime& NewDate);
+    void ProcessMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd, const FDateTime& NewDate);
     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
+    FMusicNewsEvent BuildMonthlyNews(int32 ClosedYear, int32 ClosedMonth, const FDateTime& NewDate) const;
     /** Tracks unique news triggers using a stable string key (e.g., ArtistId + NewsType). */
     UPROPERTY()
     TSet<FString> ProcessedNewsKeys;
@@ -136,6 +170,15 @@ private:
     bool HasNewsKeyBeenProcessed(const FString& Key) const;
     void MarkNewsKeyProcessed(const FString& Key);
     FString BuildNewsKey(const FMusicNewsEvent& Event) const;
+
+    UPROPERTY()
+    TArray<FMonthlyNewsSummary> MonthlyNewsSummaries;
+
+    UPROPERTY()
+    TSet<FString> ClosedMonthlyNewsKeys;
+
+    UPROPERTY()
+    TArray<FMusicNewsEvent> PendingBatchNewsEvents;
 
     TWeakObjectPtr<ULayout> LayoutWeak;
     TWeakObjectPtr<UGameTimeSubsystem> GameTimeSubsystem;

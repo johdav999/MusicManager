@@ -58,6 +58,40 @@ struct FLabelAccount
     TArray<FCashFlowEntry> Ledger;
 };
 
+USTRUCT(BlueprintType)
+struct FMonthlyFinanceSummary
+{
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString LabelId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Year = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Month = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime PeriodStart;
+
+    /** Exclusive first day of the next month. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime PeriodEnd;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float IncomeTotal = 0.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float ExpenseTotal = 0.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float NetTotal = 0.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TMap<ETransactionType, float> CategoryTotals;
+};
+
 UCLASS()
 class MUSICMANAGER_API UFinanceManagerSubsystem : public UGameInstanceSubsystem
 {
@@ -77,9 +111,18 @@ public:
     UFUNCTION(BlueprintCallable)
     float GetLastMonthProfit(const FString& LabelId, const FDateTime& CurrentDate) const;
 
+    UFUNCTION(BlueprintCallable)
+    bool GetMonthlyFinanceSummary(const FString& LabelId, int32 Year, int32 Month, FMonthlyFinanceSummary& OutSummary) const;
+
+    UFUNCTION(BlueprintCallable)
+    void GetMonthlyFinanceSummaries(const FString& LabelId, TArray<FMonthlyFinanceSummary>& OutSummaries) const;
+
     // Returns the accumulated cash balance for the specified label.
     UFUNCTION(BlueprintCallable)
     float GetAccumulatedCash(const FString& LabelId) const;
+
+    /** Closes a month as a reporting snapshot without driving monthly-only simulation. */
+    void HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd);
 
     UFUNCTION()
     void RegisterRecordSalesRevenue(const FString& LabelId, const FString& RecordId, float Amount, const FDateTime& Timestamp);
@@ -93,4 +136,13 @@ public:
 private:
     UPROPERTY()
     TMap<FString, FLabelAccount> LabelAccounts;
+
+    UPROPERTY()
+    TArray<FMonthlyFinanceSummary> MonthlySummaries;
+
+    UPROPERTY()
+    TSet<FString> ClosedMonthlySummaryKeys;
+
+    FString BuildMonthlySummaryKey(const FString& LabelId, int32 Year, int32 Month) const;
+    FMonthlyFinanceSummary BuildMonthlySummaryForLabel(const FString& LabelId, int32 Year, int32 Month, const FDateTime& PeriodStart, const FDateTime& PeriodEnd) const;
 };

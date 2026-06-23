@@ -51,6 +51,13 @@ float UFinanceManagerSubsystem::GetLastMonthProfit(const FString& LabelId, const
 
     const FDateTime StartOfPreviousMonth(PrevYear, PrevMonth, 1);
 
+    FMonthlyFinanceSummary CachedSummary;
+    if (GetMonthlyFinanceSummary(LabelId, PrevYear, PrevMonth, CachedSummary))
+    {
+        return CachedSummary.NetTotal;
+    }
+
+    // Compatibility fallback for consumers that query before the first explicit month close.
 
     float Profit = 0.f;
     for (const FCashFlowEntry& Entry : Account->Ledger)
@@ -62,6 +69,43 @@ float UFinanceManagerSubsystem::GetLastMonthProfit(const FString& LabelId, const
     }
 
     return Profit;
+}
+
+bool UFinanceManagerSubsystem::GetMonthlyFinanceSummary(const FString& LabelId, int32 Year, int32 Month, FMonthlyFinanceSummary& OutSummary) const
+{
+    const FString SummaryKey = BuildMonthlySummaryKey(LabelId, Year, Month);
+    for (const FMonthlyFinanceSummary& Summary : MonthlySummaries)
+    {
+        if (BuildMonthlySummaryKey(Summary.LabelId, Summary.Year, Summary.Month) == SummaryKey)
+        {
+            OutSummary = Summary;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void UFinanceManagerSubsystem::GetMonthlyFinanceSummaries(const FString& LabelId, TArray<FMonthlyFinanceSummary>& OutSummaries) const
+{
+    OutSummaries.Reset();
+
+    for (const FMonthlyFinanceSummary& Summary : MonthlySummaries)
+    {
+        if (Summary.LabelId == LabelId)
+        {
+            OutSummaries.Add(Summary);
+        }
+    }
+
+    OutSummaries.Sort([](const FMonthlyFinanceSummary& A, const FMonthlyFinanceSummary& B)
+    {
+        if (A.Year != B.Year)
+        {
+            return A.Year < B.Year;
+        }
+        return A.Month < B.Month;
+    });
 }
 
 float UFinanceManagerSubsystem::GetAccumulatedCash(const FString& LabelId) const
@@ -86,10 +130,74 @@ void UFinanceManagerSubsystem::RegisterRecordSalesRevenue(const FString& LabelId
     RegisterTransaction(Entry);
 }
 
+void UFinanceManagerSubsystem::HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd)
+{
+    for (const TPair<FString, FLabelAccount>& Pair : LabelAccounts)
+    {
+        const FString SummaryKey = BuildMonthlySummaryKey(Pair.Key, ClosedYear, ClosedMonth);
+        if (ClosedMonthlySummaryKeys.Contains(SummaryKey))
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("Finance monthly summary already closed: %s"), *SummaryKey);
+            continue;
+        }
+
+        MonthlySummaries.Add(BuildMonthlySummaryForLabel(Pair.Key, ClosedYear, ClosedMonth, PeriodStart, PeriodEnd));
+        ClosedMonthlySummaryKeys.Add(SummaryKey);
+
+        UE_LOG(LogTemp, Log, TEXT("Finance monthly summary closed: %s"), *SummaryKey);
+    }
+}
+
 void UFinanceManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
 {
-    // Reserved for future monthly finance processes; intentionally empty.
-    (void)NewDate;
+    const FDateTime StartOfCurrentMonth(NewDate.GetYear(), NewDate.GetMonth(), 1);
+    int32 PrevYear = StartOfCurrentMonth.GetYear();
+    int32 PrevMonth = StartOfCurrentMonth.GetMonth() - 1;
+
+    if (PrevMonth == 0)
+    {
+        PrevMonth = 12;
+        --PrevYear;
+    }
+
+    HandleMonthClosed(PrevYear, PrevMonth, FDateTime(PrevYear, PrevMonth, 1), StartOfCurrentMonth);
+}
+
+FString UFinanceManagerSubsystem::BuildMonthlySummaryKey(const FString& LabelId, int32 Year, int32 Month) const
+{
+    return FString::Printf(TEXT("%s:%04d-%02d"), *LabelId, Year, Month);
+}
+
+FMonthlyFinanceSummary UFinanceManagerSubsystem::BuildMonthlySummaryForLabel(const FString& LabelId, int32 Year, int32 Month, const FDateTime& PeriodStart, const FDateTime& PeriodEnd) const
+{
+    FMonthlyFinanceSummary Summary;
+    Summary.LabelId = LabelId;
+    Summary.Year = Year;
+    Summary.Month = Month;
+    Summary.PeriodStart = PeriodStart;
+    Summary.PeriodEnd = PeriodEnd;
+
+    if (const FLabelAccount* Account = LabelAccounts.Find(LabelId))
+    {
+        for (const FCashFlowEntry& Entry : Account->Ledger)
+        {
+            if (Entry.Timestamp >= PeriodStart && Entry.Timestamp < PeriodEnd)
+            {
+                Summary.CategoryTotals.FindOrAdd(Entry.Type) += Entry.Amount;
+                Summary.NetTotal += Entry.Amount;
+                if (Entry.Amount >= 0.f)
+                {
+                    Summary.IncomeTotal += Entry.Amount;
+                }
+                else
+                {
+                    Summary.ExpenseTotal += Entry.Amount;
+                }
+            }
+        }
+    }
+
+    return Summary;
 }
 
 void UFinanceManagerSubsystem::ProcessRecordSalesEntries(const TArray<FRecordSalesEntry>& Entries, const TMap<ERecordFormat, FRecordFormatRule>& FormatRules, const TMap<FString, FRecordData>& RecordDataById)

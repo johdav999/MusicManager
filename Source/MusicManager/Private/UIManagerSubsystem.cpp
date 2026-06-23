@@ -259,6 +259,13 @@ void UUIManagerSubsystem::RefreshSignedArtistPanel()
         return;
     }
 
+    if (bIsSimulationBatchUpdateActive)
+    {
+        bDeferredSignedArtistRefresh = true;
+        ++SuppressedUIRefreshCount;
+        return;
+    }
+
     UArtistManagerSubsystem* ArtistManager = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
     if (!IsValid(ArtistManager))
     {
@@ -332,18 +339,13 @@ void UUIManagerSubsystem::HandleArtistSigned(const FArtistContract& Contract)
         return;
     }
 
-    // Stop audition music when signing a deal
-    StopAuditionMusic();
-
-    if (ULayout* Layout = ActiveLayout.Get())
+    if (bIsSimulationBatchUpdateActive)
     {
-        Layout->CloseAuditionWidget();
-        Layout->ShowContract(Contract);
+        bDeferredSignedArtistRefresh = true;
+        ++SuppressedUIRefreshCount;
+        return;
     }
-}
 
-void UUIManagerSubsystem::HandleArtistListChanged()
-{
     TArray<FArtistData> ArtistDataList;
 
     if (UArtistManagerSubsystem* ArtistSub = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
@@ -377,6 +379,13 @@ void UUIManagerSubsystem::HandleNewsEvent(const FMusicNewsEvent& EventData)
                 Self->HandleNewsEvent(EventData);
             }
         });
+        return;
+    }
+
+    if (bIsSimulationBatchUpdateActive)
+    {
+        DeferredBatchNewsEvents.Add(EventData);
+        ++SuppressedUIRefreshCount;
         return;
     }
 
@@ -668,5 +677,71 @@ void UUIManagerSubsystem::RebuildUI()
         ActiveLayout = NewLayout;
         LayoutClass = ClassToUse;
         NewLayout->AddToViewport();
+    });
+}
+
+void UUIManagerSubsystem::BeginSimulationBatchUpdate(int32 RequestedWeeks, const FDateTime& StartDate)
+{
+    ExecuteOnGameThread([this, RequestedWeeks, StartDate]()
+    {
+        if (bIsSimulationBatchUpdateActive)
+        {
+            UE_LOG(LogUIManagerSubsystem, Warning, TEXT("BeginSimulationBatchUpdate called while another batch is active."));
+        }
+
+        bIsSimulationBatchUpdateActive = true;
+        bDeferredSignedArtistRefresh = false;
+        SuppressedUIRefreshCount = 0;
+        DeferredBatchNewsEvents.Reset();
+
+        UE_LOG(LogUIManagerSubsystem, Log, TEXT("UI batch update started: RequestedWeeks=%d StartDate=%s"),
+            RequestedWeeks,
+            *StartDate.ToString());
+    });
+}
+
+void UUIManagerSubsystem::EndSimulationBatchUpdate(int32 WeeksProcessed, const FDateTime& EndDate)
+{
+    ExecuteOnGameThread([this, WeeksProcessed, EndDate]()
+    {
+        if (!bIsSimulationBatchUpdateActive)
+        {
+            return;
+        }
+
+        const bool bShouldRefreshSignedArtists = bDeferredSignedArtistRefresh;
+        const int32 DeferredNewsCount = DeferredBatchNewsEvents.Num();
+        const int32 DeferredRefreshCount = SuppressedUIRefreshCount;
+
+        TArray<FMusicNewsEvent> NewsToFlush;
+        NewsToFlush = MoveTemp(DeferredBatchNewsEvents);
+
+        bIsSimulationBatchUpdateActive = false;
+        bDeferredSignedArtistRefresh = false;
+        SuppressedUIRefreshCount = 0;
+
+        for (const FMusicNewsEvent& Event : NewsToFlush)
+        {
+            if (ULayout* Layout = ActiveLayout.Get())
+            {
+                Layout->AddNewsCardToFeed(Event);
+            }
+            else
+            {
+                PendingNewsEvents.Add(Event);
+            }
+        }
+
+        if (bShouldRefreshSignedArtists)
+        {
+            RefreshSignedArtistPanel();
+        }
+
+        UE_LOG(LogUIManagerSubsystem, Log, TEXT("UI batch update finished: WeeksProcessed=%d EndDate=%s DeferredNews=%d SuppressedRefreshes=%d RefreshedSignedArtists=%s"),
+            WeeksProcessed,
+            *EndDate.ToString(),
+            DeferredNewsCount,
+            DeferredRefreshCount,
+            bShouldRefreshSignedArtists ? TEXT("true") : TEXT("false"));
     });
 }

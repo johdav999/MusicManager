@@ -63,6 +63,14 @@ public:
 
     void RefreshSignedArtistPanel();
 
+    /** Suppresses repeated presentation refreshes while deterministic multi-week simulation is running. */
+    void BeginSimulationBatchUpdate(int32 RequestedWeeks, const FDateTime& StartDate);
+
+    /** Flushes one summarized presentation refresh after deterministic multi-week simulation completes. */
+    void EndSimulationBatchUpdate(int32 WeeksProcessed, const FDateTime& EndDate);
+
+    bool IsSimulationBatchUpdateActive() const { return bIsSimulationBatchUpdateActive; }
+
     void ShowContractForArtist(const FString& ArtistName);
 
     UFUNCTION()
@@ -168,6 +176,15 @@ private:
     /** News events received before the layout exists */
     UPROPERTY()
     TArray<FMusicNewsEvent> PendingNewsEvents;
+
+    /** Transient UI coalescing state for fast-forward simulation. */
+    bool bIsSimulationBatchUpdateActive = false;
+
+    bool bDeferredSignedArtistRefresh = false;
+
+    int32 SuppressedUIRefreshCount = 0;
+
+    TArray<FMusicNewsEvent> DeferredBatchNewsEvents;
 
     template<typename Func>
     void ExecuteOnGameThread(Func&& Lambda)

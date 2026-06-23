@@ -32,12 +32,24 @@ void UStatusWidget::NativeConstruct()
 
     if (UGameTimeSubsystem* TimeSys = CachedTimeSubsystem.Get())
     {
+        if (TimeSys->OnWeekAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleWeekAdvanced))
+        {
+            TimeSys->OnWeekAdvanced.RemoveDynamic(this, &UStatusWidget::HandleWeekAdvanced);
+        }
+
         if (TimeSys->OnMonthAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleMonthAdvanced))
         {
             TimeSys->OnMonthAdvanced.RemoveDynamic(this, &UStatusWidget::HandleMonthAdvanced);
         }
 
+        if (TimeSys->OnTimeBatchAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleTimeBatchAdvanced))
+        {
+            TimeSys->OnTimeBatchAdvanced.RemoveDynamic(this, &UStatusWidget::HandleTimeBatchAdvanced);
+        }
+
+        TimeSys->OnWeekAdvanced.AddDynamic(this, &UStatusWidget::HandleWeekAdvanced);
         TimeSys->OnMonthAdvanced.AddDynamic(this, &UStatusWidget::HandleMonthAdvanced);
+        TimeSys->OnTimeBatchAdvanced.AddDynamic(this, &UStatusWidget::HandleTimeBatchAdvanced);
         HandleMonthAdvanced(TimeSys->GetCurrentGameDate());
     }
 }
@@ -48,9 +60,19 @@ void UStatusWidget::NativeDestruct()
 
     if (UGameTimeSubsystem* TimeSys = CachedTimeSubsystem.Get())
     {
+        if (TimeSys->OnWeekAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleWeekAdvanced))
+        {
+            TimeSys->OnWeekAdvanced.RemoveDynamic(this, &UStatusWidget::HandleWeekAdvanced);
+        }
+
         if (TimeSys->OnMonthAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleMonthAdvanced))
         {
             TimeSys->OnMonthAdvanced.RemoveDynamic(this, &UStatusWidget::HandleMonthAdvanced);
+        }
+
+        if (TimeSys->OnTimeBatchAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleTimeBatchAdvanced))
+        {
+            TimeSys->OnTimeBatchAdvanced.RemoveDynamic(this, &UStatusWidget::HandleTimeBatchAdvanced);
         }
     }
 
@@ -67,6 +89,33 @@ void UStatusWidget::NativeDestruct()
     Super::NativeDestruct();
 }
 
+void UStatusWidget::HandleWeekAdvanced(const FDateTime& PreviousDate, const FDateTime& NewDate)
+{
+    UE_LOG(LogTemp, Verbose, TEXT("StatusWidget received week advanced: %s -> %s"),
+        *PreviousDate.ToString(),
+        *NewDate.ToString());
+
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<UStatusWidget> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, PreviousDate, NewDate]()
+        {
+            if (UStatusWidget* StrongThis = WeakThis.Get())
+            {
+                StrongThis->HandleWeekAdvanced(PreviousDate, NewDate);
+            }
+        });
+        return;
+    }
+
+    if (UGameTimeSubsystem* TimeSubsystem = GetTimeSubsystem(); TimeSubsystem && TimeSubsystem->IsBatchAdvancing())
+    {
+        return;
+    }
+
+    RefreshStatus(NewDate);
+}
+
 void UStatusWidget::HandleMonthAdvanced(const FDateTime& NewDate)
 {
     UE_LOG(LogTemp, Verbose, TEXT("StatusWidget received month advanced: %s"), *NewDate.ToString());
@@ -79,6 +128,33 @@ void UStatusWidget::HandleMonthAdvanced(const FDateTime& NewDate)
             if (UStatusWidget* StrongThis = WeakThis.Get())
             {
                 StrongThis->HandleMonthAdvanced(NewDate);
+            }
+        });
+        return;
+    }
+
+    if (UGameTimeSubsystem* TimeSubsystem = GetTimeSubsystem(); TimeSubsystem && TimeSubsystem->IsBatchAdvancing())
+    {
+        return;
+    }
+
+    RefreshStatus(NewDate);
+}
+
+void UStatusWidget::HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTime& NewDate)
+{
+    UE_LOG(LogTemp, Verbose, TEXT("StatusWidget received batch time advancement: Weeks=%d Date=%s"),
+        WeeksAdvanced,
+        *NewDate.ToString());
+
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<UStatusWidget> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, WeeksAdvanced, NewDate]()
+        {
+            if (UStatusWidget* StrongThis = WeakThis.Get())
+            {
+                StrongThis->HandleTimeBatchAdvanced(WeeksAdvanced, NewDate);
             }
         });
         return;

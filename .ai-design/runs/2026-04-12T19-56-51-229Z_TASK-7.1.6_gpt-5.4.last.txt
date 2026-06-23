@@ -1,0 +1,719 @@
+diff --git a/Source/MusicManager/Public/GameTimeSubsystem.h b/Source/MusicManager/Public/GameTimeSubsystem.h
+index 1c8e5d1..f92b7a4 100644
+--- a/Source/MusicManager/Public/GameTimeSubsystem.h
++++ b/Source/MusicManager/Public/GameTimeSubsystem.h
+@@ -24,10 +24,43 @@ enum class EMusicWeeklySimulationPhase : uint8
+     Notifications UMETA(DisplayName = "Notifications")
+ };
+ 
++USTRUCT(BlueprintType)
++struct FMonthlyCloseSummary
++{
++    GENERATED_BODY()
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    int32 ClosedYear = 0;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    int32 ClosedMonth = 0;
++
++    /** Inclusive first day of the closed month. */
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FDateTime PeriodStart;
++
++    /** Exclusive first day of the next month. */
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FDateTime PeriodEnd;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FDateTime PreviousDate;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FDateTime NewDate;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FString MonthKey;
++};
++
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeekAdvanced, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnMonthClosed, int32, ClosedYear, int32, ClosedMonth, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
++DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthlySummaryClosed, const FMonthlyCloseSummary&, Summary);
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnYearAdvanced, int32, NewYear, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthAdvanced, const FDateTime&, NewDate);
++DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTimeBatchAdvanced, int32, WeeksAdvanced, const FDateTime&, NewDate);
+ 
+ class UMusicSaveGame;
+ 
+@@ -65,6 +98,12 @@ public:
+     UFUNCTION(BlueprintPure, Category="Time")
+     FDateTime GetCurrentGameDate() const { return CurrentGameDate; }
+ 
++    /**
++     * True while AdvanceWeeks is processing more than one weekly step in a single deterministic batch.
++     */
++    UFUNCTION(BlueprintPure, Category="Time")
++    bool IsBatchAdvancing() const { return bIsBatchAdvancing; }
++
+     const TArray<EMusicWeeklySimulationPhase>& GetWeeklyPhaseOrder() const { return WeeklyPhaseOrder; }
+     const TArray<EMusicWeeklySimulationPhase>& GetLastExecutedWeeklyPhases() const { return LastExecutedWeeklyPhases; }
+ 
+@@ -85,6 +124,12 @@ public:
+     UPROPERTY(BlueprintAssignable, Category="Time")
+     FOnMonthClosed OnMonthClosed;
+ 
++    /**
++     * Fired once per closed month with a stable month key and date range for summary/report consumers.
++     */
++    UPROPERTY(BlueprintAssignable, Category="Time")
++    FOnMonthlySummaryClosed OnMonthlySummaryClosed;
++
+     /**
+      * Compatibility delegate for existing month-end listeners. Mirrors OnMonthClosed with the new date only.
+      */
+@@ -97,6 +142,12 @@ public:
+     UPROPERTY(BlueprintAssignable, Category="Time")
+     FOnYearAdvanced OnYearAdvanced;
+ 
++    /**
++     * Fired after a multi-week batch completes so UI can refresh once after deferred monthly summaries.
++     */
++    UPROPERTY(BlueprintAssignable, Category="Time")
++    FOnTimeBatchAdvanced OnTimeBatchAdvanced;
++
+ #if WITH_AUTOMATION_TESTS
+     /** Test-only date hook for boundary-focused cadence tests. */
+     void AdvanceToDateForTesting(const FDateTime& NewDate);
+@@ -109,10 +160,13 @@ protected:
+     bool HasSimulationEnded() const;
+     bool WouldEndSimulation(const FDateTime& CandidateDate) const;
+     bool DidCrossMonthBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const;
++    void ProcessClosedMonths(const FDateTime& PreviousDate, const FDateTime& NewDate);
++    void CloseMonth(const FMonthlyCloseSummary& Summary);
++    FMonthlyCloseSummary BuildMonthlyCloseSummary(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PreviousDate, const FDateTime& NewDate) const;
+     bool DidCrossYearBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const;
+     void RunWeeklySimulation(const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth);
+     void RunWeeklySimulationPhase(EMusicWeeklySimulationPhase Phase, const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth);
+-    void RunMonthlyCompatibilityPass(const FDateTime& NewDate);
++    void RunMonthlyCompatibilityPass(const FMonthlyCloseSummary& Summary);
+ 
+     /** Current simulated date. Weekly cadence means this may fall inside a month. */
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+@@ -123,6 +177,10 @@ protected:
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     bool bIsTimeRunning;
+ 
++    /** Suppresses repeated UI refreshes while deterministic fast-forward batches are still running. */
++    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
++    bool bIsBatchAdvancing;
++
+     /** Fixed weekly phase order for save/load replay determinism. */
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     TArray<EMusicWeeklySimulationPhase> WeeklyPhaseOrder;
+diff --git a/Source/MusicManager/Private/GameTimeSubsystem.cpp b/Source/MusicManager/Private/GameTimeSubsystem.cpp
+index d8a6417..9f492a8 100644
+--- a/Source/MusicManager/Private/GameTimeSubsystem.cpp
++++ b/Source/MusicManager/Private/GameTimeSubsystem.cpp
+@@ -45,6 +45,7 @@ UGameTimeSubsystem::UGameTimeSubsystem()
+     : CurrentGameDate(1955, 1, 1)
+     , bIsTimeRunning(false)
++    , bIsBatchAdvancing(false)
+     , bHasReachedSimulationEnd(false)
+ {
+@@ -79,6 +80,7 @@ void UGameTimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+     CurrentGameDate = FDateTime(1955, 1, 1);
+     bHasReachedSimulationEnd = false;
+     bIsTimeRunning = false;
++    bIsBatchAdvancing = false;
+     LastExecutedWeeklyPhases.Reset();
+ 
+     StartTimer();
+@@ -111,6 +113,8 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+         return 0;
+     }
+ 
++    const bool bWasBatchAdvancing = bIsBatchAdvancing;
++    bIsBatchAdvancing = NumWeeks > 1;
+     const FDateTime BatchStartDate = CurrentGameDate;
+     int32 WeeksProcessed = 0;
+     int32 MonthsClosed = 0;
+@@ -137,8 +141,6 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+ 
+         const bool bClosedMonth = DidCrossMonthBoundary(PreviousDate, NewDate);
+         const bool bAdvancedYear = DidCrossYearBoundary(PreviousDate, NewDate);
+-        const int32 ClosedMonth = PreviousDate.GetMonth();
+-        const int32 ClosedMonthYear = PreviousDate.GetYear();
+ 
+         CurrentGameDate = NewDate;
+ 
+@@ -151,16 +153,7 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+ 
+         if (bClosedMonth)
+         {
+-            ++MonthsClosed;
+-
+-            UE_LOG(LogMusicSimTime, Log, TEXT("Month closed: %04d-%02d at weekly boundary %s -> %s"),
+-                ClosedMonthYear,
+-                ClosedMonth,
+-                *PreviousDate.ToString(),
+-                *CurrentGameDate.ToString());
+-
+-            OnMonthClosed.Broadcast(ClosedMonthYear, ClosedMonth, PreviousDate, CurrentGameDate);
+-            OnMonthAdvanced.Broadcast(CurrentGameDate);
++            ProcessClosedMonths(PreviousDate, CurrentGameDate);
++            ++MonthsClosed;
+         }
+ 
+         if (bAdvancedYear)
+@@ -176,6 +169,8 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+         ++WeeksProcessed;
+     }
+ 
++    bIsBatchAdvancing = bWasBatchAdvancing;
++
+     if (WeeksProcessed > 1)
+     {
+         UE_LOG(LogMusicSimTime, Log, TEXT("Batch weekly advancement finished: RequestedWeeks=%d ProcessedWeeks=%d StartDate=%s EndDate=%s MonthsClosed=%d CrossedYear=%s"),
+@@ -186,6 +181,8 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+             MonthsClosed,
+             bCrossedYear ? TEXT("true") : TEXT("false"));
++
++        OnTimeBatchAdvanced.Broadcast(WeeksProcessed, CurrentGameDate);
+     }
+ 
+     return WeeksProcessed;
+@@ -238,11 +235,6 @@ void UGameTimeSubsystem::RunWeeklySimulation(const FDateTime& PreviousDate, cons
+     {
+         RunWeeklySimulationPhase(Phase, PreviousDate, NewDate, bClosedMonth);
+     }
+-
+-    if (bClosedMonth)
+-    {
+-        RunMonthlyCompatibilityPass(NewDate);
+-    }
+ }
+ 
+ void UGameTimeSubsystem::RunWeeklySimulationPhase(EMusicWeeklySimulationPhase Phase, const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth)
+@@ -287,7 +279,71 @@ void UGameTimeSubsystem::RunWeeklySimulationPhase(EMusicWeeklySimulationPhase Ph
+     }
+ }
+ 
+-void UGameTimeSubsystem::RunMonthlyCompatibilityPass(const FDateTime& NewDate)
++void UGameTimeSubsystem::ProcessClosedMonths(const FDateTime& PreviousDate, const FDateTime& NewDate)
++{
++    FDateTime MonthCursor(PreviousDate.GetYear(), PreviousDate.GetMonth(), 1);
++    const FDateTime NewMonthStart(NewDate.GetYear(), NewDate.GetMonth(), 1);
++
++    // A single week usually closes one month, but fast-forward/test hooks may skip farther.
++    while (MonthCursor < NewMonthStart)
++    {
++        const FMonthlyCloseSummary Summary = BuildMonthlyCloseSummary(
++            MonthCursor.GetYear(),
++            MonthCursor.GetMonth(),
++            PreviousDate,
++            NewDate);
++
++        CloseMonth(Summary);
++
++        int32 NextMonth = MonthCursor.GetMonth() + 1;
++        int32 NextYear = MonthCursor.GetYear();
++        if (NextMonth > 12)
++        {
++            NextMonth = 1;
++            ++NextYear;
++        }
++
++        MonthCursor = FDateTime(NextYear, NextMonth, 1);
++    }
++}
++
++FMonthlyCloseSummary UGameTimeSubsystem::BuildMonthlyCloseSummary(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PreviousDate, const FDateTime& NewDate) const
++{
++    int32 NextMonth = ClosedMonth + 1;
++    int32 NextYear = ClosedYear;
++    if (NextMonth > 12)
++    {
++        NextMonth = 1;
++        ++NextYear;
++    }
++
++    FMonthlyCloseSummary Summary;
++    Summary.ClosedYear = ClosedYear;
++    Summary.ClosedMonth = ClosedMonth;
++    Summary.PeriodStart = FDateTime(ClosedYear, ClosedMonth, 1);
++    Summary.PeriodEnd = FDateTime(NextYear, NextMonth, 1);
++    Summary.PreviousDate = PreviousDate;
++    Summary.NewDate = NewDate;
++    Summary.MonthKey = FString::Printf(TEXT("%04d-%02d"), ClosedYear, ClosedMonth);
++    return Summary;
++}
++
++void UGameTimeSubsystem::CloseMonth(const FMonthlyCloseSummary& Summary)
++{
++    UE_LOG(LogMusicSimTime, Log, TEXT("Month closed: %s at weekly boundary %s -> %s"),
++        *Summary.MonthKey,
++        *Summary.PreviousDate.ToString(),
++        *Summary.NewDate.ToString());
++
++    RunMonthlyCompatibilityPass(Summary);
++
++    // Summary delegates fire after compatibility finalizers so finance/news snapshots are queryable.
++    OnMonthlySummaryClosed.Broadcast(Summary);
++    OnMonthClosed.Broadcast(Summary.ClosedYear, Summary.ClosedMonth, Summary.PreviousDate, Summary.NewDate);
++    OnMonthAdvanced.Broadcast(Summary.NewDate);
++}
++
++void UGameTimeSubsystem::RunMonthlyCompatibilityPass(const FMonthlyCloseSummary& Summary)
+ {
+     UGameInstance* GameInstance = GetGameInstance();
+     if (!GameInstance)
+@@ -301,35 +357,37 @@ void UGameTimeSubsystem::RunMonthlyCompatibilityPass(const FDateTime& NewDate)
+     if (UMarketManagerSubsystem* MarketSubsystem = GameInstance->GetSubsystem<UMarketManagerSubsystem>())
+     {
+-        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=MarketManagerSubsystem Date=%s"), *NewDate.ToString());
+-        MarketSubsystem->HandleMonthAdvanced(NewDate);
++        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=MarketManagerSubsystem ClosedMonth=%s Date=%s"), *Summary.MonthKey, *Summary.NewDate.ToString());
++        MarketSubsystem->HandleMonthAdvanced(Summary.NewDate);
+     }
+ 
+     if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+     {
+-        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=ArtistManagerSubsystem Date=%s"), *NewDate.ToString());
+-        ArtistSubsystem->HandleMonthAdvanced(NewDate);
++        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=ArtistManagerSubsystem ClosedMonth=%s Date=%s"), *Summary.MonthKey, *Summary.NewDate.ToString());
++        ArtistSubsystem->HandleMonthAdvanced(Summary.NewDate);
+     }
+ 
+     if (URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
+     {
+-        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=RecordManagerSubsystem Date=%s"), *NewDate.ToString());
+-        RecordSubsystem->HandleMonthAdvanced(NewDate);
++        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=RecordManagerSubsystem ClosedMonth=%s Date=%s"), *Summary.MonthKey, *Summary.NewDate.ToString());
++        RecordSubsystem->HandleMonthAdvanced(Summary.NewDate);
+     }
+ 
+     if (UFinanceManagerSubsystem* FinanceSubsystem = GameInstance->GetSubsystem<UFinanceManagerSubsystem>())
+     {
+-        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=FinanceManagerSubsystem Date=%s"), *NewDate.ToString());
+-        FinanceSubsystem->HandleMonthAdvanced(NewDate);
++        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=FinanceManagerSubsystem ClosedMonth=%s Date=%s"), *Summary.MonthKey, *Summary.NewDate.ToString());
++        FinanceSubsystem->HandleMonthClosed(Summary.ClosedYear, Summary.ClosedMonth, Summary.PeriodStart, Summary.PeriodEnd);
+     }
+ 
+     if (UEventSubsystem* EventSubsystem = GameInstance->GetSubsystem<UEventSubsystem>())
+     {
+-        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=EventSubsystem Date=%s"), *NewDate.ToString());
+-        EventSubsystem->HandleMonthAdvanced(NewDate);
++        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=EventSubsystem ClosedMonth=%s Date=%s"), *Summary.MonthKey, *Summary.NewDate.ToString());
++        EventSubsystem->HandleMonthClosed(Summary.ClosedYear, Summary.ClosedMonth, Summary.PeriodStart, Summary.PeriodEnd, Summary.NewDate);
+     }
+ }
+diff --git a/Source/MusicManager/Public/FinanceManagerSubsystem.h b/Source/MusicManager/Public/FinanceManagerSubsystem.h
+index 6868f9c..d64913b 100644
+--- a/Source/MusicManager/Public/FinanceManagerSubsystem.h
++++ b/Source/MusicManager/Public/FinanceManagerSubsystem.h
+@@ -47,6 +47,38 @@ struct FLabelAccount
+     TArray<FCashFlowEntry> Ledger;
+ };
+ 
++USTRUCT(BlueprintType)
++struct FMonthlyFinanceSummary
++{
++    GENERATED_BODY();
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FString LabelId;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    int32 Year = 0;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    int32 Month = 0;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FDateTime PeriodStart;
++
++    /** Exclusive first day of the next month. */
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FDateTime PeriodEnd;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    float IncomeTotal = 0.f;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    float ExpenseTotal = 0.f;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    float NetTotal = 0.f;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    TMap<ETransactionType, float> CategoryTotals;
++};
++
+ UCLASS()
+ class MUSICMANAGER_API UFinanceManagerSubsystem : public UGameInstanceSubsystem
+ {
+@@ -68,10 +100,20 @@ public:
+     UFUNCTION(BlueprintCallable)
+     float GetLastMonthProfit(const FString& LabelId, const FDateTime& CurrentDate) const;
+ 
++    UFUNCTION(BlueprintCallable)
++    bool GetMonthlyFinanceSummary(const FString& LabelId, int32 Year, int32 Month, FMonthlyFinanceSummary& OutSummary) const;
++
++    UFUNCTION(BlueprintCallable)
++    void GetMonthlyFinanceSummaries(const FString& LabelId, TArray<FMonthlyFinanceSummary>& OutSummaries) const;
++
+     // Returns the accumulated cash balance for the specified label.
+     UFUNCTION(BlueprintCallable)
+     float GetAccumulatedCash(const FString& LabelId) const;
+ 
++    /** Closes a month as a reporting snapshot without driving monthly-only simulation. */
++    void HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd);
++
+     UFUNCTION()
+     void RegisterRecordSalesRevenue(const FString& LabelId, const FString& RecordId, float Amount, const FDateTime& Timestamp);
+@@ -85,5 +127,13 @@ public:
+ private:
+     UPROPERTY()
+     TMap<FString, FLabelAccount> LabelAccounts;
++
++    UPROPERTY()
++    TArray<FMonthlyFinanceSummary> MonthlySummaries;
++
++    UPROPERTY()
++    TSet<FString> ClosedMonthlySummaryKeys;
++
++    FString BuildMonthlySummaryKey(const FString& LabelId, int32 Year, int32 Month) const;
++    FMonthlyFinanceSummary BuildMonthlySummaryForLabel(const FString& LabelId, int32 Year, int32 Month, const FDateTime& PeriodStart, const FDateTime& PeriodEnd) const;
+ };
+diff --git a/Source/MusicManager/Private/FinanceManagerSubsystem.cpp b/Source/MusicManager/Private/FinanceManagerSubsystem.cpp
+index 9f58350..8bde42d 100644
+--- a/Source/MusicManager/Private/FinanceManagerSubsystem.cpp
++++ b/Source/MusicManager/Private/FinanceManagerSubsystem.cpp
+@@ -46,6 +46,13 @@ float UFinanceManagerSubsystem::GetLastMonthProfit(const FString& LabelId, const
+ 
+     const FDateTime StartOfPreviousMonth(PrevYear, PrevMonth, 1);
+ 
++    FMonthlyFinanceSummary CachedSummary;
++    if (GetMonthlyFinanceSummary(LabelId, PrevYear, PrevMonth, CachedSummary))
++    {
++        return CachedSummary.NetTotal;
++    }
++
++    // Compatibility fallback for consumers that query before the first explicit month close.
+ 
+     float Profit = 0.f;
+     for (const FCashFlowEntry& Entry : Account->Ledger)
+@@ -59,6 +66,39 @@ float UFinanceManagerSubsystem::GetLastMonthProfit(const FString& LabelId, const
+     return Profit;
+ }
+ 
++bool UFinanceManagerSubsystem::GetMonthlyFinanceSummary(const FString& LabelId, int32 Year, int32 Month, FMonthlyFinanceSummary& OutSummary) const
++{
++    const FString SummaryKey = BuildMonthlySummaryKey(LabelId, Year, Month);
++    for (const FMonthlyFinanceSummary& Summary : MonthlySummaries)
++    {
++        if (BuildMonthlySummaryKey(Summary.LabelId, Summary.Year, Summary.Month) == SummaryKey)
++        {
++            OutSummary = Summary;
++            return true;
++        }
++    }
++
++    return false;
++}
++
++void UFinanceManagerSubsystem::GetMonthlyFinanceSummaries(const FString& LabelId, TArray<FMonthlyFinanceSummary>& OutSummaries) const
++{
++    OutSummaries.Reset();
++
++    for (const FMonthlyFinanceSummary& Summary : MonthlySummaries)
++    {
++        if (Summary.LabelId == LabelId)
++        {
++            OutSummaries.Add(Summary);
++        }
++    }
++
++    OutSummaries.Sort([](const FMonthlyFinanceSummary& A, const FMonthlyFinanceSummary& B)
++    {
++        if (A.Year != B.Year)
++        {
++            return A.Year < B.Year;
++        }
++        return A.Month < B.Month;
++    });
++}
++
+ float UFinanceManagerSubsystem::GetAccumulatedCash(const FString& LabelId) const
+ {
+     if (const FLabelAccount* Account = LabelAccounts.Find(LabelId))
+@@ -82,9 +122,64 @@ void UFinanceManagerSubsystem::RegisterRecordSalesRevenue(const FString& LabelId
+     RegisterTransaction(Entry);
+ }
+ 
++void UFinanceManagerSubsystem::HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd)
++{
++    for (const TPair<FString, FLabelAccount>& Pair : LabelAccounts)
++    {
++        const FString SummaryKey = BuildMonthlySummaryKey(Pair.Key, ClosedYear, ClosedMonth);
++        if (ClosedMonthlySummaryKeys.Contains(SummaryKey))
++        {
++            UE_LOG(LogTemp, Verbose, TEXT("Finance monthly summary already closed: %s"), *SummaryKey);
++            continue;
++        }
++
++        MonthlySummaries.Add(BuildMonthlySummaryForLabel(Pair.Key, ClosedYear, ClosedMonth, PeriodStart, PeriodEnd));
++        ClosedMonthlySummaryKeys.Add(SummaryKey);
++
++        UE_LOG(LogTemp, Log, TEXT("Finance monthly summary closed: %s"), *SummaryKey);
++    }
++}
++
+ void UFinanceManagerSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
+ {
+-    // Reserved for future monthly finance processes; intentionally empty.
+-    (void)NewDate;
++    const FDateTime StartOfCurrentMonth(NewDate.GetYear(), NewDate.GetMonth(), 1);
++    int32 PrevYear = StartOfCurrentMonth.GetYear();
++    int32 PrevMonth = StartOfCurrentMonth.GetMonth() - 1;
++
++    if (PrevMonth == 0)
++    {
++        PrevMonth = 12;
++        --PrevYear;
++    }
++
++    HandleMonthClosed(PrevYear, PrevMonth, FDateTime(PrevYear, PrevMonth, 1), StartOfCurrentMonth);
++}
++
++FString UFinanceManagerSubsystem::BuildMonthlySummaryKey(const FString& LabelId, int32 Year, int32 Month) const
++{
++    return FString::Printf(TEXT("%s:%04d-%02d"), *LabelId, Year, Month);
++}
++
++FMonthlyFinanceSummary UFinanceManagerSubsystem::BuildMonthlySummaryForLabel(const FString& LabelId, int32 Year, int32 Month, const FDateTime& PeriodStart, const FDateTime& PeriodEnd) const
++{
++    FMonthlyFinanceSummary Summary;
++    Summary.LabelId = LabelId;
++    Summary.Year = Year;
++    Summary.Month = Month;
++    Summary.PeriodStart = PeriodStart;
++    Summary.PeriodEnd = PeriodEnd;
++
++    if (const FLabelAccount* Account = LabelAccounts.Find(LabelId))
++    {
++        for (const FCashFlowEntry& Entry : Account->Ledger)
++        {
++            if (Entry.Timestamp >= PeriodStart && Entry.Timestamp < PeriodEnd)
++            {
++                Summary.CategoryTotals.FindOrAdd(Entry.Type) += Entry.Amount;
++                Summary.NetTotal += Entry.Amount;
++                if (Entry.Amount >= 0.f)
++                {
++                    Summary.IncomeTotal += Entry.Amount;
++                }
++                else
++                {
++                    Summary.ExpenseTotal += Entry.Amount;
++                }
++            }
++        }
++    }
++
++    return Summary;
+ }
+ 
+ void UFinanceManagerSubsystem::ProcessRecordSalesEntries(const TArray<FRecordSalesEntry>& Entries, const TMap<ERecordFormat, FRecordFormatRule>& FormatRules, const TMap<FString, FRecordData>& RecordDataById)
+diff --git a/Source/MusicManager/Public/EventSubsystem.h b/Source/MusicManager/Public/EventSubsystem.h
+index 0a01d3e..9ba56a1 100644
+--- a/Source/MusicManager/Public/EventSubsystem.h
++++ b/Source/MusicManager/Public/EventSubsystem.h
+@@ -76,6 +76,30 @@ struct FMusicNewsEvent
+     TMap<FString, FString> Metadata;
+ };
+ 
++USTRUCT(BlueprintType)
++struct FMonthlyNewsSummary
++{
++    GENERATED_BODY()
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    int32 Year = 0;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    int32 Month = 0;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FDateTime PeriodStart;
++
++    /** Exclusive first day of the next month. */
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FDateTime PeriodEnd;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    FString SummaryKey;
++
++    UPROPERTY(EditAnywhere, BlueprintReadWrite)
++    TArray<FGuid> GeneratedNewsIds;
++};
++
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnNewsEventGenerated, const FMusicNewsEvent&, Event);
+ 
+ class ULayout;
+@@ -100,6 +124,11 @@ public:
+     UFUNCTION()
+     void HandleMonthAdvanced(const FDateTime& NewDate);
+     UFUNCTION()
++    void HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd, const FDateTime& NewDate);
++    UFUNCTION(BlueprintCallable)
++    void GetMonthlyNewsSummaries(TArray<FMonthlyNewsSummary>& OutSummaries) const;
++
++    UFUNCTION()
+     void HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTime& NewDate);
+ 
+     UGameTimeSubsystem* GetOrCreateGameTimeSubsystem();
+@@ -112,7 +141,9 @@ private:
+     void HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS);
+ 
+     void ProcessMonthAdvanced(const FDateTime& NewDate);
++    void ProcessMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd, const FDateTime& NewDate);
+     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
++    FMusicNewsEvent BuildMonthlyNews(int32 ClosedYear, int32 ClosedMonth, const FDateTime& NewDate) const;
+     /** Tracks unique news triggers using a stable string key (e.g., ArtistId + NewsType). */
+     UPROPERTY()
+     TSet<FString> ProcessedNewsKeys;
+@@ -122,6 +153,12 @@ private:
+     FString BuildNewsKey(const FMusicNewsEvent& Event) const;
+ 
+     UPROPERTY()
++    TArray<FMonthlyNewsSummary> MonthlyNewsSummaries;
++
++    UPROPERTY()
++    TSet<FString> ClosedMonthlyNewsKeys;
++
++    UPROPERTY()
+     TArray<FMusicNewsEvent> PendingBatchNewsEvents;
+ 
+     TWeakObjectPtr<ULayout> LayoutWeak;
+diff --git a/Source/MusicManager/Private/EventSubsystem.cpp b/Source/MusicManager/Private/EventSubsystem.cpp
+index a5b3312..f7f8c6a 100644
+--- a/Source/MusicManager/Private/EventSubsystem.cpp
++++ b/Source/MusicManager/Private/EventSubsystem.cpp
+@@ -63,6 +63,35 @@ void UEventSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
+         return;
+     }
+ 
++    const FDateTime StartOfCurrentMonth(NewDate.GetYear(), NewDate.GetMonth(), 1);
++    int32 PrevYear = NewDate.GetYear();
++    int32 PrevMonth = NewDate.GetMonth() - 1;
++    if (PrevMonth == 0)
++    {
++        PrevMonth = 12;
++        --PrevYear;
++    }
++
++    HandleMonthClosed(PrevYear, PrevMonth, FDateTime(PrevYear, PrevMonth, 1), StartOfCurrentMonth, NewDate);
++}
++
++void UEventSubsystem::HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd, const FDateTime& NewDate)
++{
++    if (!IsInGameThread())
++    {
++        const TWeakObjectPtr<UEventSubsystem> WeakThis = this;
++        AsyncTask(ENamedThreads::GameThread, [WeakThis, ClosedYear, ClosedMonth, PeriodStart, PeriodEnd, NewDate]()
++        {
++            if (UEventSubsystem* StrongThis = WeakThis.Get())
++            {
++                StrongThis->ProcessMonthClosed(ClosedYear, ClosedMonth, PeriodStart, PeriodEnd, NewDate);
++            }
++        });
++        return;
++    }
++
++    ProcessMonthClosed(ClosedYear, ClosedMonth, PeriodStart, PeriodEnd, NewDate);
++}
++
++void UEventSubsystem::GetMonthlyNewsSummaries(TArray<FMonthlyNewsSummary>& OutSummaries) const
++{
+-    ProcessMonthAdvanced(NewDate);
++    OutSummaries = MonthlyNewsSummaries;
+ }
+ 
+ void UEventSubsystem::HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTime& NewDate)
+@@ -148,6 +177,52 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
+     }
+ }
+ 
++void UEventSubsystem::ProcessMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd, const FDateTime& NewDate)
++{
++    if (!ensure(IsInGameThread()))
++    {
++        return;
++    }
++
++    const FString SummaryKey = FString::Printf(TEXT("%04d-%02d"), ClosedYear, ClosedMonth);
++    if (ClosedMonthlyNewsKeys.Contains(SummaryKey))
++    {
++        UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping duplicate monthly news summary: %s"), *SummaryKey);
++        return;
++    }
++
++    FMonthlyNewsSummary Summary;
++    Summary.Year = ClosedYear;
++    Summary.Month = ClosedMonth;
++    Summary.PeriodStart = PeriodStart;
++    Summary.PeriodEnd = PeriodEnd;
++    Summary.SummaryKey = SummaryKey;
++
++    const FMusicNewsEvent NewEvent = BuildMonthlyNews(ClosedYear, ClosedMonth, NewDate);
++    if (NewEvent.Headline != "")
++    {
++        const FString EventKey = FString::Printf(TEXT("MonthlySummary:%s"), *SummaryKey);
++        if (!HasNewsKeyBeenProcessed(EventKey))
++        {
++            MarkNewsKeyProcessed(EventKey);
++            Summary.GeneratedNewsIds.Add(NewEvent.NewsId);
++
++            if (UGameTimeSubsystem* TimeSubsystem = GameTimeSubsystem.Get())
++            {
++                if (TimeSubsystem->IsBatchAdvancing())
++                {
++                    PendingBatchNewsEvents.Add(NewEvent);
++                }
++                else if (UGameInstance* GameInstance = GetGameInstance())
++                {
++                    if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
++                    {
++                        UI->HandleNewsEvent(NewEvent);
++                    }
++                    OnNewsEventGenerated.Broadcast(NewEvent);
++                }
++            }
++        }
++    }
++
++    ClosedMonthlyNewsKeys.Add(SummaryKey);
++    MonthlyNewsSummaries.Add(Summary);
++}
++
+ UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
+ {
+     if (UGameTimeSubsystem* Existing = GameTimeSubsystem.Get())
+@@ -183,6 +258,12 @@ FMusicNewsEvent UEventSubsystem::BuildMonthlyNews(const FDateTime& NewDate) cons
+     FMusicNewsEvent NewEvent;
+     NewEvent.NewsId = FGuid::NewGuid();
+     NewEvent.Timestamp = NewDate;
++    return BuildMonthlyNews(NewDate.GetYear(), NewDate.GetMonth(), NewDate);
++}
++
++FMusicNewsEvent UEventSubsystem::BuildMonthlyNews(int32 ClosedYear, int32 ClosedMonth, const FDateTime& NewDate) const
++{
++    FMusicNewsEvent NewEvent;
++    NewEvent.NewsId = FGuid::NewGuid();
++    NewEvent.Timestamp = NewDate;
++    NewEvent.Metadata.Add(TEXT("ClosedYear"), FString::FromInt(ClosedYear));
++    NewEvent.Metadata.Add(TEXT("ClosedMonth"), FString::FromInt(ClosedMonth));
+ 
+     if (UWorld* World = GetWorld())
+     {
+END_OF_PATCH

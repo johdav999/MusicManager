@@ -1,0 +1,304 @@
+diff --git a/Source/MusicManager/Public/GameTimeSubsystem.h b/Source/MusicManager/Public/GameTimeSubsystem.h
+index 4f0b0a1..c7d4b52 100644
+--- a/Source/MusicManager/Public/GameTimeSubsystem.h
++++ b/Source/MusicManager/Public/GameTimeSubsystem.h
+@@ -2,7 +2,6 @@
+ 
+ #include "CoreMinimal.h"
+ #include "Subsystems/GameInstanceSubsystem.h"
+-#include "TimerManager.h"
+ #include "GameTimeSubsystem.generated.h"
+ 
+ DECLARE_LOG_CATEGORY_EXTERN(LogMusicSimTime, Log, All);
+@@ -95,7 +94,7 @@ public:
+     void AdvanceMonth();
+ 
+     /**
+-     * Pause or resume the automatic time advancement timer.
++     * Legacy compatibility hook. Time now advances only through explicit AdvanceOneWeek/AdvanceWeeks calls.
+      */
+     UFUNCTION(BlueprintCallable, Category="Time")
+     void PauseTime(bool bPause);
+@@ -158,9 +157,6 @@ public:
+ #endif
+ 
+ protected:
+-    void StartTimer();
+-    void StopTimer();
+-
+     bool HasSimulationEnded() const;
+     bool WouldEndSimulation(const FDateTime& CandidateDate) const;
+     bool DidCrossMonthBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const;
+@@ -178,7 +174,7 @@ protected:
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     FDateTime CurrentGameDate;
+ 
+-    /** Whether the automatic timer is actively advancing weeks. */
++    /** Legacy state retained for Blueprint compatibility. Explicit advancement keeps this false. */
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     bool bIsTimeRunning;
+ 
+@@ -194,9 +190,6 @@ protected:
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     TArray<EMusicWeeklySimulationPhase> LastExecutedWeeklyPhases;
+ 
+-    /** Internal repeating timer that fires once every ten real seconds. */
+-    FTimerHandle TimeAdvanceHandle;
+-
+     /** True after the timeline surpasses the year 2026, preventing further advancement. */
+     bool bHasReachedSimulationEnd;
+ };
+diff --git a/Source/MusicManager/Private/GameTimeSubsystem.cpp b/Source/MusicManager/Private/GameTimeSubsystem.cpp
+index 93b8e21..2d2a0f4 100644
+--- a/Source/MusicManager/Private/GameTimeSubsystem.cpp
++++ b/Source/MusicManager/Private/GameTimeSubsystem.cpp
+@@ -2,13 +2,13 @@
+ 
+ #include "ArtistManagerSubsystem.h"
+-#include "Engine/World.h"
+ #include "EventSubsystem.h"
+ #include "FinanceManagerSubsystem.h"
+ #include "MarketManagerSubsystem.h"
+ #include "MusicSaveGame.h"
+ #include "RecordManagerSubsystem.h"
++#include "UIManagerSubsystem.h"
+ 
+ DEFINE_LOG_CATEGORY(LogMusicSimTime);
+ 
+ namespace
+@@ -78,12 +78,10 @@ void UGameTimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+     bIsBatchAdvancing = false;
+     LastExecutedWeeklyPhases.Reset();
+ 
+-    StartTimer();
++    UE_LOG(LogMusicSimTime, Log, TEXT("Game time initialized at %s. Automatic timer advancement is disabled; use explicit weekly advancement."), *CurrentGameDate.ToString());
+ }
+ 
+ void UGameTimeSubsystem::Deinitialize()
+ {
+-    StopTimer();
+     Super::Deinitialize();
+ }
+ 
+@@ -104,7 +102,6 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+ 
+     if (HasSimulationEnded())
+     {
+-        StopTimer();
+         return 0;
+     }
+ 
+@@ -113,11 +110,26 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+     const FDateTime BatchStartDate = CurrentGameDate;
+     int32 WeeksProcessed = 0;
+     int32 MonthsClosed = 0;
+     bool bCrossedYear = false;
++    UUIManagerSubsystem* BatchUIManager = nullptr;
++
++    if (bIsBatchAdvancing)
++    {
++        if (UGameInstance* GameInstance = GetGameInstance())
++        {
++            BatchUIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>();
++            if (BatchUIManager)
++            {
++                BatchUIManager->BeginSimulationBatchUpdate(NumWeeks, BatchStartDate);
++            }
++        }
++    }
+ 
+     for (int32 WeekIndex = 0; WeekIndex < NumWeeks; ++WeekIndex)
+     {
+         if (HasSimulationEnded())
+         {
+-            StopTimer();
+             break;
+         }
+ 
+@@ -126,7 +138,6 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+ 
+         if (WouldEndSimulation(NewDate))
+         {
+             bHasReachedSimulationEnd = true;
+-            StopTimer();
+             break;
+         }
+ 
+@@ -165,6 +176,11 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+ 
+     bIsBatchAdvancing = bWasBatchAdvancing;
+ 
++    if (BatchUIManager)
++    {
++        BatchUIManager->EndSimulationBatchUpdate(WeeksProcessed, CurrentGameDate);
++    }
++
+     if (WeeksProcessed > 1)
+     {
+         UE_LOG(LogMusicSimTime, Log, TEXT("Batch weekly advancement finished: RequestedWeeks=%d ProcessedWeeks=%d StartDate=%s EndDate=%s MonthsClosed=%d CrossedYear=%s"),
+@@ -188,7 +204,6 @@ void UGameTimeSubsystem::AdvanceMonth()
+ 
+     if (HasSimulationEnded())
+     {
+-        StopTimer();
+         return;
+     }
+ 
+@@ -395,7 +410,6 @@ void UGameTimeSubsystem::AdvanceToDateForTesting(const FDateTime& NewDate)
+     if (NewDate.GetYear() > 2026)
+     {
+         bHasReachedSimulationEnd = true;
+-        StopTimer();
+         return;
+     }
+ 
+@@ -407,34 +421,11 @@ void UGameTimeSubsystem::AdvanceToDateForTesting(const FDateTime& NewDate)
+ void UGameTimeSubsystem::PauseTime(bool bPause)
+ {
+     check(IsInGameThread());
+ 
+-    if (bPause)
+-    {
+-        if (bIsTimeRunning)
+-        {
+-            StopTimer();
+-        }
+-    }
+-    else
+-    {
+-        StartTimer();
+-    }
+-}
+-
+-void UGameTimeSubsystem::StartTimer()
+-{
+-    if (HasSimulationEnded())
+-    {
+-        return;
+-    }
+-
+-    if (UWorld* World = GetWorld())
+-    {
+-        World->GetTimerManager().SetTimer(TimeAdvanceHandle, this, &UGameTimeSubsystem::AdvanceOneWeek, 4.0f, true);
+-        bIsTimeRunning = true;
+-    }
+-}
+-
+-void UGameTimeSubsystem::StopTimer()
+-{
+-    if (UWorld* World = GetWorld())
+-    {
+-        World->GetTimerManager().ClearTimer(TimeAdvanceHandle);
+-    }
+-
++    // TASK-7.1.7: business simulation must not self-advance from a repeating timer.
++    // Keep this Blueprint-callable method as a no-op compatibility hook.
+     bIsTimeRunning = false;
++    UE_LOG(LogMusicSimTime, Verbose, TEXT("PauseTime(%s) ignored; simulation advances only through explicit AdvanceOneWeek/AdvanceWeeks calls."),
++        bPause ? TEXT("true") : TEXT("false"));
+ }
+ 
+ bool UGameTimeSubsystem::HasSimulationEnded() const
+diff --git a/Source/MusicManager/Public/UI/StatusWidget.h b/Source/MusicManager/Public/UI/StatusWidget.h
+index 67b96e4..ff6c3e9 100644
+--- a/Source/MusicManager/Public/UI/StatusWidget.h
++++ b/Source/MusicManager/Public/UI/StatusWidget.h
+@@ -45,6 +45,8 @@ protected:
+ 
+ private:
+     UFUNCTION()
++    void HandleWeekAdvanced(const FDateTime& PreviousDate, const FDateTime& NewDate);
++    UFUNCTION()
+     void HandleMonthAdvanced(const FDateTime& NewDate);
+     UFUNCTION()
+     void HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTime& NewDate);
+diff --git a/Source/MusicManager/Private/UI/StatusWidget.cpp b/Source/MusicManager/Private/UI/StatusWidget.cpp
+index 1cc21d2..c01df52 100644
+--- a/Source/MusicManager/Private/UI/StatusWidget.cpp
++++ b/Source/MusicManager/Private/UI/StatusWidget.cpp
+@@ -29,6 +29,11 @@ void UStatusWidget::NativeConstruct()
+ 
+     if (UGameTimeSubsystem* TimeSys = CachedTimeSubsystem.Get())
+     {
++        if (TimeSys->OnWeekAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleWeekAdvanced))
++        {
++            TimeSys->OnWeekAdvanced.RemoveDynamic(this, &UStatusWidget::HandleWeekAdvanced);
++        }
++
+         if (TimeSys->OnMonthAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleMonthAdvanced))
+         {
+             TimeSys->OnMonthAdvanced.RemoveDynamic(this, &UStatusWidget::HandleMonthAdvanced);
+@@ -43,6 +48,7 @@ void UStatusWidget::NativeConstruct()
+             TimeSys->OnTimeBatchAdvanced.RemoveDynamic(this, &UStatusWidget::HandleTimeBatchAdvanced);
+         }
+ 
++        TimeSys->OnWeekAdvanced.AddDynamic(this, &UStatusWidget::HandleWeekAdvanced);
+         TimeSys->OnMonthAdvanced.AddDynamic(this, &UStatusWidget::HandleMonthAdvanced);
+         TimeSys->OnTimeBatchAdvanced.AddDynamic(this, &UStatusWidget::HandleTimeBatchAdvanced);
+         HandleMonthAdvanced(TimeSys->GetCurrentGameDate());
+@@ -55,6 +61,11 @@ void UStatusWidget::NativeDestruct()
+ 
+     if (UGameTimeSubsystem* TimeSys = CachedTimeSubsystem.Get())
+     {
++        if (TimeSys->OnWeekAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleWeekAdvanced))
++        {
++            TimeSys->OnWeekAdvanced.RemoveDynamic(this, &UStatusWidget::HandleWeekAdvanced);
++        }
++
+         if (TimeSys->OnMonthAdvanced.IsAlreadyBound(this, &UStatusWidget::HandleMonthAdvanced))
+         {
+             TimeSys->OnMonthAdvanced.RemoveDynamic(this, &UStatusWidget::HandleMonthAdvanced);
+@@ -78,6 +89,32 @@ void UStatusWidget::NativeDestruct()
+     Super::NativeDestruct();
+ }
+ 
++void UStatusWidget::HandleWeekAdvanced(const FDateTime& PreviousDate, const FDateTime& NewDate)
++{
++    UE_LOG(LogTemp, Verbose, TEXT("StatusWidget received week advanced: %s -> %s"),
++        *PreviousDate.ToString(),
++        *NewDate.ToString());
++
++    if (!IsInGameThread())
++    {
++        const TWeakObjectPtr<UStatusWidget> WeakThis(this);
++        AsyncTask(ENamedThreads::GameThread, [WeakThis, PreviousDate, NewDate]()
++        {
++            if (UStatusWidget* StrongThis = WeakThis.Get())
++            {
++                StrongThis->HandleWeekAdvanced(PreviousDate, NewDate);
++            }
++        });
++        return;
++    }
++
++    if (UGameTimeSubsystem* TimeSubsystem = GetTimeSubsystem(); TimeSubsystem && TimeSubsystem->IsBatchAdvancing())
++    {
++        return;
++    }
++
++    RefreshStatus(NewDate);
++}
++
+ void UStatusWidget::HandleMonthAdvanced(const FDateTime& NewDate)
+ {
+     UE_LOG(LogTemp, Verbose, TEXT("StatusWidget received month advanced: %s"), *NewDate.ToString());
+diff --git a/Source/MusicManager/Private/EventSubsystem.cpp b/Source/MusicManager/Private/EventSubsystem.cpp
+index 5ec8887..f304e1b 100644
+--- a/Source/MusicManager/Private/EventSubsystem.cpp
++++ b/Source/MusicManager/Private/EventSubsystem.cpp
+@@ -67,8 +67,14 @@ void UEventSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::Initia
+ 
+     GameTimeSubsystem = TimeSubsystem;
+ 
+-    ProcessMonthAdvanced(TimeSubsystem->GetCurrentGameDate());
++    if (!TimeSubsystem->OnTimeBatchAdvanced.IsAlreadyBound(this, &UEventSubsystem::HandleTimeBatchAdvanced))
++    {
++        TimeSubsystem->OnTimeBatchAdvanced.AddDynamic(this, &UEventSubsystem::HandleTimeBatchAdvanced);
++    }
++
++    // Initial hookup observes the current date only. News generation is driven by explicit month closes.
+ }
+ 
+ void UEventSubsystem::HandleMonthAdvanced(const FDateTime& NewDate)
+ {
+END_OF_PATCH

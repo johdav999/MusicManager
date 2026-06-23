@@ -1,0 +1,324 @@
+diff --git a/Source/MusicManager/Private/GameTimeSubsystem.cpp b/Source/MusicManager/Private/GameTimeSubsystem.cpp
+index 4a5a4db..af16315 100644
+--- a/Source/MusicManager/Private/GameTimeSubsystem.cpp
++++ b/Source/MusicManager/Private/GameTimeSubsystem.cpp
+@@ -7,6 +7,7 @@
+ #include "MusicSaveGame.h"
+ #include "RecordManagerSubsystem.h"
++#include "UIManagerSubsystem.h"
+ 
+ DEFINE_LOG_CATEGORY(LogMusicSimTime);
+ 
+@@ -43,6 +44,7 @@ UGameTimeSubsystem::UGameTimeSubsystem()
+     : CurrentGameDate(1955, 1, 1)
+     , bIsTimeRunning(false)
++    , bIsBatchAdvancing(false)
+     , bHasReachedSimulationEnd(false)
+ {
+     WeeklyPhaseOrder =
+@@ -69,6 +71,7 @@ void UGameTimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+     CurrentGameDate = FDateTime(1955, 1, 1);
+     bHasReachedSimulationEnd = false;
+     bIsTimeRunning = false;
++    bIsBatchAdvancing = false;
+     LastExecutedWeeklyPhases.Reset();
+ 
+     StartTimer();
+@@ -100,6 +103,31 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+         return 0;
+     }
+ 
++    const bool bUseBatchNotifications = NumWeeks > 1;
++    const FDateTime BatchStartDate = CurrentGameDate;
++    const double BatchStartSeconds = FPlatformTime::Seconds();
++    UUIManagerSubsystem* UIManager = nullptr;
++
++    if (bUseBatchNotifications)
++    {
++        bIsBatchAdvancing = true;
++
++        if (UGameInstance* GameInstance = GetGameInstance())
++        {
++            UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>();
++            if (UIManager)
++            {
++                UIManager->BeginSimulationBatchUpdate(NumWeeks, BatchStartDate);
++            }
++        }
++
++        UE_LOG(LogMusicSimTime, Log, TEXT("Batch weekly advancement started: RequestedWeeks=%d StartDate=%s"),
++            NumWeeks,
++            *BatchStartDate.ToString());
++    }
++
+     int32 WeeksProcessed = 0;
++    int32 MonthsClosed = 0;
++    bool bCrossedYear = false;
+ 
+     for (int32 WeekIndex = 0; WeekIndex < NumWeeks; ++WeekIndex)
+     {
+@@ -130,7 +158,10 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+             *CurrentGameDate.ToString());
+ 
+         RunWeeklySimulation(PreviousDate, CurrentGameDate, bClosedMonth);
+ 
++        // Gameplay delegates continue to fire per simulated week; UI listeners can coalesce while batching is active.
+         OnWeekAdvanced.Broadcast(PreviousDate, CurrentGameDate);
+ 
+         if (bClosedMonth)
+         {
++            ++MonthsClosed;
++
+             UE_LOG(LogMusicSimTime, Log, TEXT("Month closed: %04d-%02d at weekly boundary %s -> %s"),
+                 ClosedMonthYear,
+                 ClosedMonth,
+@@ -146,6 +177,8 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+ 
+         if (bAdvancedYear)
+         {
++            bCrossedYear = true;
++
+             UE_LOG(LogMusicSimTime, Log, TEXT("Year advanced: %d -> %d"),
+                 PreviousDate.GetYear(),
+                 CurrentGameDate.GetYear());
+@@ -158,6 +191,29 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+         ++WeeksProcessed;
+     }
+ 
++    if (bUseBatchNotifications)
++    {
++        bIsBatchAdvancing = false;
++
++        if (UIManager)
++        {
++            UIManager->EndSimulationBatchUpdate(WeeksProcessed, CurrentGameDate);
++        }
++
++        if (WeeksProcessed > 0)
++        {
++            OnTimeBatchAdvanced.Broadcast(WeeksProcessed, CurrentGameDate);
++        }
++
++        const double ElapsedSeconds = FPlatformTime::Seconds() - BatchStartSeconds;
++        UE_LOG(LogMusicSimTime, Log, TEXT("Batch weekly advancement finished: RequestedWeeks=%d ProcessedWeeks=%d StartDate=%s EndDate=%s MonthsClosed=%d CrossedYear=%s ElapsedSeconds=%.4f"),
++            NumWeeks,
++            WeeksProcessed,
++            *BatchStartDate.ToString(),
++            *CurrentGameDate.ToString(),
++            MonthsClosed,
++            bCrossedYear ? TEXT("true") : TEXT("false"),
++            ElapsedSeconds);
++    }
++
+     return WeeksProcessed;
+ }
+ 
+diff --git a/Source/MusicManager/Private/UIManagerSubsystem.cpp b/Source/MusicManager/Private/UIManagerSubsystem.cpp
+index 62b7261..f5cd4f7 100644
+--- a/Source/MusicManager/Private/UIManagerSubsystem.cpp
++++ b/Source/MusicManager/Private/UIManagerSubsystem.cpp
+@@ -244,6 +244,13 @@ void UUIManagerSubsystem::RefreshSignedArtistPanel()
+         return;
+     }
+ 
++    if (bIsSimulationBatchUpdateActive)
++    {
++        bDeferredSignedArtistRefresh = true;
++        ++SuppressedUIRefreshCount;
++        return;
++    }
++
+     UArtistManagerSubsystem* ArtistManager = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
+     if (!IsValid(ArtistManager))
+     {
+@@ -344,6 +351,13 @@ void UUIManagerSubsystem::HandleArtistListChanged()
+         return;
+     }
+ 
++    if (bIsSimulationBatchUpdateActive)
++    {
++        bDeferredSignedArtistRefresh = true;
++        ++SuppressedUIRefreshCount;
++        return;
++    }
++
+     TArray<FArtistData> ArtistDataList;
+ 
+     if (UArtistManagerSubsystem* ArtistSub = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
+@@ -379,6 +393,13 @@ void UUIManagerSubsystem::HandleNewsEvent(const FMusicNewsEvent& EventData)
+         return;
+     }
+ 
++    if (bIsSimulationBatchUpdateActive)
++    {
++        DeferredBatchNewsEvents.Add(EventData);
++        ++SuppressedUIRefreshCount;
++        return;
++    }
++
+     if (ULayout* Layout = ActiveLayout.Get())
+     {
+         Layout->AddNewsCardToFeed(EventData);
+@@ -677,3 +698,67 @@ void UUIManagerSubsystem::RebuildUI()
+         NewLayout->AddToViewport();
+     });
+ }
++
++void UUIManagerSubsystem::BeginSimulationBatchUpdate(int32 RequestedWeeks, const FDateTime& StartDate)
++{
++    ExecuteOnGameThread([this, RequestedWeeks, StartDate]()
++    {
++        if (bIsSimulationBatchUpdateActive)
++        {
++            UE_LOG(LogUIManagerSubsystem, Warning, TEXT("BeginSimulationBatchUpdate called while another batch is active."));
++        }
++
++        bIsSimulationBatchUpdateActive = true;
++        bDeferredSignedArtistRefresh = false;
++        SuppressedUIRefreshCount = 0;
++        DeferredBatchNewsEvents.Reset();
++
++        UE_LOG(LogUIManagerSubsystem, Log, TEXT("UI batch update started: RequestedWeeks=%d StartDate=%s"),
++            RequestedWeeks,
++            *StartDate.ToString());
++    });
++}
++
++void UUIManagerSubsystem::EndSimulationBatchUpdate(int32 WeeksProcessed, const FDateTime& EndDate)
++{
++    ExecuteOnGameThread([this, WeeksProcessed, EndDate]()
++    {
++        if (!bIsSimulationBatchUpdateActive)
++        {
++            return;
++        }
++
++        const bool bShouldRefreshSignedArtists = bDeferredSignedArtistRefresh;
++        const int32 DeferredNewsCount = DeferredBatchNewsEvents.Num();
++        const int32 DeferredRefreshCount = SuppressedUIRefreshCount;
++
++        TArray<FMusicNewsEvent> NewsToFlush;
++        NewsToFlush = MoveTemp(DeferredBatchNewsEvents);
++
++        bIsSimulationBatchUpdateActive = false;
++        bDeferredSignedArtistRefresh = false;
++        SuppressedUIRefreshCount = 0;
++
++        for (const FMusicNewsEvent& Event : NewsToFlush)
++        {
++            if (ULayout* Layout = ActiveLayout.Get())
++            {
++                Layout->AddNewsCardToFeed(Event);
++            }
++            else
++            {
++                PendingNewsEvents.Add(Event);
++            }
++        }
++
++        if (bShouldRefreshSignedArtists)
++        {
++            RefreshSignedArtistPanel();
++        }
++
++        UE_LOG(LogUIManagerSubsystem, Log, TEXT("UI batch update finished: WeeksProcessed=%d EndDate=%s DeferredNews=%d SuppressedRefreshes=%d RefreshedSignedArtists=%s"),
++            WeeksProcessed,
++            *EndDate.ToString(),
++            DeferredNewsCount,
++            DeferredRefreshCount,
++            bShouldRefreshSignedArtists ? TEXT("true") : TEXT("false"));
++    });
++}
+diff --git a/Source/MusicManager/Public/GameTimeSubsystem.h b/Source/MusicManager/Public/GameTimeSubsystem.h
+index 24c5672..9c4508f 100644
+--- a/Source/MusicManager/Public/GameTimeSubsystem.h
++++ b/Source/MusicManager/Public/GameTimeSubsystem.h
+@@ -27,6 +27,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeekAdvanced, const FDateTime&,
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnMonthClosed, int32, ClosedYear, int32, ClosedMonth, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnYearAdvanced, int32, NewYear, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthAdvanced, const FDateTime&, NewDate);
++DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTimeBatchAdvanced, int32, WeeksAdvanced, const FDateTime&, NewDate);
+ 
+ class UMusicSaveGame;
+ 
+@@ -74,6 +75,8 @@ public:
+ 
+     const TArray<EMusicWeeklySimulationPhase>& GetLastExecutedWeeklyPhases() const { return LastExecutedWeeklyPhases; }
+ 
++    bool IsBatchAdvancing() const { return bIsBatchAdvancing; }
++
+     void SaveState(class UMusicSaveGame* SaveObject);
+     void LoadState(const class UMusicSaveGame* SaveObject);
+ 
+@@ -103,6 +106,12 @@ public:
+     UPROPERTY(BlueprintAssignable, Category="Time")
+     FOnYearAdvanced OnYearAdvanced;
+ 
++    /**
++     * Fired once after a multi-week advancement completes so presentation code can refresh once from final state.
++     */
++    UPROPERTY(BlueprintAssignable, Category="Time")
++    FOnTimeBatchAdvanced OnTimeBatchAdvanced;
++
+ protected:
+     void StartTimer();
+     void StopTimer();
+@@ -122,6 +131,10 @@ protected:
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     bool bIsTimeRunning;
+ 
++    /** Transient presentation batching flag; simulation still executes every weekly phase. */
++    UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category="Time")
++    bool bIsBatchAdvancing;
++
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     TArray<EMusicWeeklySimulationPhase> WeeklyPhaseOrder;
+ 
+diff --git a/Source/MusicManager/Public/UIManagerSubsystem.h b/Source/MusicManager/Public/UIManagerSubsystem.h
+index 2c6248f..96ef489 100644
+--- a/Source/MusicManager/Public/UIManagerSubsystem.h
++++ b/Source/MusicManager/Public/UIManagerSubsystem.h
+@@ -64,6 +64,13 @@ public:
+ 
+     void RefreshSignedArtistPanel();
+ 
++    /** Suppresses repeated presentation refreshes while deterministic multi-week simulation is running. */
++    void BeginSimulationBatchUpdate(int32 RequestedWeeks, const FDateTime& StartDate);
++
++    /** Flushes one summarized presentation refresh after deterministic multi-week simulation completes. */
++    void EndSimulationBatchUpdate(int32 WeeksProcessed, const FDateTime& EndDate);
++
++    bool IsSimulationBatchUpdateActive() const { return bIsSimulationBatchUpdateActive; }
++
+     void ShowContractForArtist(const FString& ArtistName);
+ 
+     UFUNCTION()
+@@ -170,6 +177,15 @@ private:
+     UPROPERTY()
+     TArray<FMusicNewsEvent> PendingNewsEvents;
+ 
++    /** Transient UI coalescing state for fast-forward simulation. */
++    bool bIsSimulationBatchUpdateActive = false;
++
++    bool bDeferredSignedArtistRefresh = false;
++
++    int32 SuppressedUIRefreshCount = 0;
++
++    TArray<FMusicNewsEvent> DeferredBatchNewsEvents;
++
+     template<typename Func>
+     void ExecuteOnGameThread(Func&& Lambda)
+     {
+diff --git a/README.md b/README.md
+index af6ffef..11bfbc9 100644
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,8 @@
+ # MusicManager
+ 
+ Developed with Unreal Engine 5
++
++## Simulation Time
++
++`UGameTimeSubsystem` owns weekly advancement. Use `AdvanceOneWeek()` for normal single-step time progression and `AdvanceWeeks(NumWeeks)` for fast-forward. Multi-week advancement still runs every deterministic weekly simulation phase, but UI refreshes are coalesced and flushed once after the batch completes.
+END_OF_PATCH

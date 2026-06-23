@@ -1,0 +1,541 @@
+diff --git a/README.md b/README.md
+index 32ee25a..f5504fc 100644
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,8 @@
+ # MusicManager
+ 
+ Developed with Unreal Engine 5
++
++## Simulation Time
++
++`UGameTimeSubsystem` owns deterministic weekly advancement. Existing monthly systems remain behind a month-boundary compatibility pass while subsystems migrate to native weekly logic.
++Use `AdvanceOneWeek()` for normal progression, `AdvanceWeeks(NumWeeks)` for fast-forward, and `AdvanceMonth()` only as a legacy compatibility entry point.
+diff --git a/Source/MusicManager/Private/GameTimeSubsystem.cpp b/Source/MusicManager/Private/GameTimeSubsystem.cpp
+index b506712..127e28a 100644
+--- a/Source/MusicManager/Private/GameTimeSubsystem.cpp
++++ b/Source/MusicManager/Private/GameTimeSubsystem.cpp
+@@ -7,11 +7,62 @@
+ #include "MusicSaveGame.h"
+ #include "RecordManagerSubsystem.h"
+ 
++DEFINE_LOG_CATEGORY(LogMusicSimTime);
++
++namespace
++{
++    const TCHAR* ToPhaseName(EMusicWeeklySimulationPhase Phase)
++    {
++        switch (Phase)
++        {
++        case EMusicWeeklySimulationPhase::TrendDrift:
++            return TEXT("TrendDrift");
++        case EMusicWeeklySimulationPhase::ArtistCondition:
++            return TEXT("ArtistCondition");
++        case EMusicWeeklySimulationPhase::ProductionProgress:
++            return TEXT("ProductionProgress");
++        case EMusicWeeklySimulationPhase::ReleaseLaunchProcessing:
++            return TEXT("ReleaseLaunchProcessing");
++        case EMusicWeeklySimulationPhase::MarketExposure:
++            return TEXT("MarketExposure");
++        case EMusicWeeklySimulationPhase::ChartCalculation:
++            return TEXT("ChartCalculation");
++        case EMusicWeeklySimulationPhase::TourShowResolution:
++            return TEXT("TourShowResolution");
++        case EMusicWeeklySimulationPhase::FinancePosting:
++            return TEXT("FinancePosting");
++        case EMusicWeeklySimulationPhase::CriticNewsGeneration:
++            return TEXT("CriticNewsGeneration");
++        case EMusicWeeklySimulationPhase::UINotifications:
++            return TEXT("UINotifications");
++        default:
++            return TEXT("Unknown");
++        }
++    }
++}
++
+ UGameTimeSubsystem::UGameTimeSubsystem()
+     : CurrentGameDate(1955, 1, 1)
+     , bIsTimeRunning(false)
+     , bHasReachedSimulationEnd(false)
+ {
++    WeeklyPhaseOrder =
++    {
++        EMusicWeeklySimulationPhase::TrendDrift,
++        EMusicWeeklySimulationPhase::ArtistCondition,
++        EMusicWeeklySimulationPhase::ProductionProgress,
++        EMusicWeeklySimulationPhase::ReleaseLaunchProcessing,
++        EMusicWeeklySimulationPhase::MarketExposure,
++        EMusicWeeklySimulationPhase::ChartCalculation,
++        EMusicWeeklySimulationPhase::TourShowResolution,
++        EMusicWeeklySimulationPhase::FinancePosting,
++        EMusicWeeklySimulationPhase::CriticNewsGeneration,
++        EMusicWeeklySimulationPhase::UINotifications
++    };
+ }
+ 
+ void UGameTimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+@@ -21,6 +72,7 @@ void UGameTimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+     CurrentGameDate = FDateTime(1955, 1, 1);
+     bHasReachedSimulationEnd = false;
+     bIsTimeRunning = false;
++    LastExecutedWeeklyPhases.Reset();
+ 
+     StartTimer();
+ }
+@@ -31,59 +83,256 @@ void UGameTimeSubsystem::Deinitialize()
+     Super::Deinitialize();
+ }
+ 
+-void UGameTimeSubsystem::AdvanceMonth()
++void UGameTimeSubsystem::AdvanceOneWeek()
++{
++    AdvanceWeeks(1);
++}
++
++int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
+ {
+     check(IsInGameThread());
+ 
++    if (NumWeeks <= 0)
++    {
++        return 0;
++    }
++
+     if (HasSimulationEnded())
+     {
+         StopTimer();
+-        return;
++        return 0;
++    }
++
++    const FDateTime BatchStartDate = CurrentGameDate;
++    int32 WeeksProcessed = 0;
++    int32 MonthsClosed = 0;
++    bool bCrossedYear = false;
++
++    for (int32 WeekIndex = 0; WeekIndex < NumWeeks; ++WeekIndex)
++    {
++        if (HasSimulationEnded())
++        {
++            StopTimer();
++            break;
++        }
++
++        const FDateTime PreviousDate = CurrentGameDate;
++        const FDateTime NewDate = CurrentGameDate + FTimespan::FromDays(7);
++
++        if (WouldEndSimulation(NewDate))
++        {
++            bHasReachedSimulationEnd = true;
++            StopTimer();
++            break;
++        }
++
++        const bool bClosedMonth = DidCrossMonthBoundary(PreviousDate, NewDate);
++        const bool bAdvancedYear = DidCrossYearBoundary(PreviousDate, NewDate);
++        const int32 ClosedMonth = PreviousDate.GetMonth();
++        const int32 ClosedMonthYear = PreviousDate.GetYear();
++
++        CurrentGameDate = NewDate;
++
++        UE_LOG(LogMusicSimTime, Log, TEXT("Week advanced: %s -> %s"),
++            *PreviousDate.ToString(),
++            *CurrentGameDate.ToString());
++
++        RunWeeklySimulation(PreviousDate, CurrentGameDate, bClosedMonth);
++
++        OnWeekAdvanced.Broadcast(PreviousDate, CurrentGameDate);
++
++        if (bClosedMonth)
++        {
++            ++MonthsClosed;
++
++            UE_LOG(LogMusicSimTime, Log, TEXT("Month closed: %04d-%02d at weekly boundary %s -> %s"),
++                ClosedMonthYear,
++                ClosedMonth,
++                *PreviousDate.ToString(),
++                *CurrentGameDate.ToString());
++
++            OnMonthClosed.Broadcast(ClosedMonthYear, ClosedMonth, PreviousDate, CurrentGameDate);
++
++            // Legacy delegate retained for monthly consumers during the weekly simulation transition.
++            OnMonthAdvanced.Broadcast(CurrentGameDate);
++        }
++
++        if (bAdvancedYear)
++        {
++            bCrossedYear = true;
++
++            UE_LOG(LogMusicSimTime, Log, TEXT("Year advanced: %d -> %d"),
++                PreviousDate.GetYear(),
++                CurrentGameDate.GetYear());
++
++            OnYearAdvanced.Broadcast(CurrentGameDate.GetYear(), PreviousDate, CurrentGameDate);
++        }
++
++        ++WeeksProcessed;
++    }
++
++    if (WeeksProcessed > 1)
++    {
++        UE_LOG(LogMusicSimTime, Log, TEXT("Batch weekly advancement finished: RequestedWeeks=%d ProcessedWeeks=%d StartDate=%s EndDate=%s MonthsClosed=%d CrossedYear=%s"),
++            NumWeeks,
++            WeeksProcessed,
++            *BatchStartDate.ToString(),
++            *CurrentGameDate.ToString(),
++            MonthsClosed,
++            bCrossedYear ? TEXT("true") : TEXT("false"));
+     }
+ 
+-    int32 NewYear = CurrentGameDate.GetYear();
+-    int32 NewMonth = CurrentGameDate.GetMonth() + 1;
++    return WeeksProcessed;
++}
+ 
+-    if (NewMonth > 12)
++void UGameTimeSubsystem::AdvanceMonth()
++{
++    check(IsInGameThread());
++
++    if (HasSimulationEnded())
+     {
+-        NewMonth = 1;
+-        ++NewYear;
++        StopTimer();
++        return;
+     }
+ 
+-    if (NewYear > 2026)
++    const int32 StartingMonth = CurrentGameDate.GetMonth();
++    const int32 StartingYear = CurrentGameDate.GetYear();
++
++    UE_LOG(LogMusicSimTime, Log, TEXT("AdvanceMonth compatibility path entered at %s."),
++        *CurrentGameDate.ToString());
++
++    // Six weekly steps cross any calendar month from any in-month start date.
++    for (int32 Guard = 0; Guard < 6; ++Guard)
+     {
+-        bHasReachedSimulationEnd = true;
+-        StopTimer();
+-        return;
++        AdvanceOneWeek();
++
++        if (HasSimulationEnded() || CurrentGameDate.GetMonth() != StartingMonth || CurrentGameDate.GetYear() != StartingYear)
++        {
++            return;
++        }
+     }
+ 
+-    CurrentGameDate = FDateTime(NewYear, NewMonth, 1);
++    UE_LOG(LogMusicSimTime, Warning, TEXT("AdvanceMonth compatibility path did not cross a month from %04d-%02d within guard limit."),
++        StartingYear,
++        StartingMonth);
++}
++
++void UGameTimeSubsystem::RunWeeklySimulation(const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth)
++{
++    LastExecutedWeeklyPhases.Reset();
++
++    UE_LOG(LogMusicSimTime, Verbose, TEXT("Running weekly simulation phases for %s. ClosedMonth=%s"),
++        *NewDate.ToString(),
++        bClosedMonth ? TEXT("true") : TEXT("false"));
++
++    for (EMusicWeeklySimulationPhase Phase : WeeklyPhaseOrder)
++    {
++        RunWeeklySimulationPhase(Phase, PreviousDate, NewDate, bClosedMonth);
++    }
++
++    if (bClosedMonth)
++    {
++        RunMonthlyCompatibilityPass(NewDate);
++    }
++}
++
++void UGameTimeSubsystem::RunWeeklySimulationPhase(EMusicWeeklySimulationPhase Phase, const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth)
++{
++    LastExecutedWeeklyPhases.Add(Phase);
++
++    UE_LOG(LogMusicSimTime, Verbose, TEXT("Executing weekly simulation phase: %s"), ToPhaseName(Phase));
++
++    switch (Phase)
++    {
++    case EMusicWeeklySimulationPhase::TrendDrift:
++        // TODO(ST-101): Move market trend drift here when the trend model becomes weekly-native.
++        break;
++
++    case EMusicWeeklySimulationPhase::ArtistCondition:
++        // TODO(ST-101): Move artist condition updates here after contract finances stop assuming full-month cadence.
++        break;
++
++    case EMusicWeeklySimulationPhase::ProductionProgress:
++        // TODO(ST-101): Move recording progress here when record production supports weekly slices.
++        break;
++
++    case EMusicWeeklySimulationPhase::ReleaseLaunchProcessing:
++        // TODO(ST-101): Move launch processing here once release timing no longer relies on month-end sales.
++        break;
++
++    case EMusicWeeklySimulationPhase::MarketExposure:
++        // TODO(ST-101): Move radio/exposure drift here after market exposure becomes weekly-native.
++        break;
++
++    case EMusicWeeklySimulationPhase::ChartCalculation:
++        // TODO(ST-101): Move chart and sales processing here after monthly sales can roll up weekly entries.
++        break;
++
++    case EMusicWeeklySimulationPhase::TourShowResolution:
++        // Reserved for touring once that subsystem lands.
++        break;
++
++    case EMusicWeeklySimulationPhase::FinancePosting:
++        // TODO(ST-101): Move finance accrual/posting here after ledger consumers can distinguish weekly and monthly rows.
++        break;
++
++    case EMusicWeeklySimulationPhase::CriticNewsGeneration:
++    case EMusicWeeklySimulationPhase::UINotifications:
++        // Boundary delegates fire after deterministic state mutation so listeners see settled state.
++        break;
++    }
++
++    (void)PreviousDate;
++    (void)NewDate;
++    (void)bClosedMonth;
++}
++
++void UGameTimeSubsystem::RunMonthlyCompatibilityPass(const FDateTime& NewDate)
++{
++    UGameInstance* GameInstance = GetGameInstance();
++    if (!GameInstance)
++    {
++        return;
++    }
++
++    // Legacy month-end order is preserved during the weekly transition:
++    // market exposure can influence artist momentum, records consume market/artist state, finance records the rollup.
++    if (UMarketManagerSubsystem* MarketSubsystem = GameInstance->GetSubsystem<UMarketManagerSubsystem>())
++    {
++        MarketSubsystem->HandleMonthAdvanced(NewDate);
++    }
++
++    if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
++    {
++        ArtistSubsystem->HandleMonthAdvanced(NewDate);
++    }
++
++    if (URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
++    {
++        RecordSubsystem->HandleMonthAdvanced(NewDate);
++    }
++
++    if (UFinanceManagerSubsystem* FinanceSubsystem = GameInstance->GetSubsystem<UFinanceManagerSubsystem>())
++    {
++        FinanceSubsystem->HandleMonthAdvanced(NewDate);
++    }
++}
++
++bool UGameTimeSubsystem::DidCrossMonthBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const
++{
++    return PreviousDate.GetMonth() != NewDate.GetMonth() || PreviousDate.GetYear() != NewDate.GetYear();
++}
+ 
+-    // Orchestrate monthly flow explicitly to keep deterministic ordering across subsystems.
+-    if (UGameInstance* GameInstance = GetGameInstance())
++bool UGameTimeSubsystem::DidCrossYearBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const
++{
++    return PreviousDate.GetYear() != NewDate.GetYear();
++}
++
++void UGameTimeSubsystem::AdvanceToDateForTesting(const FDateTime& NewDate)
++{
++#if WITH_AUTOMATION_TESTS
++    check(IsInGameThread());
++
++    if (NewDate.GetYear() > 2026)
+     {
+-        if (UMarketManagerSubsystem* MarketSubsystem = GameInstance->GetSubsystem<UMarketManagerSubsystem>())
+-        {
+-            MarketSubsystem->HandleMonthAdvanced(CurrentGameDate);
+-        }
+-
+-        if (UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>())
+-        {
+-            ArtistSubsystem->HandleMonthAdvanced(CurrentGameDate);
+-        }
+-
+-        if (URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
+-        {
+-            RecordSubsystem->HandleMonthAdvanced(CurrentGameDate);
+-        }
+-
+-        if (UFinanceManagerSubsystem* FinanceSubsystem = GameInstance->GetSubsystem<UFinanceManagerSubsystem>())
+-        {
+-            FinanceSubsystem->HandleMonthAdvanced(CurrentGameDate);
+-        }
++        bHasReachedSimulationEnd = true;
++        StopTimer();
++        return;
+     }
+ 
+-    OnMonthAdvanced.Broadcast(CurrentGameDate);
++    CurrentGameDate = NewDate;
++    bHasReachedSimulationEnd = false;
++#else
++    (void)NewDate;
++#endif
+ }
+ 
+ void UGameTimeSubsystem::PauseTime(bool bPause)
+@@ -112,7 +361,7 @@ void UGameTimeSubsystem::StartTimer()
+ 
+     if (UWorld* World = GetWorld())
+     {
+-        World->GetTimerManager().SetTimer(TimeAdvanceHandle, this, &UGameTimeSubsystem::AdvanceMonth, 4.0f, true);
++        World->GetTimerManager().SetTimer(TimeAdvanceHandle, this, &UGameTimeSubsystem::AdvanceOneWeek, 4.0f, true);
+         bIsTimeRunning = true;
+     }
+ }
+@@ -137,6 +386,11 @@ bool UGameTimeSubsystem::HasSimulationEnded() const
+     return CurrentGameDate.GetYear() > 2026;
+ }
+ 
++bool UGameTimeSubsystem::WouldEndSimulation(const FDateTime& CandidateDate) const
++{
++    return CandidateDate.GetYear() > 2026;
++}
++
+ void UGameTimeSubsystem::SaveState(UMusicSaveGame* SaveObject)
+ {
+     if (!ensure(IsInGameThread()))
+diff --git a/Source/MusicManager/Public/GameTimeSubsystem.h b/Source/MusicManager/Public/GameTimeSubsystem.h
+index 75ca099..5eff024 100644
+--- a/Source/MusicManager/Public/GameTimeSubsystem.h
++++ b/Source/MusicManager/Public/GameTimeSubsystem.h
+@@ -5,12 +5,33 @@
+ #include "TimerManager.h"
+ #include "GameTimeSubsystem.generated.h"
+ 
++DECLARE_LOG_CATEGORY_EXTERN(LogMusicSimTime, Log, All);
++
++UENUM(BlueprintType)
++enum class EMusicWeeklySimulationPhase : uint8
++{
++    TrendDrift UMETA(DisplayName = "Trend Drift"),
++    ArtistCondition UMETA(DisplayName = "Artist Condition"),
++    ProductionProgress UMETA(DisplayName = "Production Progress"),
++    ReleaseLaunchProcessing UMETA(DisplayName = "Release Launch Processing"),
++    MarketExposure UMETA(DisplayName = "Market Exposure"),
++    ChartCalculation UMETA(DisplayName = "Chart Calculation"),
++    TourShowResolution UMETA(DisplayName = "Tour Show Resolution"),
++    FinancePosting UMETA(DisplayName = "Finance Posting"),
++    CriticNewsGeneration UMETA(DisplayName = "Critic News Generation"),
++    UINotifications UMETA(DisplayName = "UI Notifications")
++};
++
++DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnWeekAdvanced, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
++DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnMonthClosed, int32, ClosedYear, int32, ClosedMonth, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
++DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnYearAdvanced, int32, NewYear, const FDateTime&, PreviousDate, const FDateTime&, NewDate);
+ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthAdvanced, const FDateTime&, NewDate);
+ 
+ class UMusicSaveGame;
+ 
+ /**
+- * Centralized time simulation subsystem that controls the passage of in-game months.
++ * Centralized time simulation subsystem that directs deterministic weekly advancement.
++ * Month-end delegates remain as compatibility hooks for monthly systems while they migrate.
+  */
+ UCLASS()
+ class UGameTimeSubsystem : public UGameInstanceSubsystem
+@@ -24,7 +45,19 @@ public:
+     virtual void Deinitialize() override;
+ 
+     /**
+-     * Manually advance the simulation by one month.
++     * Advance the simulation by one deterministic weekly step.
++     */
++    UFUNCTION(BlueprintCallable, Category="Time")
++    void AdvanceOneWeek();
++
++    /**
++     * Advance multiple deterministic weekly steps in fixed order.
++     */
++    UFUNCTION(BlueprintCallable, Category="Time")
++    int32 AdvanceWeeks(int32 NumWeeks);
++
++    /**
++     * Compatibility entry point for existing monthly callers. Advances weekly until the next month boundary is crossed.
+      */
+     UFUNCTION(BlueprintCallable, Category="Time")
+     void AdvanceMonth();
+@@ -41,29 +74,68 @@ public:
+     UFUNCTION(BlueprintPure, Category="Time")
+     FDateTime GetCurrentGameDate() const { return CurrentGameDate; }
+ 
++    const TArray<EMusicWeeklySimulationPhase>& GetLastExecutedWeeklyPhases() const { return LastExecutedWeeklyPhases; }
++
+     void SaveState(class UMusicSaveGame* SaveObject);
+     void LoadState(const class UMusicSaveGame* SaveObject);
+ 
+     /**
+-     * Fired each time the subsystem successfully advances one month.
++     * Fired each time the subsystem successfully advances one week.
++     */
++    UPROPERTY(BlueprintAssignable, Category="Time")
++    FOnWeekAdvanced OnWeekAdvanced;
++
++    /**
++     * Fired when a weekly step crosses into a new month. ClosedYear and ClosedMonth identify the month being closed.
++     */
++    UPROPERTY(BlueprintAssignable, Category="Time")
++    FOnMonthClosed OnMonthClosed;
++
++    /**
++     * Compatibility delegate for existing month-end listeners. Mirrors OnMonthClosed with the new date only.
+      */
+     UPROPERTY(BlueprintAssignable, Category="Time")
+     FOnMonthAdvanced OnMonthAdvanced;
+ 
++    /**
++     * Fired when a weekly step crosses into a new year.
++     */
++    UPROPERTY(BlueprintAssignable, Category="Time")
++    FOnYearAdvanced OnYearAdvanced;
++
++#if WITH_AUTOMATION_TESTS
++    /** Test-only date hook for boundary-focused cadence tests. */
++    void AdvanceToDateForTesting(const FDateTime& NewDate);
++#endif
++
+ protected:
+     void StartTimer();
+     void StopTimer();
+ 
+     bool HasSimulationEnded() const;
++    bool WouldEndSimulation(const FDateTime& CandidateDate) const;
++    bool DidCrossMonthBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const;
++    bool DidCrossYearBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const;
++    void RunWeeklySimulation(const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth);
++    void RunWeeklySimulationPhase(EMusicWeeklySimulationPhase Phase, const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth);
++    void RunMonthlyCompatibilityPass(const FDateTime& NewDate);
+ 
+-    /** Current simulated date. Always normalized to the first day of the month. */
++    /** Current simulated date. Weekly cadence means this may fall inside a month. */
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     FDateTime CurrentGameDate;
+ 
+-    /** Whether the automatic timer is actively advancing months. */
++    /** Whether the automatic timer is actively advancing weeks. */
+     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
+     bool bIsTimeRunning;
+ 
++    /** Deterministic weekly phase order. Monthly-only systems remain in RunMonthlyCompatibilityPass for now. */
++    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
++    TArray<EMusicWeeklySimulationPhase> WeeklyPhaseOrder;
++
++    /** Last weekly phase sequence executed; exposed for lightweight cadence validation. */
++    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
++    TArray<EMusicWeeklySimulationPhase> LastExecutedWeeklyPhases;
++
+     /** Internal repeating timer that fires once every ten real seconds. */
+     FTimerHandle TimeAdvanceHandle;
+ 
+END_OF_PATCH

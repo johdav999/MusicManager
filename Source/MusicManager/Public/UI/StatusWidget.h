@@ -45,7 +45,11 @@ protected:
 
 private:
     UFUNCTION()
+    void HandleWeekAdvanced(const FDateTime& PreviousDate, const FDateTime& NewDate);
+    UFUNCTION()
     void HandleMonthAdvanced(const FDateTime& NewDate);
+    UFUNCTION()
+    void HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTime& NewDate);
     UFUNCTION()
     void HandleCurrentLabelChanged(const FString& NewLabelId);
 
