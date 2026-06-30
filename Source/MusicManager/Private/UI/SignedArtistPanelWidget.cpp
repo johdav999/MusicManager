@@ -4,6 +4,7 @@
 #include "Components/ScrollBox.h"
 #include "Engine/Texture2D.h"
 #include "UObject/SoftObjectPath.h"
+#include "ArtistManagerSubsystem.h"
 #include "UI/SignedArtistItemWidget.h"
 
 void USignedArtistPanelWidget::NativeConstruct()
@@ -75,7 +76,8 @@ void USignedArtistPanelWidget::PopulateArtistList(const TArray<FArtistData>& Sig
         ArtistScrollBox->AddChild(Item);
         SpawnedItems.Add(Item);
 
-        if (!bSelectionStillValid && PreviousSelection == Data.ArtistName)
+        const FString DataArtistId = Data.ArtistId.IsEmpty() ? Data.ArtistName : Data.ArtistId;
+        if (!bSelectionStillValid && PreviousSelection == DataArtistId)
         {
             bSelectionStillValid = true;
         }
@@ -89,7 +91,8 @@ void USignedArtistPanelWidget::PopulateArtistList(const TArray<FArtistData>& Sig
         }
         else
         {
-            SelectedArtistId = SignedArtists.Last().ArtistName;
+            const FArtistData& DefaultArtist = SignedArtists[0];
+            SelectedArtistId = DefaultArtist.ArtistId.IsEmpty() ? DefaultArtist.ArtistName : DefaultArtist.ArtistId;
         }
     }
     else
@@ -98,6 +101,20 @@ void USignedArtistPanelWidget::PopulateArtistList(const TArray<FArtistData>& Sig
     }
 
     UpdateSelectionVisuals();
+
+    if (!SelectedArtistId.IsEmpty())
+    {
+        if (UGameInstance* GI = GetGameInstance())
+        {
+            if (UArtistManagerSubsystem* ArtistSubsystem = GI->GetSubsystem<UArtistManagerSubsystem>())
+            {
+                if (ArtistSubsystem->GetSelectedArtist().IsEmpty())
+                {
+                    ArtistSubsystem->SetSelectedArtist(SelectedArtistId);
+                }
+            }
+        }
+    }
 }
 
 void USignedArtistPanelWidget::HandleArtistItemClicked(FString ArtistId)

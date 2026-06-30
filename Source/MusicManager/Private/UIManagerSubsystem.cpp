@@ -5,6 +5,7 @@
 #include "Layout.h"
 #include "ArtistManagerSubsystem.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "CommandDispatcherSubsystem.h"
 #include "Logging/LogMacros.h"
 #include "MusicPlayerComponent.h"
 #include "UI/StatusWidget.h"
@@ -17,29 +18,31 @@ void UUIManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
-    if (UEventSubsystem* EventSubsystem = GetGameInstance()->GetSubsystem<UEventSubsystem>())
-    {
-        EventSubsystem->OnNewsEventGenerated.AddDynamic(this, &UUIManagerSubsystem::HandleNewsEventGenerated);
-    }
+    UE_LOG(LogUIManagerSubsystem, Warning, TEXT("UIManager initialized. News is routed directly by EventSubsystem; OnNewsEventGenerated remains available for non-UI listeners."));
 
     if (UArtistManagerSubsystem* Artist = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
     {
         Artist->OnArtistSigned.AddDynamic(this, &UUIManagerSubsystem::HandleArtistSigned);
         Artist->OnArtistListChanged.AddDynamic(this, &UUIManagerSubsystem::HandleArtistListChanged);
     }
+
+    if (UCommandDispatcherSubsystem* Commands = GetGameInstance()->GetSubsystem<UCommandDispatcherSubsystem>())
+    {
+        Commands->OnCommandExecuted.AddDynamic(this, &UUIManagerSubsystem::HandleCommandExecuted);
+    }
 }
 
 void UUIManagerSubsystem::Deinitialize()
 {
-    if (UEventSubsystem* EventSubsystem = GetGameInstance()->GetSubsystem<UEventSubsystem>())
-    {
-        EventSubsystem->OnNewsEventGenerated.RemoveDynamic(this, &UUIManagerSubsystem::HandleNewsEventGenerated);
-    }
-
     if (UArtistManagerSubsystem* Artist = GetGameInstance()->GetSubsystem<UArtistManagerSubsystem>())
     {
         Artist->OnArtistSigned.RemoveDynamic(this, &UUIManagerSubsystem::HandleArtistSigned);
         Artist->OnArtistListChanged.RemoveDynamic(this, &UUIManagerSubsystem::HandleArtistListChanged);
+    }
+
+    if (UCommandDispatcherSubsystem* Commands = GetGameInstance()->GetSubsystem<UCommandDispatcherSubsystem>())
+    {
+        Commands->OnCommandExecuted.RemoveDynamic(this, &UUIManagerSubsystem::HandleCommandExecuted);
     }
 
     Super::Deinitialize();
@@ -66,6 +69,9 @@ void UUIManagerSubsystem::RegisterLayout(ULayout* Layout)
     }
 
     ActiveLayout = Layout;
+    UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Registered active layout %s. Flushing PendingNewsEvents=%d."),
+        *GetNameSafe(Layout),
+        PendingNewsEvents.Num());
 
     // Flush any pending news events
     for (const FMusicNewsEvent& Event : PendingNewsEvents)
@@ -319,6 +325,60 @@ void UUIManagerSubsystem::HandleNewsCardSelected(const FMusicNewsEvent& EventDat
 {
     ExecuteOnGameThread([this, EventData]()
     {
+        UE_LOG(LogUIManagerSubsystem, Warning, TEXT("News card selected: Type=%d Headline='%s' Source='%s'."),
+            static_cast<int32>(EventData.NewsType),
+            *EventData.Headline,
+            *EventData.SourceName);
+
+        if (EventData.NewsType == EMusicNewsType::NewUpcomingArtistPerforming)
+        {
+            UGameInstance* GameInstance = GetGameInstance();
+            UArtistManagerSubsystem* ArtistManager = IsValid(GameInstance)
+                ? GameInstance->GetSubsystem<UArtistManagerSubsystem>()
+                : nullptr;
+
+            if (!IsValid(ArtistManager))
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("News audition selection ignored: ArtistManagerSubsystem is unavailable."));
+            }
+            else
+            {
+                TArray<FArtistData> UnsignedArtists;
+                ArtistManager->GetUnsignedArtists(UnsignedArtists);
+
+                const FString* ArtistId = EventData.Metadata.Find(TEXT("ArtistId"));
+                const FString ArtistKey = ArtistId && !ArtistId->IsEmpty() ? *ArtistId : EventData.SourceName;
+
+                const FArtistData* MatchingArtist = UnsignedArtists.FindByPredicate([&ArtistKey, &EventData](const FArtistData& Artist)
+                {
+                    return (!ArtistKey.IsEmpty() && (Artist.ArtistId == ArtistKey || Artist.ArtistName == ArtistKey))
+                        || (!EventData.SourceName.IsEmpty() && Artist.ArtistName == EventData.SourceName);
+                });
+
+                if (MatchingArtist)
+                {
+                    if (ULayout* Layout = ActiveLayout.Get())
+                    {
+                        UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Opening audition panel from news event: ArtistId='%s' Name='%s'."),
+                            *MatchingArtist->ArtistId,
+                            *MatchingArtist->ArtistName);
+                        Layout->ShowAuditionWidgetForArtist(*MatchingArtist);
+                    }
+                    else
+                    {
+                        UE_LOG(LogUIManagerSubsystem, Warning, TEXT("News audition selection resolved artist '%s' but no active layout is registered."), *MatchingArtist->ArtistName);
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogUIManagerSubsystem, Warning, TEXT("News audition selection could not resolve unsigned artist. ArtistKey='%s' Source='%s' UnsignedCount=%d."),
+                        *ArtistKey,
+                        *EventData.SourceName,
+                        UnsignedArtists.Num());
+                }
+            }
+        }
+
         OnNewsSelected.Broadcast(EventData);
     });
 }
@@ -366,6 +426,11 @@ void UUIManagerSubsystem::HandleArtistSigned(const FArtistContract& Contract)
     });
 }
 
+void UUIManagerSubsystem::HandleArtistListChanged()
+{
+    RefreshSignedArtistPanel();
+}
+
 void UUIManagerSubsystem::HandleNewsEvent(const FMusicNewsEvent& EventData)
 {
     if (!IsInGameThread())
@@ -386,22 +451,77 @@ void UUIManagerSubsystem::HandleNewsEvent(const FMusicNewsEvent& EventData)
     {
         DeferredBatchNewsEvents.Add(EventData);
         ++SuppressedUIRefreshCount;
+        UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Deferred news event during UI batch: Headline='%s' DeferredCount=%d."),
+            *EventData.Headline,
+            DeferredBatchNewsEvents.Num());
         return;
     }
 
     if (ULayout* Layout = ActiveLayout.Get())
     {
+        UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Routing news event to active layout %s: Headline='%s'."),
+            *GetNameSafe(Layout),
+            *EventData.Headline);
         Layout->AddNewsCardToFeed(EventData);
     }
     else
     {
         PendingNewsEvents.Add(EventData);
+        UE_LOG(LogUIManagerSubsystem, Warning, TEXT("No active layout for news event. Queued Headline='%s' PendingNewsEvents=%d."),
+            *EventData.Headline,
+            PendingNewsEvents.Num());
     }
 }
 
 void UUIManagerSubsystem::HandleNewsEventGenerated(const FMusicNewsEvent& EventData)
 {
+    UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Received generated news event: Headline='%s' Type=%d."),
+        *EventData.Headline,
+        static_cast<int32>(EventData.NewsType));
     HandleNewsEvent(EventData);
+}
+
+void UUIManagerSubsystem::HandleCommandExecuted(const FMusicCommandResult& Result)
+{
+    ExecuteOnGameThread([this, Result]()
+    {
+        FCommandNotification Notification;
+        Notification.NotificationId = FGuid::NewGuid();
+        Notification.Result = Result;
+        Notification.Timestamp = Result.ResultDate.GetTicks() > 0 ? Result.ResultDate : FDateTime::UtcNow();
+
+        if (Result.bSuccess)
+        {
+            Notification.Severity = ECommandNotificationSeverity::Success;
+        }
+        else if (Result.ErrorCode == EMusicCommandErrorCode::ValidationFailed || Result.ErrorCode == EMusicCommandErrorCode::InvalidState)
+        {
+            Notification.Severity = ECommandNotificationSeverity::Warning;
+        }
+        else
+        {
+            Notification.Severity = ECommandNotificationSeverity::Error;
+        }
+
+        PendingCommandNotifications.Add(Notification);
+        constexpr int32 MaxPendingNotifications = 20;
+        if (PendingCommandNotifications.Num() > MaxPendingNotifications)
+        {
+            PendingCommandNotifications.RemoveAt(0, PendingCommandNotifications.Num() - MaxPendingNotifications);
+        }
+
+        OnCommandNotification.Broadcast(Notification);
+    });
+}
+
+void UUIManagerSubsystem::GetPendingCommandNotifications(TArray<FCommandNotification>& OutNotifications) const
+{
+    OutNotifications = PendingCommandNotifications;
+}
+
+void UUIManagerSubsystem::ClearPendingCommandNotifications()
+{
+    PendingCommandNotifications.Reset();
 }
 
 void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
@@ -418,38 +538,41 @@ void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
             return;
         }
 
-        if (CommandName == TEXT("Contracts"))
+        if (CommandName == TEXT("Audition"))
         {
-            UGameInstance* GameInstance = Self->GetGameInstance();
-            if (!IsValid(GameInstance))
-            {
-                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: GameInstance is invalid."));
-                return;
-            }
-
-            UArtistManagerSubsystem* ArtistSubsystem = GameInstance->GetSubsystem<UArtistManagerSubsystem>();
-            if (!IsValid(ArtistSubsystem))
-            {
-                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: ArtistManagerSubsystem is unavailable."));
-                return;
-            }
-
-            if (ArtistSubsystem->ActiveContracts.Num() <= 0)
-            {
-                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: No active contracts to display."));
-                return;
-            }
-
-            const FArtistContract& Contract = ArtistSubsystem->ActiveContracts[0];
-
             ULayout* Layout = Self->ActiveLayout.Get();
             if (!IsValid(Layout))
             {
-                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("HandleCommandAction: No active layout registered to show contracts."));
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Audition command: No active layout available."));
                 return;
             }
-            UE_LOG(LogTemp, Display, TEXT("Show Contract"));
-            Layout->ShowContract(Contract);
+
+            UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Showing Audition GUI"));
+            Layout->ShowAuditionWidget();
+        }
+        else if (CommandName == TEXT("Market"))
+        {
+            ULayout* Layout = Self->ActiveLayout.Get();
+            if (!IsValid(Layout))
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Market command: No active layout available."));
+                return;
+            }
+
+            UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Showing Market GUI"));
+            Layout->ShowRegionMap();
+        }
+        else if (CommandName == TEXT("Contracts"))
+        {
+            ULayout* Layout = Self->ActiveLayout.Get();
+            if (!IsValid(Layout))
+            {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Contracts command: No active layout available."));
+                return;
+            }
+
+            UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Showing Active Contracts GUI"));
+            Layout->ShowActiveContractsWidget();
         }
         else if (CommandName == TEXT("Studio"))
         {
@@ -462,6 +585,10 @@ void UUIManagerSubsystem::HandleCommandAction(const FString& CommandName)
             UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Showing Recording GUI"));
             // Show the embedded RecordWidget
             Layout->ShowRecordWidget();
+        }
+        else if (CommandName == TEXT("Charts"))
+        {
+            UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Charts command selected, but no production charts UMG screen is wired into Layout yet."));
         }
     });
 }
@@ -724,11 +851,17 @@ void UUIManagerSubsystem::EndSimulationBatchUpdate(int32 WeeksProcessed, const F
         {
             if (ULayout* Layout = ActiveLayout.Get())
             {
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("Flushing deferred batch news to layout %s: Headline='%s'."),
+                    *GetNameSafe(Layout),
+                    *Event.Headline);
                 Layout->AddNewsCardToFeed(Event);
             }
             else
             {
                 PendingNewsEvents.Add(Event);
+                UE_LOG(LogUIManagerSubsystem, Warning, TEXT("No active layout while flushing batch news. Queued Headline='%s' PendingNewsEvents=%d."),
+                    *Event.Headline,
+                    PendingNewsEvents.Num());
             }
         }
 

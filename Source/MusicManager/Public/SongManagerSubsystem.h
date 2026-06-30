@@ -7,6 +7,7 @@
 
 class UDataTable;
 class USong;
+struct FMusicSaveValidationResult;
 
 USTRUCT()
 struct FSongSaveRecord
@@ -21,6 +22,12 @@ struct FSongSaveRecord
 
     UPROPERTY()
     FSongData Data;
+
+    UPROPERTY()
+    bool bLockedForRecording = false;
+
+    UPROPERTY()
+    FString RecordedOnRecordId;
 };
 
 /**
@@ -61,6 +68,12 @@ public:
     /** Query unreleased and unlocked songs for an artist that can be recorded. */
     void GetEligibleSongsForRecording(const FString& ArtistId, TArray<USong*>& OutSongs) const;
 
+    /** Query unreleased and unlocked songs from the catalog matching the artist or an unowned genre-compatible catalog entry. */
+    void GetEligibleSongsForRecordingByGenre(const FString& ArtistId, const FString& Genre, TArray<USong*>& OutSongs) const;
+
+    /** Assign unowned catalog songs to an artist when a recording session claims them. */
+    bool AssignSongsToArtist(const TArray<FString>& SongIds, const FString& ArtistId, const FString& RequiredGenre, FString& OutError);
+
     /** Prevent a set of songs from being used in concurrent recordings. */
     bool LockSongsForRecording(const TArray<FString>& SongIds, FString& OutError);
 
@@ -72,6 +85,8 @@ public:
 
     /** Serialize the registry for a save game. */
     void SerializeForSave(TArray<FSongSaveRecord>& OutRecords) const;
+
+    void ValidateSaveRecords(const TArray<FSongSaveRecord>& Records, FMusicSaveValidationResult& Result) const;
 
     /** Restore the registry from saved data. */
     void DeserializeFromSave(const TArray<FSongSaveRecord>& Records);

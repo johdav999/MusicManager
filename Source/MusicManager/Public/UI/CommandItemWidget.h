@@ -7,6 +7,7 @@
 class UBorder;
 class UButton;
 class UImage;
+class UTextBlock;
 
 UENUM(BlueprintType)
 enum class ECommandItemVisualState : uint8
@@ -73,6 +74,10 @@ protected:
     /** Image displayed with the command. Bound via the widget blueprint. */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UImage* CommandImage;
+
+    /** Text label displayed under the command icon. */
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* CommandLabelText;
 
     /** Button that triggers the command. Bound via the widget blueprint. */
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))

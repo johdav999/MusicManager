@@ -80,11 +80,6 @@ void UCommandPanelWidget::HandleCommandClicked(const FString& CommandName)
         {
             if (UUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>())
             {
-                if (CommandName == TEXT("Market"))
-                {
-                    UIManager->ShowMarketView();
-                }
-
                 UIManager->HandleCommandAction(CommandName);
             }
         }
@@ -116,7 +111,21 @@ void UCommandPanelWidget::HandleChildCommandClicked(const FString& CommandName)
 
 void UCommandPanelWidget::BuildDefaultCommands()
 {
-    if (CommandDefinitions.Num() > 0)
+    const TArray<FString> ExpectedCommands = {
+        TEXT("Audition"),
+        TEXT("Market"),
+        TEXT("Contracts"),
+        TEXT("Studio"),
+        TEXT("Charts")
+    };
+
+    bool bAlreadyHasDockCommands = CommandDefinitions.Num() == ExpectedCommands.Num();
+    for (int32 Index = 0; bAlreadyHasDockCommands && Index < ExpectedCommands.Num(); ++Index)
+    {
+        bAlreadyHasDockCommands = CommandDefinitions[Index].CommandName == ExpectedCommands[Index];
+    }
+
+    if (bAlreadyHasDockCommands)
     {
         return;
     }
@@ -133,15 +142,11 @@ void UCommandPanelWidget::BuildDefaultCommands()
     };
 
     CommandDefinitions = {
-        MakeDefinition(TEXT("Artists"), TEXT("/Game/GUI/Icons/Artists.Artists")),
-        MakeDefinition(TEXT("Studio"), TEXT("/Game/GUI/Icons/Studio.Studio")),
-        MakeDefinition(TEXT("Tours"), TEXT("/Game/GUI/Icons/Tours.Tours")),
-        MakeDefinition(TEXT("Genre Tree"), TEXT("/Game/GUI/Icons/GenreTree.GenreTree")),
-        MakeDefinition(TEXT("Radio"), TEXT("/Game/GUI/Icons/Radio.Radio")),
-        MakeDefinition(TEXT("Charts"), TEXT("/Game/GUI/Icons/Charts.Charts")),
-        MakeDefinition(TEXT("Financials"), TEXT("/Game/GUI/Icons/Financials.Financials")),
-        MakeDefinition(TEXT("Market"), TEXT("/Game/GUI/Icons/Market.Market")),
-        MakeDefinition(TEXT("Contracts"), TEXT("/Game/GUI/Icons/Contracts.Contracts"))
+        MakeDefinition(TEXT("Audition"), TEXT("/Game/GUI/HUD/CommandDock/BottomCommandDockIcon_Audition.BottomCommandDockIcon_Audition")),
+        MakeDefinition(TEXT("Market"), TEXT("/Game/GUI/HUD/CommandDock/BottomCommandDockIcon_Market.BottomCommandDockIcon_Market")),
+        MakeDefinition(TEXT("Contracts"), TEXT("/Game/GUI/HUD/CommandDock/BottomCommandDockIcon_Contracts.BottomCommandDockIcon_Contracts")),
+        MakeDefinition(TEXT("Studio"), TEXT("/Game/GUI/HUD/CommandDock/BottomCommandDockIcon_Studio.BottomCommandDockIcon_Studio")),
+        MakeDefinition(TEXT("Charts"), TEXT("/Game/GUI/HUD/CommandDock/BottomCommandDockIcon_Charts.BottomCommandDockIcon_Charts"))
     };
 }
 

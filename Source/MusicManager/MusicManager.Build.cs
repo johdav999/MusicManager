@@ -22,6 +22,17 @@ public class MusicManager : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new string[] { });
 
+        if (Target.bBuildEditor)
+        {
+            PrivateDependencyModuleNames.AddRange(new[]
+            {
+                "AssetRegistry",
+                "KismetCompiler",
+                "UnrealEd",
+                "UMGEditor"
+            });
+        }
+
         // Uncomment if you are using online features
         // PrivateDependencyModuleNames.Add("OnlineSubsystem");
 

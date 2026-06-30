@@ -7,6 +7,7 @@
 #include "AuditionTypes.h"
 #include "Layout.h"  
 #include "GameTimeSubsystem.h"
+#include "MusicSaveGame.h"
 #include "UIManagerSubsystem.h"
 
 DEFINE_LOG_CATEGORY(LogEventSubsystem);
@@ -17,6 +18,34 @@ void UEventSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
     FWorldDelegates::OnPostWorldInitialization.AddUObject(this, &UEventSubsystem::HandleWorldInitialized);
+
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UGameTimeSubsystem* TimeSubsystem = GameInstance->GetSubsystem<UGameTimeSubsystem>())
+        {
+            GameTimeSubsystem = TimeSubsystem;
+
+            if (!TimeSubsystem->OnTimeBatchAdvanced.IsAlreadyBound(this, &UEventSubsystem::HandleTimeBatchAdvanced))
+            {
+                TimeSubsystem->OnTimeBatchAdvanced.AddDynamic(this, &UEventSubsystem::HandleTimeBatchAdvanced);
+        UE_LOG(LogEventSubsystem, Warning, TEXT("Initialize: bound to OnTimeBatchAdvanced on GameTimeSubsystem %p."), TimeSubsystem);
+            }
+
+            if (!TimeSubsystem->OnMonthlySummaryClosed.IsAlreadyBound(this, &UEventSubsystem::HandleMonthlySummaryClosed))
+            {
+                TimeSubsystem->OnMonthlySummaryClosed.AddDynamic(this, &UEventSubsystem::HandleMonthlySummaryClosed);
+                UE_LOG(LogEventSubsystem, Warning, TEXT("Initialize: bound to OnMonthlySummaryClosed on GameTimeSubsystem %p."), TimeSubsystem);
+            }
+        }
+        else
+        {
+            UE_LOG(LogEventSubsystem, Warning, TEXT("Initialize: GameTimeSubsystem is unavailable; waiting for world initialization."));
+        }
+    }
+    else
+    {
+        UE_LOG(LogEventSubsystem, Warning, TEXT("Initialize: GameInstance is unavailable; waiting for world initialization."));
+    }
 }
 
 void UEventSubsystem::Deinitialize()
@@ -26,6 +55,7 @@ void UEventSubsystem::Deinitialize()
     if (UGameTimeSubsystem* GameTime = GameTimeSubsystem.Get())
     {
         GameTime->OnTimeBatchAdvanced.RemoveAll(this);
+        GameTime->OnMonthlySummaryClosed.RemoveAll(this);
     }
     GameTimeSubsystem.Reset();
     PendingBatchNewsEvents.Reset();
@@ -61,9 +91,12 @@ void UEventSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::Initia
     {
         if (Existing == TimeSubsystem)
         {
+            UE_LOG(LogEventSubsystem, Verbose, TEXT("HandleWorldInitialized: already bound to GameTimeSubsystem %p."), TimeSubsystem);
             return;
         }
 
+        Existing->OnTimeBatchAdvanced.RemoveAll(this);
+        Existing->OnMonthlySummaryClosed.RemoveAll(this);
     }
 
     GameTimeSubsystem = TimeSubsystem;
@@ -71,6 +104,13 @@ void UEventSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::Initia
     if (!TimeSubsystem->OnTimeBatchAdvanced.IsAlreadyBound(this, &UEventSubsystem::HandleTimeBatchAdvanced))
     {
         TimeSubsystem->OnTimeBatchAdvanced.AddDynamic(this, &UEventSubsystem::HandleTimeBatchAdvanced);
+        UE_LOG(LogEventSubsystem, Warning, TEXT("Bound to OnTimeBatchAdvanced on GameTimeSubsystem %p."), TimeSubsystem);
+    }
+
+    if (!TimeSubsystem->OnMonthlySummaryClosed.IsAlreadyBound(this, &UEventSubsystem::HandleMonthlySummaryClosed))
+    {
+        TimeSubsystem->OnMonthlySummaryClosed.AddDynamic(this, &UEventSubsystem::HandleMonthlySummaryClosed);
+        UE_LOG(LogEventSubsystem, Warning, TEXT("Bound to OnMonthlySummaryClosed on GameTimeSubsystem %p."), TimeSubsystem);
     }
 
     // Initial hookup observes the current date only. News generation is driven by explicit month closes.
@@ -121,9 +161,135 @@ void UEventSubsystem::HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, con
     ProcessMonthClosed(ClosedYear, ClosedMonth, PeriodStart, PeriodEnd, NewDate);
 }
 
+void UEventSubsystem::HandleMonthlySummaryClosed(const FMonthlyCloseSummary& Summary)
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<UEventSubsystem> WeakThis = this;
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, Summary]()
+        {
+            if (UEventSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->HandleMonthlySummaryClosed(Summary);
+            }
+        });
+        return;
+    }
+
+    UE_LOG(LogEventSubsystem, Warning, TEXT("Monthly summary closed received: MonthKey=%s Period=%s -> %s CurrentDate=%s."),
+        *Summary.MonthKey,
+        *Summary.PeriodStart.ToString(),
+        *Summary.PeriodEnd.ToString(),
+        *Summary.NewDate.ToString());
+
+    ProcessMonthClosed(Summary.ClosedYear, Summary.ClosedMonth, Summary.PeriodStart, Summary.PeriodEnd, Summary.NewDate);
+}
+
 void UEventSubsystem::GetMonthlyNewsSummaries(TArray<FMonthlyNewsSummary>& OutSummaries) const
 {
     OutSummaries = MonthlyNewsSummaries;
+}
+
+bool UEventSubsystem::PublishNewsEvent(const FMusicNewsEvent& Event, const FString& DeduplicationKey)
+{
+    if (!ensure(IsInGameThread()))
+    {
+        return false;
+    }
+
+    if (DeduplicationKey.IsEmpty() || HasNewsKeyBeenProcessed(DeduplicationKey))
+    {
+        UE_LOG(LogEventSubsystem, Verbose, TEXT("PublishNewsEvent skipped: DeduplicationKey='%s' AlreadyProcessed=%s Headline='%s'."),
+            *DeduplicationKey,
+            HasNewsKeyBeenProcessed(DeduplicationKey) ? TEXT("true") : TEXT("false"),
+            *Event.Headline);
+        return false;
+    }
+
+    MarkNewsKeyProcessed(DeduplicationKey);
+    UE_LOG(LogEventSubsystem, Warning, TEXT("PublishNewsEvent accepted: Key='%s' Type=%d Headline='%s'."),
+        *DeduplicationKey,
+        static_cast<int32>(Event.NewsType),
+        *Event.Headline);
+
+    if (UGameTimeSubsystem* TimeSubsystem = GameTimeSubsystem.Get())
+    {
+        if (TimeSubsystem->IsBatchAdvancing())
+        {
+            PendingBatchNewsEvents.Add(Event);
+            UE_LOG(LogEventSubsystem, Warning, TEXT("PublishNewsEvent deferred during batch. PendingBatchNewsEvents=%d Headline='%s'."),
+                PendingBatchNewsEvents.Num(),
+                *Event.Headline);
+            return true;
+        }
+    }
+
+    EmitNewsEvent(Event, TEXT("PublishNewsEvent"));
+    return true;
+}
+
+void UEventSubsystem::BuildSaveSnapshot(FNewsSnapshot& OutSnapshot) const
+{
+    OutSnapshot.MonthlyNewsSummaries = MonthlyNewsSummaries;
+    OutSnapshot.ProcessedNewsKeys = ProcessedNewsKeys;
+    OutSnapshot.ClosedMonthlyNewsKeys = ClosedMonthlyNewsKeys;
+}
+
+void UEventSubsystem::ValidateSaveSnapshot(const FNewsSnapshot& Snapshot, FMusicSaveValidationResult& Result) const
+{
+    TSet<FString> SeenSummaryKeys;
+    for (const FMonthlyNewsSummary& Summary : Snapshot.MonthlyNewsSummaries)
+    {
+        if (Summary.SummaryKey.IsEmpty())
+        {
+            Result.AddError(TEXT("Monthly news summary has an empty summary key."));
+        }
+        else if (SeenSummaryKeys.Contains(Summary.SummaryKey))
+        {
+            Result.AddError(FString::Printf(TEXT("Duplicate monthly news summary key %s."), *Summary.SummaryKey));
+        }
+        SeenSummaryKeys.Add(Summary.SummaryKey);
+
+        if (Summary.Month < 1 || Summary.Month > 12 || Summary.Year < 1955)
+        {
+            Result.AddError(FString::Printf(TEXT("Monthly news summary has invalid period %04d-%02d."), Summary.Year, Summary.Month));
+        }
+        if (Summary.PeriodStart.GetTicks() <= 0 || Summary.PeriodEnd.GetTicks() <= 0 || Summary.PeriodEnd <= Summary.PeriodStart)
+        {
+            Result.AddError(FString::Printf(TEXT("Monthly news summary %s has invalid date range."), *Summary.SummaryKey));
+        }
+        for (const FGuid& NewsId : Summary.GeneratedNewsIds)
+        {
+            if (!NewsId.IsValid())
+            {
+                Result.AddError(FString::Printf(TEXT("Monthly news summary %s contains an invalid generated news id."), *Summary.SummaryKey));
+            }
+        }
+    }
+
+    for (const FString& Key : Snapshot.ProcessedNewsKeys)
+    {
+        if (Key.IsEmpty())
+        {
+            Result.AddError(TEXT("Processed news key set contains an empty key."));
+        }
+    }
+
+    for (const FString& Key : Snapshot.ClosedMonthlyNewsKeys)
+    {
+        if (Key.IsEmpty())
+        {
+            Result.AddError(TEXT("Closed monthly news key set contains an empty key."));
+        }
+    }
+}
+
+void UEventSubsystem::ApplySaveSnapshot(const FNewsSnapshot& Snapshot)
+{
+    MonthlyNewsSummaries = Snapshot.MonthlyNewsSummaries;
+    ProcessedNewsKeys = Snapshot.ProcessedNewsKeys;
+    ClosedMonthlyNewsKeys = Snapshot.ClosedMonthlyNewsKeys;
+    PendingBatchNewsEvents.Reset();
 }
 
 void UEventSubsystem::HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTime& NewDate)
@@ -151,16 +317,9 @@ void UEventSubsystem::HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTi
         return;
     }
 
-    if (UGameInstance* GameInstance = GetGameInstance())
+    for (const FMusicNewsEvent& Event : PendingBatchNewsEvents)
     {
-        if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
-        {
-            for (const FMusicNewsEvent& Event : PendingBatchNewsEvents)
-            {
-                UI->HandleNewsEvent(Event);
-                OnNewsEventGenerated.Broadcast(Event);
-            }
-        }
+        EmitNewsEvent(Event, TEXT("BatchFlush"));
     }
 
     PendingBatchNewsEvents.Reset();
@@ -226,30 +385,28 @@ void UEventSubsystem::ProcessMonthAdvanced(const FDateTime& NewDate)
         // Prevent duplicates
         if (HasNewsKeyBeenProcessed(EventKey))
         {
-            UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping duplicate event key: %s"), *EventKey);
+            UE_LOG(LogEventSubsystem, Verbose, TEXT("ProcessMonthAdvanced skipped duplicate event key: %s"), *EventKey);
             return;
         }
 
         MarkNewsKeyProcessed(EventKey);
+        UE_LOG(LogEventSubsystem, Warning, TEXT("ProcessMonthAdvanced generated news: Key='%s' Headline='%s' Date=%s."),
+            *EventKey,
+            *NewEvent.Headline,
+            *NewDate.ToString());
 
         if (UGameTimeSubsystem* TimeSubsystem = GameTimeSubsystem.Get())
         {
             if (TimeSubsystem->IsBatchAdvancing())
             {
                 PendingBatchNewsEvents.Add(NewEvent);
+                UE_LOG(LogEventSubsystem, Warning, TEXT("ProcessMonthAdvanced deferred news during batch. PendingBatchNewsEvents=%d."),
+                    PendingBatchNewsEvents.Num());
                 return;
             }
         }
 
-        if (UGameInstance* GameInstance = GetGameInstance())
-        {
-            if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
-            {
-                UI->HandleNewsEvent(NewEvent);
-            }
-        }
-
-        OnNewsEventGenerated.Broadcast(NewEvent);
+        EmitNewsEvent(NewEvent, TEXT("ProcessMonthAdvanced"));
     }
 }
 
@@ -261,6 +418,12 @@ void UEventSubsystem::ProcessMonthClosed(int32 ClosedYear, int32 ClosedMonth, co
     }
 
     const FString SummaryKey = FString::Printf(TEXT("%04d-%02d"), ClosedYear, ClosedMonth);
+    UE_LOG(LogEventSubsystem, Warning, TEXT("ProcessMonthClosed entered: SummaryKey=%s Period=%s -> %s CurrentDate=%s."),
+        *SummaryKey,
+        *PeriodStart.ToString(),
+        *PeriodEnd.ToString(),
+        *NewDate.ToString());
+
     if (ClosedMonthlyNewsKeys.Contains(SummaryKey))
     {
         UE_LOG(LogEventSubsystem, Verbose, TEXT("Skipping duplicate monthly news summary: %s"), *SummaryKey);
@@ -282,27 +445,75 @@ void UEventSubsystem::ProcessMonthClosed(int32 ClosedYear, int32 ClosedMonth, co
         {
             MarkNewsKeyProcessed(EventKey);
             Summary.GeneratedNewsIds.Add(NewEvent.NewsId);
+            UE_LOG(LogEventSubsystem, Warning, TEXT("Monthly news generated: Key='%s' Headline='%s' Type=%d Source='%s'."),
+                *EventKey,
+                *NewEvent.Headline,
+                static_cast<int32>(NewEvent.NewsType),
+                *NewEvent.SourceName);
 
             if (UGameTimeSubsystem* TimeSubsystem = GameTimeSubsystem.Get())
             {
                 if (TimeSubsystem->IsBatchAdvancing())
                 {
                     PendingBatchNewsEvents.Add(NewEvent);
+                    UE_LOG(LogEventSubsystem, Warning, TEXT("Monthly news deferred during batch. PendingBatchNewsEvents=%d."),
+                        PendingBatchNewsEvents.Num());
                 }
-                else if (UGameInstance* GameInstance = GetGameInstance())
+                else
                 {
-                    if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
-                    {
-                        UI->HandleNewsEvent(NewEvent);
-                    }
-                    OnNewsEventGenerated.Broadcast(NewEvent);
+                    EmitNewsEvent(NewEvent, TEXT("ProcessMonthClosed"));
                 }
             }
+            else
+            {
+                UE_LOG(LogEventSubsystem, Warning, TEXT("Monthly news generated without cached GameTimeSubsystem; emitting immediately."));
+                EmitNewsEvent(NewEvent, TEXT("ProcessMonthClosedNoTimeSubsystem"));
+            }
         }
+        else
+        {
+            UE_LOG(LogEventSubsystem, Verbose, TEXT("Monthly news skipped because event key was already processed: %s."), *EventKey);
+        }
+    }
+    else
+    {
+        UE_LOG(LogEventSubsystem, Warning, TEXT("Monthly news builder returned no headline for SummaryKey=%s."), *SummaryKey);
     }
 
     ClosedMonthlyNewsKeys.Add(SummaryKey);
     MonthlyNewsSummaries.Add(Summary);
+    UE_LOG(LogEventSubsystem, Warning, TEXT("Monthly news summary stored: SummaryKey=%s GeneratedNewsIds=%d TotalSummaries=%d."),
+        *SummaryKey,
+        Summary.GeneratedNewsIds.Num(),
+        MonthlyNewsSummaries.Num());
+}
+
+void UEventSubsystem::EmitNewsEvent(const FMusicNewsEvent& Event, const FString& SourceContext)
+{
+    UE_LOG(LogEventSubsystem, Warning, TEXT("Emitting news event: Context=%s Type=%d Headline='%s' Source='%s' Subject='%s' Listeners=%d."),
+        *SourceContext,
+        static_cast<int32>(Event.NewsType),
+        *Event.Headline,
+        *Event.SourceName,
+        *Event.SubjectName,
+        OnNewsEventGenerated.IsBound() ? 1 : 0);
+
+    bool bRoutedToUI = false;
+    if (UGameInstance* GameInstance = GetGameInstance())
+    {
+        if (UUIManagerSubsystem* UI = GameInstance->GetSubsystem<UUIManagerSubsystem>())
+        {
+            UI->HandleNewsEvent(Event);
+            bRoutedToUI = true;
+        }
+    }
+
+    UE_LOG(LogEventSubsystem, Warning, TEXT("News event UI route complete: Context=%s RoutedToUI=%s Headline='%s'."),
+        *SourceContext,
+        bRoutedToUI ? TEXT("true") : TEXT("false"),
+        *Event.Headline);
+
+    OnNewsEventGenerated.Broadcast(Event);
 }
 
 UGameTimeSubsystem* UEventSubsystem::GetOrCreateGameTimeSubsystem()
@@ -377,26 +588,53 @@ FMusicNewsEvent UEventSubsystem::BuildMonthlyNews(int32 ClosedYear, int32 Closed
                                     *Artist.Genre);
 
                                 NewEvent.Tags = { TEXT("Artist"), TEXT("Unsigned"), Artist.Genre };
+                                NewEvent.Metadata.Add(TEXT("ArtistId"), Artist.ArtistId.IsEmpty() ? Artist.ArtistName : Artist.ArtistId);
+                                NewEvent.Metadata.Add(TEXT("ArtistName"), Artist.ArtistName);
+                                UE_LOG(LogEventSubsystem, Verbose, TEXT("BuildMonthlyNews selected unsigned artist '%s' for %04d-%02d."),
+                                    *Artist.ArtistName,
+                                    ClosedYear,
+                                    ClosedMonth);
                                 return NewEvent;
                             }
+                            UE_LOG(LogEventSubsystem, Warning, TEXT("BuildMonthlyNews found no unsigned artist for %04d-%02d."), ClosedYear, ClosedMonth);
+                        }
+                        else
+                        {
+                            UE_LOG(LogEventSubsystem, Warning, TEXT("BuildMonthlyNews: ArtistManagerSubsystem is invalid."));
                         }
                     }
+                    else
+                    {
+                        UE_LOG(LogEventSubsystem, Warning, TEXT("BuildMonthlyNews: ArtistManagerSubsystem is unavailable."));
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogEventSubsystem, Warning, TEXT("BuildMonthlyNews: GameInstance is invalid."));
                 }
             }
         }
+        else
+        {
+            UE_LOG(LogEventSubsystem, Warning, TEXT("BuildMonthlyNews: World is invalid."));
+        }
     }
 
-    //NewEvent.NewsType = EMusicNewsType::IndustryTrend;
+    NewEvent.NewsType = EMusicNewsType::IndustryTrend;
 
-    //const FString MonthYearString = NewDate.ToString(TEXT("%B %Y"));
-    //NewEvent.SourceName = TEXT("Global Market Desk");
-    //NewEvent.SubjectName = MonthYearString;
-    //NewEvent.Headline = FString::Printf(TEXT("%s Market Recap Released"), *MonthYearString);
-    //NewEvent.BodyText = FString::Printf(
-    //    TEXT("Simulated time advanced to %s, generating scheduled market coverage."),
-    //    *MonthYearString
-    //);
-    //NewEvent.Tags = { TEXT("Auto"), TEXT("TimeSubsystem") };
+    const FString MonthYearString = FDateTime(ClosedYear, ClosedMonth, 1).ToString(TEXT("%B %Y"));
+    NewEvent.SourceName = TEXT("Global Market Desk");
+    NewEvent.SubjectName = MonthYearString;
+    NewEvent.Headline = FString::Printf(TEXT("%s market recap"), *MonthYearString);
+    NewEvent.BodyText = FString::Printf(
+        TEXT("The %s market cycle closed with labels watching regional demand, release timing, and artist momentum."),
+        *MonthYearString
+    );
+    NewEvent.Tags = { TEXT("Market"), TEXT("Monthly"), TEXT("Industry") };
+
+    UE_LOG(LogEventSubsystem, Warning, TEXT("BuildMonthlyNews generated fallback industry recap for %04d-%02d."),
+        ClosedYear,
+        ClosedMonth);
 
     return NewEvent;
 }

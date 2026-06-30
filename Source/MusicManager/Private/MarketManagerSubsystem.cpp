@@ -2,6 +2,7 @@
 
 #include "Algo/RandomShuffle.h"
 #include "ArtistManagerSubsystem.h"
+#include "MusicSaveGame.h"
 #include "RecordManagerSubsystem.h"
 
 void UMarketManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
@@ -127,6 +128,37 @@ bool UMarketManagerSubsystem::GetRegion(const FString& RegionId, FMarketRegion& 
 void UMarketManagerSubsystem::GetAllRegions(TArray<FMarketRegion>& OutRegions) const
 {
     LoadedRegions.GenerateValueArray(OutRegions);
+}
+
+bool UMarketManagerSubsystem::AddRecordExposure(const FString& RegionId, const FString& RecordId, float ExposureAmount)
+{
+    if (RegionId.IsEmpty() || RecordId.IsEmpty() || !LoadedRegions.Contains(RegionId))
+    {
+        return false;
+    }
+
+    if (!FMath::IsFinite(ExposureAmount) || ExposureAmount <= 0.f)
+    {
+        return false;
+    }
+
+    TMap<FString, float>& ExposureByRecord = RegionRecordExposure.FindOrAdd(RegionId).RecordExposure;
+    float& CurrentExposure = ExposureByRecord.FindOrAdd(RecordId);
+    CurrentExposure = FMath::Clamp(CurrentExposure + ExposureAmount, 0.f, 3.0f);
+    return true;
+}
+
+float UMarketManagerSubsystem::GetRecordExposure(const FString& RegionId, const FString& RecordId) const
+{
+    if (const FRegionRecordExposureState* RegionExposure = RegionRecordExposure.Find(RegionId))
+    {
+        if (const float* Exposure = RegionExposure->RecordExposure.Find(RecordId))
+        {
+            return *Exposure;
+        }
+    }
+
+    return 0.f;
 }
 
 void UMarketManagerSubsystem::BuildMarketDemandSnapshot(const FMarketRegion& Region, FMarketDemandSnapshot& OutSnapshot) const
@@ -385,5 +417,66 @@ void UMarketManagerSubsystem::GetAllDemandSnapshots(TArray<FMarketDemandSnapshot
         FMarketDemandSnapshot Snapshot;
         BuildMarketDemandSnapshot(Pair.Value, Snapshot);
         OutSnapshots.Add(Snapshot);
+    }
+}
+
+void UMarketManagerSubsystem::BuildSaveSnapshot(FMarketSnapshot& OutSnapshot) const
+{
+    OutSnapshot.RegionArtistExposure = RegionArtistExposure;
+    OutSnapshot.RegionRecordExposure = RegionRecordExposure;
+}
+
+void UMarketManagerSubsystem::ValidateSaveSnapshot(const FMarketSnapshot& Snapshot, const TSet<FString>& KnownArtistIds, const TSet<FString>& KnownRecordIds, FMusicSaveValidationResult& Result) const
+{
+    for (const TPair<FString, FRegionArtistExposureState>& RegionPair : Snapshot.RegionArtistExposure)
+    {
+        if (!LoadedRegions.Contains(RegionPair.Key))
+        {
+            Result.AddError(FString::Printf(TEXT("Market artist exposure references unknown region %s."), *RegionPair.Key));
+        }
+
+        for (const TPair<FString, float>& ArtistExposure : RegionPair.Value.ArtistExposure)
+        {
+            if (ArtistExposure.Key.IsEmpty() || !KnownArtistIds.Contains(ArtistExposure.Key))
+            {
+                Result.AddError(FString::Printf(TEXT("Market artist exposure references unknown artist %s."), *ArtistExposure.Key));
+            }
+            if (!FMath::IsFinite(ArtistExposure.Value) || ArtistExposure.Value < 0.f)
+            {
+                Result.AddError(FString::Printf(TEXT("Market artist exposure for artist %s has invalid value."), *ArtistExposure.Key));
+            }
+        }
+    }
+
+    for (const TPair<FString, FRegionRecordExposureState>& RegionPair : Snapshot.RegionRecordExposure)
+    {
+        if (!LoadedRegions.Contains(RegionPair.Key))
+        {
+            Result.AddError(FString::Printf(TEXT("Market record exposure references unknown region %s."), *RegionPair.Key));
+        }
+
+        for (const TPair<FString, float>& RecordExposure : RegionPair.Value.RecordExposure)
+        {
+            if (RecordExposure.Key.IsEmpty() || !KnownRecordIds.Contains(RecordExposure.Key))
+            {
+                Result.AddError(FString::Printf(TEXT("Market record exposure references unknown record %s."), *RecordExposure.Key));
+            }
+            if (!FMath::IsFinite(RecordExposure.Value) || RecordExposure.Value < 0.f)
+            {
+                Result.AddError(FString::Printf(TEXT("Market record exposure for record %s has invalid value."), *RecordExposure.Key));
+            }
+        }
+    }
+}
+
+void UMarketManagerSubsystem::ApplySaveSnapshot(const FMarketSnapshot& Snapshot)
+{
+    RegionArtistExposure = Snapshot.RegionArtistExposure;
+    RegionRecordExposure = Snapshot.RegionRecordExposure;
+
+    for (const TPair<FString, FMarketRegion>& RegionPair : LoadedRegions)
+    {
+        RegionArtistExposure.FindOrAdd(RegionPair.Key);
+        RegionRecordExposure.FindOrAdd(RegionPair.Key);
     }
 }

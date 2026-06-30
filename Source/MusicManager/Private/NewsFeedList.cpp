@@ -3,6 +3,7 @@
 
 #include "Async/Async.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/PanelWidget.h"
@@ -43,7 +44,7 @@ void UNewsFeedList::NativeConstruct()
     if (IsValid(FeedScrollBox))
     {
         FeedScrollBox->SetAnimateWheelScrolling(true);
-        FeedScrollBox->SetScrollBarVisibility(ESlateVisibility::Visible);
+        FeedScrollBox->SetScrollBarVisibility(ESlateVisibility::Collapsed);
     }
 
     if (IsValid(FeedScrollBox) && IsValid(FeedContainer))
@@ -58,6 +59,24 @@ void UNewsFeedList::NativeConstruct()
             FeedScrollBox->AddChild(FeedContainer);
         }
     }
+
+    if (bClearFeedOnConstruct && IsValid(FeedContainer))
+    {
+        const int32 PlaceholderCount = FeedContainer->GetChildrenCount();
+        if (PlaceholderCount > 0)
+        {
+            FeedContainer->ClearChildren();
+        }
+        UE_LOG(LogNewsFeedList, Warning, TEXT("NewsFeedList runtime feed cleared on construct. RemovedChildren=%d."),
+            PlaceholderCount);
+    }
+
+    if (IsValid(ViewAllNewsButton))
+    {
+        ViewAllNewsButton->OnClicked.RemoveDynamic(this, &UNewsFeedList::HandleViewAllNewsClicked);
+        ViewAllNewsButton->OnClicked.AddDynamic(this, &UNewsFeedList::HandleViewAllNewsClicked);
+    }
+
     UE_LOG(LogNewsFeedList, Warning,
         TEXT("NewsFeedItemWidgetClass = %s"),
         *GetNameSafe(NewsFeedItemWidgetClass));
@@ -66,14 +85,25 @@ void UNewsFeedList::NativeConstruct()
         TEXT("NewsFeedList runtime class = %s"),
         *GetClass()->GetPathName());
 
-    EnsureHoverTicker();
+    HideHover();
 }
 
 void UNewsFeedList::NativeDestruct()
 {
+    if (IsValid(ViewAllNewsButton))
+    {
+        ViewAllNewsButton->OnClicked.RemoveDynamic(this, &UNewsFeedList::HandleViewAllNewsClicked);
+    }
+
     HideHover();
     ActiveHoverItem = nullptr;
     Super::NativeDestruct();
+}
+
+void UNewsFeedList::HandleViewAllNewsClicked()
+{
+    UE_LOG(LogNewsFeedList, Log, TEXT("View all news requested."));
+    OnViewAllNewsRequested.Broadcast();
 }
 
 UNewsFeedItemWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
@@ -94,13 +124,16 @@ UNewsFeedItemWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
 
     if (!IsValid(FeedContainer))
     {
-        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: FeedContainer is invalid."));
+        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: FeedContainer is invalid. Headline='%s'."), *Event.Headline);
         return nullptr;
     }
 
+    SetVisibility(ESlateVisibility::Visible);
+    FeedContainer->SetVisibility(ESlateVisibility::Visible);
+
     if (!NewsFeedItemWidgetClass)
     {
-        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: NewsFeedItemWidgetClass is not set."));
+        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: NewsFeedItemWidgetClass is not set. Headline='%s'."), *Event.Headline);
         return nullptr;
     }
 
@@ -108,38 +141,63 @@ UNewsFeedItemWidget* UNewsFeedList::AddNewsCard(const FMusicNewsEvent& Event)
     {
         UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: FeedScrollBox is invalid."));
     }
+    else
+    {
+        FeedScrollBox->SetVisibility(ESlateVisibility::Visible);
+    }
 
     UWorld* const World = GetWorld();
     if (!IsValid(World))
     {
-        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: World is invalid."));
+        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: World is invalid. Headline='%s'."), *Event.Headline);
         return nullptr;
     }
+
+    UE_LOG(LogNewsFeedList, Warning, TEXT("Creating news card: Headline='%s' Type=%d CurrentChildren=%d ItemClass=%s ListVisibility=%d ScrollVisibility=%d ContainerVisibility=%d."),
+        *Event.Headline,
+        static_cast<int32>(Event.NewsType),
+        FeedContainer->GetChildrenCount(),
+        *GetNameSafe(NewsFeedItemWidgetClass),
+        static_cast<int32>(GetVisibility()),
+        IsValid(FeedScrollBox) ? static_cast<int32>(FeedScrollBox->GetVisibility()) : -1,
+        static_cast<int32>(FeedContainer->GetVisibility()));
 
     UNewsFeedItemWidget* const NewCard = CreateWidget<UNewsFeedItemWidget>(World, NewsFeedItemWidgetClass);
     if (!IsValid(NewCard))
     {
-        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: Failed to create news feed item widget."));
+        UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: Failed to create news feed item widget. Headline='%s'."), *Event.Headline);
         return nullptr;
     }
 
     NewCard->SetOwnerList(this);
     NewCard->SetupFromEvent(Event);
+    NewCard->SetVisibility(ESlateVisibility::Visible);
+    NewCard->SetRenderOpacity(1.f);
 
     if (UPanelSlot* PanelSlot = FeedContainer->InsertChildAt(0, NewCard))
     {
         if (UVerticalBoxSlot* const slot = Cast<UVerticalBoxSlot>(PanelSlot))
         {
             slot->SetHorizontalAlignment(HAlign_Fill);
+            slot->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
         }
         if (IsValid(FeedScrollBox))
         {
             FeedScrollBox->ScrollToStart();
         }
+        UE_LOG(LogNewsFeedList, Warning, TEXT("News card inserted: Headline='%s' NewChildren=%d."),
+            *Event.Headline,
+            FeedContainer->GetChildrenCount());
+
+        UE_LOG(LogNewsFeedList, Warning, TEXT("Broadcasting news card added event: Card=%s Headline='%s'."),
+            *GetNameSafe(NewCard),
+            *Event.Headline);
+        OnNewsFeedCardAdded.Broadcast(NewCard, Event);
+        BP_OnNewsCardAdded(NewCard, Event);
         return NewCard;
     }
 
-    UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: Failed to add card to container."));
+    UE_LOG(LogNewsFeedList, Warning, TEXT("AddNewsCard: Failed to add card to container. Headline='%s'."), *Event.Headline);
     if (IsValid(NewCard))
     {
         NewCard->RemoveFromParent();
@@ -249,6 +307,7 @@ bool UNewsFeedList::MoveNewsCardToTop(UNewsFeedItemWidget* Card)
         if (UVerticalBoxSlot* slot = Cast<UVerticalBoxSlot>(PanelSlot))
         {
             slot->SetHorizontalAlignment(HAlign_Fill);
+            slot->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
         }
         if (IsValid(FeedScrollBox))
         {
@@ -296,6 +355,15 @@ void UNewsFeedList::HandleItemToggled(UNewsFeedItemWidget* Item)
         return;
     }
 
+    const FMusicNewsEvent& Event = Item->GetNewsEvent();
+    const FString* ArtistId = Event.Metadata.Find(TEXT("ArtistId"));
+    UE_LOG(LogNewsFeedList, Warning, TEXT("News feed item selected: Headline='%s' Type=%d Source='%s' ArtistId='%s'."),
+        *Event.Headline,
+        static_cast<int32>(Event.NewsType),
+        *Event.SourceName,
+        ArtistId ? **ArtistId : TEXT(""));
+    OnNewsFeedItemSelected.Broadcast(Item, Event);
+
     if (ActiveHoverItem.Get() == Item && ActiveHoverTicker && ActiveHoverTicker->IsVisible())
     {
         HideHover();
@@ -335,7 +403,12 @@ void UNewsFeedList::EnsureHoverTicker()
     slot->SetAnchors(FAnchors(0.f, 0.f));
     slot->SetAlignment(FVector2D(0.f, 0.f));
 
-    ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
+    ActiveHoverTicker->SetVisibility(ESlateVisibility::Collapsed);
+    ActiveHoverTicker->SetRenderOpacity(1.f);
+
+    UE_LOG(LogNewsFeedList, Warning, TEXT("Hover ticker created hidden: Widget=%s Class=%s."),
+        *GetNameSafe(ActiveHoverTicker),
+        *GetNameSafe(HoverTickerWidgetClass));
 }
 
 void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNewsEvent& Event, const FGeometry& ItemGeometry)
@@ -349,6 +422,8 @@ void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNews
 
     ActiveHoverItem = Item;
     ActiveHoverTicker->SetNewsEvent(Event);
+    ActiveHoverTicker->SetVisibility(ESlateVisibility::Visible);
+    ActiveHoverTicker->SetRenderOpacity(1.f);
 
     const FVector2D ItemScreenPos = ItemGeometry.GetAbsolutePosition();
     const FVector2D HoverSize = ActiveHoverTicker->GetDesiredSize();
@@ -364,7 +439,10 @@ void UNewsFeedList::ShowHoverForItem(UNewsFeedItemWidget* Item, const FMusicNews
         slot->SetPosition(DesiredPos);
     }
 
-
+    UE_LOG(LogNewsFeedList, Warning, TEXT("Showing hover ticker for news card: Headline='%s' Position=(%.1f, %.1f)."),
+        *Event.Headline,
+        DesiredPos.X,
+        DesiredPos.Y);
 }
 
 void UNewsFeedList::HideHover()

@@ -5,6 +5,7 @@
 #include "Async/Async.h"
 #include "MusicPlayerComponent.h"
 #include "UI/RecordWidget.h"
+#include "UI/MusicSegmentedMeterWidget.h"
 #include "UIManagerSubsystem.h"
 
 URecordSongListItemWidget::URecordSongListItemWidget(const FObjectInitializer& ObjectInitializer)
@@ -34,6 +35,33 @@ void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& 
         SongNameText->SetText(FText::FromString(SongData.SongName));
     }
 
+    if (IsValid(SongMetadataText))
+    {
+        SongMetadataText->SetText(FText::FromString(FString::Printf(
+            TEXT("%s - %d - %s"),
+            *SongData.Genre,
+            SongData.YearCreated,
+            SongData.SoundWave ? TEXT("Preview ready") : TEXT("No preview"))));
+    }
+
+    if (IsValid(SongQualityText))
+    {
+        const int32 Hit = FMath::RoundToInt(SongData.HitPotential);
+        const int32 Catchiness = FMath::RoundToInt(SongData.Catchiness);
+        const int32 Production = FMath::RoundToInt(SongData.ProductionQuality);
+        SongQualityText->SetText(FText::FromString(FString::Printf(
+            TEXT("Hit %d  Hook %d  Prod %d"),
+            Hit,
+            Catchiness,
+            Production)));
+    }
+
+    if (IsValid(PopularityMeter))
+    {
+        const float PopularityScore = (SongData.HitPotential + SongData.Catchiness + SongData.ProductionQuality) / 300.f;
+        PopularityMeter->SetPercent(FMath::Clamp(PopularityScore, 0.f, 1.f));
+    }
+
     DisplaySongMetadata(SongData);
 
     if (IsValid(AddButton))
@@ -53,6 +81,7 @@ void URecordSongListItemWidget::Setup(const FString& InSongId, const FSongData& 
     }
 
     BindButtonDelegates();
+    RefreshInteractionVisuals();
 }
 
 void URecordSongListItemWidget::OnPlayClicked()
@@ -90,7 +119,17 @@ void URecordSongListItemWidget::OnPlayClicked()
                     // ArtistId may come from EntryObject or OwningRecordWidget
                     FString ArtistIdToUse = ArtistId;
 
-                    Player->PlaySongData(CachedSongData, ArtistIdToUse);
+                    if (bPreviewPlaying && Player->IsPlaying())
+                    {
+                        Player->Stop();
+                        bPreviewPlaying = false;
+                    }
+                    else
+                    {
+                        Player->PlaySongData(CachedSongData, ArtistIdToUse);
+                        bPreviewPlaying = true;
+                    }
+                    RefreshInteractionVisuals();
                     return;
                 }
             }
@@ -119,6 +158,7 @@ void URecordSongListItemWidget::OnRemoveClicked()
 void URecordSongListItemWidget::SetOwningRecordWidget(URecordWidget* InOwner)
 {
     OwningRecordWidget = InOwner;
+    RefreshInteractionVisuals();
 }
 
 void URecordSongListItemWidget::BindButtonDelegates()
@@ -139,5 +179,19 @@ void URecordSongListItemWidget::BindButtonDelegates()
     {
         RemoveButton->OnClicked.RemoveDynamic(this, &URecordSongListItemWidget::OnRemoveClicked);
         RemoveButton->OnClicked.AddDynamic(this, &URecordSongListItemWidget::OnRemoveClicked);
+    }
+}
+
+void URecordSongListItemWidget::RefreshInteractionVisuals()
+{
+    if (IsValid(PlayButtonText))
+    {
+        PlayButtonText->SetText(FText::FromString(bPreviewPlaying ? TEXT("STOP") : TEXT("PLAY")));
+    }
+
+    if (IsValid(AddButtonText))
+    {
+        const bool bSelected = OwningRecordWidget.IsValid() && OwningRecordWidget->IsSongSelected(SongId);
+        AddButtonText->SetText(FText::FromString(bSelected ? TEXT("ON") : TEXT("")));
     }
 }

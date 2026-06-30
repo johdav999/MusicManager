@@ -17,6 +17,7 @@ struct FArtistDealTerms
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Deal")
     int32 NumRecords = 0;
 
+    /** Fractional royalty rate: 0.17 means 17%. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Deal")
     float RoyaltyRate = 0.f;
 

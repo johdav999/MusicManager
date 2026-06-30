@@ -5,8 +5,11 @@
 #include "AuditionTypes.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
-#include "Components/Slider.h"
+#include "UI/MusicGoldSlider.h"
 #include "AuditionWidget.generated.h"
+
+class UImage;
+class UTexture2D;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnAuditionDecision);
 
@@ -47,25 +50,25 @@ public:
     UTextBlock* TextSongwritingQuality = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    USlider* SliderSignUpBonus = nullptr;
+    UMusicGoldSlider* SliderSignUpBonus = nullptr;
 
     UPROPERTY(meta = (BindWidget))
     UTextBlock* TextSignUpBonusValue = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    USlider* SliderNumOfRecords = nullptr;
+    UMusicGoldSlider* SliderNumOfRecords = nullptr;
 
     UPROPERTY(meta = (BindWidget))
     UTextBlock* TextNumOfRecordsValue = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    USlider* SliderRoyaltyRate = nullptr;
+    UMusicGoldSlider* SliderRoyaltyRate = nullptr;
 
     UPROPERTY(meta = (BindWidget))
     UTextBlock* TextRoyaltyRateValue = nullptr;
 
     UPROPERTY(meta = (BindWidget))
-    USlider* SliderContractYears = nullptr;
+    UMusicGoldSlider* SliderContractYears = nullptr;
 
     UPROPERTY(meta = (BindWidget))
     UTextBlock* TextContractYearsValue = nullptr;
@@ -75,6 +78,18 @@ public:
 
     UPROPERTY(meta = (BindWidget))
     UButton* ButtonPass = nullptr;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UImage* PanelBackgroundImage = nullptr;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UImage* ArtistPortraitImage = nullptr;
+
+    UPROPERTY(meta = (BindWidgetOptional))
+    UImage* VinylFrameImage = nullptr;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Audition|Visuals")
+    UTexture2D* DefaultPortraitTexture = nullptr;
 
     UPROPERTY(BlueprintAssignable, Category = "Audition")
     FOnAuditionDecision OnSignArtist;
@@ -116,4 +131,12 @@ protected:
     void OnNegotiationValueChanged();
 
 private:
+    void ConfigureSliderRanges();
+    void RefreshStatMeters();
+    void RefreshPortrait();
+    void RefreshDealValueTexts();
+    static FText FormatCurrency(float Value);
+    static FText FormatWholeNumber(float Value);
+    static FText FormatRoyalty(float Value);
+    static FText FormatYears(int32 Value);
 };

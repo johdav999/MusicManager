@@ -5,6 +5,7 @@
 #include "AuditionTypes.h"
 #include "EventSubsystem.h"
 #include "FArtistContract.h"
+#include "MusicCommandResult.h"
 #include "Async/Async.h"
 #include "Templates/UnrealTemplate.h"
 #include "UI/MainCanvasHost.h"
@@ -18,6 +19,35 @@ class UUserWidget;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnNewsSelected, const FMusicNewsEvent&);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCurrentLabelChanged, const FString&, LabelId);
+
+UENUM(BlueprintType)
+enum class ECommandNotificationSeverity : uint8
+{
+    Info,
+    Success,
+    Warning,
+    Error
+};
+
+USTRUCT(BlueprintType)
+struct FCommandNotification
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FGuid NotificationId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ECommandNotificationSeverity Severity = ECommandNotificationSeverity::Info;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FMusicCommandResult Result;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime Timestamp;
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCommandNotification, const FCommandNotification&, Notification);
 
 /**
  * Game-instance subsystem that orchestrates high-level UI interactions and ensures they run on the game thread.
@@ -101,6 +131,15 @@ public:
     UPROPERTY(BlueprintAssignable)
     FOnCurrentLabelChanged OnCurrentLabelChanged;
 
+    UPROPERTY(BlueprintAssignable, Category="UI|Commands")
+    FOnCommandNotification OnCommandNotification;
+
+    UFUNCTION(BlueprintCallable, Category="UI|Commands")
+    void GetPendingCommandNotifications(TArray<FCommandNotification>& OutNotifications) const;
+
+    UFUNCTION(BlueprintCallable, Category="UI|Commands")
+    void ClearPendingCommandNotifications();
+
     /** Handle selection events coming from news cards. */
 
     UFUNCTION()
@@ -114,6 +153,9 @@ public:
 
     UFUNCTION()
     void HandleNewsEventGenerated(const FMusicNewsEvent& EventData);
+
+    UFUNCTION()
+    void HandleCommandExecuted(const FMusicCommandResult& Result);
 
     /**
      * Entry point for handling command actions from the command panel.
@@ -176,6 +218,9 @@ private:
     /** News events received before the layout exists */
     UPROPERTY()
     TArray<FMusicNewsEvent> PendingNewsEvents;
+
+    UPROPERTY()
+    TArray<FCommandNotification> PendingCommandNotifications;
 
     /** Transient UI coalescing state for fast-forward simulation. */
     bool bIsSimulationBatchUpdateActive = false;

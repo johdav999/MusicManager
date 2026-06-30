@@ -17,6 +17,8 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FOnArtistActionAvailabilityChanged, const F
 
 class UMusicSaveGame;
 class USong;
+struct FArtistManagerSnapshot;
+struct FMusicSaveValidationResult;
 struct FSongData;
 
 USTRUCT(BlueprintType)
@@ -89,6 +91,10 @@ public:
     UFUNCTION(BlueprintCallable, Category="Contracts")
     void SignArtist(const FArtistDealTerms& Deal);
 
+    bool SignArtistById(const FString& ArtistId, const FArtistDealTerms& Deal, FArtistContract& OutContract, FString& OutError);
+
+    bool RejectArtistById(const FString& ArtistId, FString& OutError);
+
     UFUNCTION(BlueprintCallable, Category="Contracts")
     void RejectArtist(const FString& ArtistId);
 
@@ -136,6 +142,9 @@ public:
 
     void SaveState(class UMusicSaveGame* SaveObject);
     void LoadState(const class UMusicSaveGame* SaveObject);
+    void BuildSaveSnapshot(FArtistManagerSnapshot& OutSnapshot) const;
+    void ValidateSaveSnapshot(const FArtistManagerSnapshot& Snapshot, const TSet<FString>& KnownSongIds, FMusicSaveValidationResult& Result) const;
+    void ApplySaveSnapshot(const FArtistManagerSnapshot& Snapshot);
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Contracts")
     TArray<FArtistContract> ActiveContracts;

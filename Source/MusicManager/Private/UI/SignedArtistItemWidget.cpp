@@ -186,14 +186,15 @@ void USignedArtistItemWidget::HandleClicked()
         return;
     }
 
-    OnArtistClicked.Broadcast(LocalArtistData.ArtistName);
+    const FString SelectedArtistId = GetArtistId();
+    OnArtistClicked.Broadcast(SelectedArtistId);
 
     // Update global selected artist
     if (UGameInstance* GI = GetGameInstance())
     {
         if (UArtistManagerSubsystem* ArtistSub = GI->GetSubsystem<UArtistManagerSubsystem>())
         {
-            ArtistSub->SetSelectedArtist(LocalArtistData.ArtistName);
+            ArtistSub->SetSelectedArtist(SelectedArtistId);
         }
     }
 }
@@ -232,7 +233,7 @@ void USignedArtistItemWidget::HandleUnhovered()
 
 void USignedArtistItemWidget::HandleActionAvailabilityChanged(const FString& ArtistId, EArtistActionAvailability NewAvailability)
 {
-    if (LocalArtistData.ArtistName.IsEmpty() || LocalArtistData.ArtistName != ArtistId)
+    if (GetArtistId().IsEmpty() || GetArtistId() != ArtistId)
     {
         return;
     }

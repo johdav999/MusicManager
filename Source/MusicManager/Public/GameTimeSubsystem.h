@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "GameTimeSubsystem.generated.h"
 
@@ -58,6 +60,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnMonthAdvanced, const FDateTime&, 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTimeBatchAdvanced, int32, WeeksAdvanced, const FDateTime&, NewDate);
 
 class UMusicSaveGame;
+struct FMusicSaveValidationResult;
+struct FTimeSnapshot;
 
 /**
  * Centralized time simulation subsystem that directs deterministic weekly advancement.
@@ -93,10 +97,22 @@ public:
     void AdvanceMonth();
 
     /**
-     * Legacy compatibility hook. Time now advances only through explicit AdvanceOneWeek/AdvanceWeeks calls.
+     * Pauses or resumes the automatic month timer.
      */
     UFUNCTION(BlueprintCallable, Category="Time")
     void PauseTime(bool bPause);
+
+    /**
+     * Starts automatic month advancement at the configured interval.
+     */
+    UFUNCTION(BlueprintCallable, Category="Time")
+    void StartAutoAdvance();
+
+    /**
+     * Stops automatic month advancement.
+     */
+    UFUNCTION(BlueprintCallable, Category="Time")
+    void StopAutoAdvance();
 
     /**
      * Returns the current simulated date for UI display or logic.
@@ -110,11 +126,20 @@ public:
     UFUNCTION(BlueprintPure, Category="Time")
     bool IsBatchAdvancing() const { return bIsBatchAdvancing; }
 
+    UFUNCTION(BlueprintPure, Category="Time")
+    bool IsTimeRunning() const { return bIsTimeRunning; }
+
+    UFUNCTION(BlueprintPure, Category="Time")
+    float GetAutoAdvanceMonthIntervalSeconds() const { return AutoAdvanceMonthIntervalSeconds; }
+
     const TArray<EMusicWeeklySimulationPhase>& GetWeeklyPhaseOrder() const { return WeeklyPhaseOrder; }
     const TArray<EMusicWeeklySimulationPhase>& GetLastExecutedWeeklyPhases() const { return LastExecutedWeeklyPhases; }
 
     void SaveState(class UMusicSaveGame* SaveObject);
     void LoadState(const class UMusicSaveGame* SaveObject);
+    void BuildSaveSnapshot(FTimeSnapshot& OutSnapshot) const;
+    void ValidateSaveSnapshot(const FTimeSnapshot& Snapshot, FMusicSaveValidationResult& Result) const;
+    void ApplySaveSnapshot(const FTimeSnapshot& Snapshot);
 
     /**
      * Fired each time the subsystem successfully advances one week.
@@ -168,6 +193,9 @@ protected:
     void RunWeeklySimulation(const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth);
     void RunWeeklySimulationPhase(EMusicWeeklySimulationPhase Phase, const FDateTime& PreviousDate, const FDateTime& NewDate, bool bClosedMonth);
     void RunMonthlyCompatibilityPass(const FMonthlyCloseSummary& Summary);
+    void HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS);
+    void HandleAutoAdvanceTimerElapsed();
+    void ClearAutoAdvanceTimer();
 
     /** Current simulated date. Weekly cadence means this may fall inside a month. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
@@ -176,6 +204,13 @@ protected:
     /** Legacy state retained for Blueprint compatibility. Explicit advancement keeps this false. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")
     bool bIsTimeRunning;
+
+    /** Real-time interval for automatic month advancement. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Time", meta=(ClampMin="0.1"))
+    float AutoAdvanceMonthIntervalSeconds = 5.f;
+
+    /** Timer that drives automatic month advancement. */
+    FTimerHandle AutoAdvanceMonthTimerHandle;
 
     /** Suppresses repeated UI refreshes while deterministic fast-forward batches are still running. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Time")

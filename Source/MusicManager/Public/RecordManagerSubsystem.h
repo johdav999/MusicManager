@@ -10,6 +10,8 @@
 
 class USongManagerSubsystem;
 class UGameTimeSubsystem;
+struct FMusicSaveValidationResult;
+struct FRecordManagerSnapshot;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(
     FOnArtistRecordCreated,
@@ -27,14 +29,44 @@ enum class ERecordFormat : uint8
 };
 
 /** High-level lifecycle stages for a record. */
-UENUM()
+UENUM(BlueprintType)
 enum class ERecordLifecycleState : uint8
 {
     Draft,
     Recording,
     Recorded,
     Scheduled,
-    Released
+    Released,
+    Catalog
+};
+
+UENUM(BlueprintType)
+enum class ERecordType : uint8
+{
+    Single,
+    EP,
+    LP
+};
+
+USTRUCT(BlueprintType)
+struct FScheduleReleaseCommand
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString RecordId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString LabelId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime ReleaseDate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FString> TargetRegionIds;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<ERecordFormat> Formats;
 };
 
 /**
@@ -53,6 +85,9 @@ struct FRecordRecordingIntent
     /** Album/record display name requested by the player. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     FString AlbumName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ERecordType RecordType = ERecordType::Single;
 
     /** True if the player intends to release a single (one track). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -73,6 +108,60 @@ struct FRecordRecordingIntent
     /** Optional requested release date; recording completion is still authoritative. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     TOptional<FDateTime> DesiredReleaseDate;
+};
+
+USTRUCT(BlueprintType)
+struct FRecordingProjection
+{
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ArtistId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ERecordType RecordType = ERecordType::Single;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 SongCount = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float EstimatedRecordingCost = 0.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 EstimatedDurationDays = 0;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime StartDate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime EstimatedCompletionDate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bCanRecord = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FString> ValidationWarnings;
+};
+
+USTRUCT(BlueprintType)
+struct FActiveRecordingSession
+{
+    GENERATED_BODY();
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString RecordingId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FRecordRecordingIntent Intent;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime StartDate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime CompletionDate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float RecordingCost = 0.f;
 };
 
 /**
@@ -158,6 +247,9 @@ struct FRecordData
     FString AlbumName;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ERecordType RecordType = ERecordType::Single;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
     bool bIsSingle = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -192,6 +284,121 @@ struct FRecordData
     /** Marketing exposure multiplier injected by campaign systems. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float MarketingExposure = 1.0f;
+
+    /** Regions where this record is commercially available. Empty means not scheduled for market sale. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FString> TargetRegionIds;
+};
+
+USTRUCT(BlueprintType)
+struct FReleasePlannerRecordOption
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString RecordId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString AlbumName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ArtistDisplayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString LabelDisplayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ArtistId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString LabelId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime DateRecorded;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ERecordLifecycleState LifecycleState = ERecordLifecycleState::Draft;
+};
+
+USTRUCT(BlueprintType)
+struct FReleasePlannerView
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bHasPlannableRecords = false;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FRecordData SelectedRecord;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString SelectedRecordDisplayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString SelectedArtistDisplayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ERecordLifecycleState SelectedRecordState = ERecordLifecycleState::Draft;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FReleasePlannerRecordOption> PlannableRecords;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FRecordFormatRule> ValidFormats;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FMarketRegion> AvailableRegions;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float ProjectedReach = 0.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FString> ValidationWarnings;
+};
+
+USTRUCT(BlueprintType)
+struct FReleaseDashboardItem
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString RecordId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString RecordDisplayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ArtistId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FString ArtistDisplayName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FDateTime ReleaseDate;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ERecordLifecycleState LifecycleState = ERecordLifecycleState::Draft;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FString> TargetRegionIds;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<ERecordFormat> Formats;
+};
+
+USTRUCT(BlueprintType)
+struct FReleaseDashboardSummary
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FReleaseDashboardItem> AwaitingPlanning;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FReleaseDashboardItem> ScheduledReleases;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FReleaseDashboardItem> RecentlyReleased;
 };
 
 UCLASS()
@@ -218,6 +425,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="Records|Recording")
     bool SubmitRecordingIntent(const FRecordRecordingIntent& Intent, FString& OutError);
 
+    UFUNCTION(BlueprintCallable, Category="Records|Recording")
+    bool BuildRecordingProjection(const FRecordRecordingIntent& Intent, FRecordingProjection& OutProjection, FString& OutError) const;
+
     /** TEMPORARY RADIO SIMULATION SUPPORT: REPLACE WITH REAL RADIO SYSTEM */
     void GetRecentlyReleasedArtists(const FDateTime& CurrentDate, int32 MonthsBack, TArray<FString>& OutArtistIds) const;
 
@@ -232,16 +442,67 @@ public:
     UFUNCTION(BlueprintCallable, Category="Records|Sales")
     int32 GetLifetimeUnits(const FString& RecordId) const;
 
+    UFUNCTION(BlueprintCallable, Category="Records")
+    void GetAllRecords(TArray<FRecordData>& OutRecords) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    bool ScheduleRelease(const FScheduleReleaseCommand& Command, FString& OutError);
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    bool ReleaseNow(const FString& RecordId, const FString& LabelId, FString& OutError);
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    bool GetRecordLifecycleState(const FString& RecordId, ERecordLifecycleState& OutState) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    void GetRecordsAwaitingReleasePlanning(TArray<FRecordData>& OutRecords) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    void GetScheduledReleases(TArray<FRecordData>& OutRecords) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    void GetReleasedOrCatalogRecords(TArray<FRecordData>& OutRecords) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    bool BuildReleasePlannerView(const FString& SelectedRecordId, FReleasePlannerView& OutView, FString& OutError) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    void BuildReleaseDashboardSummary(FReleaseDashboardSummary& OutSummary) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records")
+    FString GetRecordDisplayName(const FString& RecordId) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records")
+    FString GetArtistDisplayNameForRecord(const FString& RecordId) const;
+
+    UFUNCTION(BlueprintCallable, Category="Records|Release")
+    bool IsRecordMarketable(const FString& RecordId, FString& OutLabelId) const;
+
+    void BuildSaveSnapshot(FRecordManagerSnapshot& OutSnapshot) const;
+    void ValidateSaveSnapshot(const FRecordManagerSnapshot& Snapshot, const TSet<FString>& KnownArtistIds, const TSet<FString>& KnownSongIds, const TSet<FString>& KnownLabelIds, FMusicSaveValidationResult& Result) const;
+    void ApplySaveSnapshot(const FRecordManagerSnapshot& Snapshot);
+
 private:
     /** Track active recordings until the studio session is complete. */
     void ProcessActiveRecordings(const FDateTime& CurrentDate);
     void CompleteRecording(const FString& RecordingId, const FDateTime& CompletionDate);
-    bool ValidateRecordingIntent(const FRecordRecordingIntent& Intent, FString& OutError);
+    bool ValidateRecordingIntent(const FRecordRecordingIntent& Intent, FString& OutError) const;
+    FRecordRecordingIntent NormalizeRecordingIntent(const FRecordRecordingIntent& Intent) const;
+    bool IsSongCountValidForType(ERecordType RecordType, int32 SongCount, FString& OutError) const;
+    float EstimateRecordingCost(const FRecordRecordingIntent& Intent) const;
+    int32 EstimateRecordingDurationDays(const FRecordRecordingIntent& Intent) const;
+    FString GetRecordTypeDisplayName(ERecordType RecordType) const;
     void ApplyFormatRules(const FDateTime& CurrentDate, TArray<ERecordFormat>& InOutFormats) const;
     FString DerivePrimaryGenre(const TArray<FString>& SongIds) const;
     float ComputeRecordQuality(const TArray<FString>& SongIds, const FString& ArtistId) const;
     FDateTime ResolveReleaseDate(const FRecordRecordingIntent& Intent, const FDateTime& DateRecorded) const;
     FString ResolveLabelForArtist(const FString& ArtistId) const;
+    ERecordLifecycleState ResolveLifecycleStateForRecord(const FString& RecordId) const;
+    bool ValidateReleaseCommand(const FScheduleReleaseCommand& Command, FString& OutError) const;
+    void ProcessScheduledReleases(const FDateTime& CurrentDate);
+    bool IsRegionTargetedByRecord(const FRecordData& Record, const FString& RegionId) const;
+    FString ResolveArtistDisplayName(const FString& ArtistId) const;
+    FReleaseDashboardItem BuildReleaseDashboardItem(const FRecordData& Record) const;
 
     void SimulateMonthlySales(const FDateTime& CurrentDate);
     void ComputeRecordSalesForMarket(const FRecordData& Record, const FMarketDemandSnapshot& Demand, const FArtistMarketModifiers& ArtistImpact, const FDateTime& CurrentDate, TArray<FRecordSalesEntry>& OutEntries) const;
@@ -273,4 +534,7 @@ private:
     TMap<FString, FDateTime> RecordingStartDates;
     UPROPERTY()
     TMap<FString, FDateTime> RecordingCompletionDates;
+
+    UPROPERTY()
+    TMap<FString, float> RecordingCosts;
 };

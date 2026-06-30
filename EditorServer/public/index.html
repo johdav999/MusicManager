@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MusicManager Editor</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="record-mark"></div>
+        <div>
+          <strong>MUSICMANAGER</strong>
+          <span>EDITOR</span>
+        </div>
+      </div>
+      <nav id="nav"></nav>
+    </aside>
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <h1 id="screenTitle">Dashboard</h1>
+          <p id="screenSubtitle">Local production data editor</p>
+        </div>
+        <div class="status-pill" id="serverStatus">LOCALHOST</div>
+      </header>
+      <section id="content" class="content-grid"></section>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

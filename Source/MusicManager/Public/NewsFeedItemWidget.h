@@ -8,6 +8,7 @@
 class UImage;
 class UTextBlock;
 class UNewsFeedList;
+class UTexture2D;
 
 /**
  * Lightweight news feed list item that reports hover state to the owning list.
@@ -19,6 +20,8 @@ class UNewsFeedItemWidget : public UUserWidget
 
 public:
     UNewsFeedItemWidget(const FObjectInitializer& ObjectInitializer);
+
+    virtual void NativeConstruct() override;
 
     UFUNCTION(BlueprintCallable, Category="News")
     void SetupFromEvent(const FMusicNewsEvent& Event);
@@ -33,16 +36,34 @@ protected:
     virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
-    UPROPERTY(meta=(BindWidget))
+    UPROPERTY(meta=(BindWidgetOptional))
     UTextBlock* HeadlineText;
 
-    UPROPERTY(meta=(BindWidget))
+    UPROPERTY(meta=(BindWidgetOptional))
+    UTextBlock* SourceText;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UTextBlock* DateText;
+
+    UPROPERTY(meta=(BindWidgetOptional))
     UImage* NewsTypeIcon;
 
+    UPROPERTY(meta=(BindWidgetOptional))
+    UImage* DateIcon;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UImage* AccentDivider;
+
 private:
+    void ResolveWidgetBindings();
+    void ApplyCachedEventToWidgets();
     void ApplyNewsTypeIcon(EMusicNewsType NewsType);
+    FString ResolveSourceText() const;
+    static FText FormatNewsDate(const FDateTime& Timestamp);
+    static UTexture2D* ResolveNewsTypeTexture(EMusicNewsType NewsType);
 
     FMusicNewsEvent CachedEvent;
+    bool bHasCachedEvent = false;
 
     UPROPERTY()
     TWeakObjectPtr<UNewsFeedList> OwnerList;

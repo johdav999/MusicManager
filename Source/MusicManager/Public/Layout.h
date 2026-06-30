@@ -23,6 +23,8 @@ class USignedArtistPanelWidget;
 class UArtistManagerSubsystem;
 class URegionMapWidget;
 class UArtistHoverDetailWidget;
+class UTopStatusBarWidget;
+class UActiveContractsWidget;
 
 /**
  * Layout widget that exposes helpers for locating child widgets by name or class.
@@ -61,6 +63,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="Layout")
     void ShowAuditionWidget();
 
+    UFUNCTION(BlueprintCallable, Category="Layout")
+    void ShowAuditionWidgetForArtist(const FArtistData& ArtistData);
+
     UFUNCTION(BlueprintCallable, Category = "UI")
     void CloseAuditionWidget();
 
@@ -80,6 +85,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Contract")
     void ShowContract(const FArtistContract& SignedContract);
 
+    UFUNCTION(BlueprintCallable, Category = "Contract")
+    void ShowActiveContractsWidget();
+
+    UFUNCTION(BlueprintCallable, Category = "Contract")
+    void ShowActiveContractsWidgetForArtist(const FString& ArtistId);
+
+    UFUNCTION(BlueprintCallable, Category = "Contract")
+    void CloseActiveContractsWidget();
+
     UFUNCTION(BlueprintCallable, Category="Artist")
     void RefreshSignedArtists(const TArray<FArtistData>& Artists);
 
@@ -91,6 +105,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category="Layout")
     UInspectorPanelWidget* GetInspectorPanel() const { return InspectorPanelWidget; }
+
+    UFUNCTION(BlueprintCallable, Category="Layout")
+    UTopStatusBarWidget* GetTopStatusBarWidget() const { return TopStatusBarWidget; }
 
     /** Layer-2 hover tooltip routing (UI manager only). */
     void ShowHoverTooltip(const FTooltipData& Data);
@@ -104,6 +121,21 @@ public:
 protected:
     UPROPERTY(meta=(BindWidgetOptional))
     UWidget* Layer1_Root;
+
+    UPROPERTY(meta=(BindWidgetOptional))
+    UTopStatusBarWidget* TopStatusBarWidget;
+
+    UPROPERTY(EditDefaultsOnly, Category="Layout|HUD")
+    TSubclassOf<UTopStatusBarWidget> TopStatusBarWidgetClass;
+
+    UPROPERTY(EditDefaultsOnly, Category="Layout|HUD")
+    TSubclassOf<UAuditionWidget> ArtistAuditionPanelWidgetClass;
+
+    UPROPERTY(EditDefaultsOnly, Category="Layout|Studio")
+    TSubclassOf<URecordWidget> RecordWidgetClass;
+
+    UPROPERTY(EditDefaultsOnly, Category="Layout|Contracts")
+    TSubclassOf<UActiveContractsWidget> ActiveContractsWidgetClass;
 
     UPROPERTY(meta=(BindWidgetOptional))
     UWidget* Layer2_Root;
@@ -123,11 +155,14 @@ protected:
     UPROPERTY(meta=(BindWidgetOptional))
     UNewsFeedList* NewsFeedList;
 
-    UPROPERTY(meta = (BindWidget))
+    UPROPERTY(Transient)
     UAuditionWidget* AuditionWidget;
 
     UPROPERTY(meta = (BindWidgetOptional))
         UContractWidget* ContractWidget;
+
+    UPROPERTY(Transient)
+    UActiveContractsWidget* ActiveContractsWidget;
 
     UPROPERTY(meta = (BindWidgetOptional))
     URecordWidget* RecordWidget;
@@ -143,7 +178,24 @@ private:
     void HandleTickerClicked(UEventTickerWidget* ClickedTicker);
 
     UFUNCTION()
+    void HandleNewsFeedItemSelected(UNewsFeedItemWidget* Card, const FMusicNewsEvent& EventData);
+
+    UFUNCTION()
     void HandleArtistSelected(FString ArtistId);
+
+    UFUNCTION()
+    void HandleAuditionSigned();
+
+    UFUNCTION()
+    void HandleAuditionPassed();
+
+    UFUNCTION()
+    void HandleActiveContractsCloseRequested();
+
+    void EnsureTopStatusBarWidget();
+    void EnsureArtistAuditionPanelWidget();
+    void EnsureRecordWidget();
+    void EnsureActiveContractsWidget();
 
     UUIManagerSubsystem* GetUIManagerSubsystem() const;
     UArtistManagerSubsystem* GetArtistManagerSubsystem() const;

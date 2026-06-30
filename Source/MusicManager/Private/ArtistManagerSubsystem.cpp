@@ -3,6 +3,7 @@
 #include "Engine/Engine.h"
 #include "GameTimeSubsystem.h"
 #include "MusicSaveGame.h"
+#include "PlayerLabelSubsystem.h"
 #include "RecordManagerSubsystem.h"
 #include "SongManagerSubsystem.h"
 #include "Song.h"
@@ -285,7 +286,10 @@ void UArtistManagerSubsystem::SetSelectedArtist(const FString& ArtistId)
     {
         if (UUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UUIManagerSubsystem>())
         {
-            UIManager->SetCurrentLabelId(ArtistId);
+            if (UPlayerLabelSubsystem* LabelSubsystem = GameInstance->GetSubsystem<UPlayerLabelSubsystem>())
+            {
+                UIManager->SetCurrentLabelId(LabelSubsystem->GetPlayerLabelId());
+            }
         }
     }
 }
@@ -397,12 +401,53 @@ void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal)
         return;
     }
 
-    const FArtistData ArtistInfo = UnsignedArtists[0];
+    FArtistContract SignedContract;
+    FString Error;
+    const FString ArtistId = Deal.ArtistId.IsEmpty() ? UnsignedArtists[0].ArtistId : Deal.ArtistId;
+    if (!SignArtistById(ArtistId, Deal, SignedContract, Error))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("SignArtist failed: %s"), *Error);
+    }
+}
+
+bool UArtistManagerSubsystem::SignArtistById(const FString& ArtistId, const FArtistDealTerms& Deal, FArtistContract& OutContract, FString& OutError)
+{
+    if (!IsInGameThread())
+    {
+        OutError = TEXT("Artist signing must run on the game thread.");
+        return false;
+    }
+
+    if (ArtistId.IsEmpty())
+    {
+        OutError = TEXT("Artist id is required.");
+        return false;
+    }
+
+    const int32 ArtistIndex = UnsignedArtists.IndexOfByPredicate([&ArtistId](const FArtistData& Artist)
+    {
+        return Artist.ArtistId == ArtistId || Artist.ArtistName == ArtistId;
+    });
+
+    if (ArtistIndex == INDEX_NONE)
+    {
+        OutError = TEXT("Artist is not available to sign.");
+        return false;
+    }
+
+    const FArtistData ArtistInfo = UnsignedArtists[ArtistIndex];
+
+    if (GetContractByArtistId(ArtistInfo.ArtistId) || GetContractByArtistId(ArtistInfo.ArtistName))
+    {
+        OutError = TEXT("Artist is already signed.");
+        return false;
+    }
 
     FArtistContract NewContract;
-    NewContract.ArtistId = ArtistInfo.ArtistName;
+    NewContract.ArtistId = ArtistInfo.ArtistId.IsEmpty() ? ArtistInfo.ArtistName : ArtistInfo.ArtistId;
     NewContract.ArtistData = ArtistInfo;
     NewContract.Terms = Deal;
+    NewContract.Terms.ArtistId = NewContract.ArtistId;
 
     const FDateTime EffectiveStartDate = Deal.ProposedStartDate.GetTicks() > 0 ? Deal.ProposedStartDate : CurrentGameDate;
     NewContract.StartDate = EffectiveStartDate;
@@ -424,7 +469,7 @@ void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal)
 
     ActiveContracts.Add(NewContract);
 
-    UnsignedArtists.RemoveAt(0);
+    UnsignedArtists.RemoveAt(ArtistIndex);
 
     // Select the newly signed artist as the active label context.
     SetSelectedArtist(NewContract.ArtistId);
@@ -433,11 +478,68 @@ void UArtistManagerSubsystem::SignArtist(const FArtistDealTerms& Deal)
     OnArtistListChanged.Broadcast();
 
     UpdateArtistActionAvailability(NewContract.ArtistId);
+    OutContract = NewContract;
+    return true;
 }
 
 void UArtistManagerSubsystem::RejectArtist(const FString& ArtistId)
 {
-    OnArtistRejected.Broadcast(ArtistId);
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<UArtistManagerSubsystem> WeakThis(this);
+        const FString ArtistIdCopy = ArtistId;
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistIdCopy]()
+        {
+            if (UArtistManagerSubsystem* StrongThis = WeakThis.Get())
+            {
+                StrongThis->RejectArtist(ArtistIdCopy);
+            }
+        });
+        return;
+    }
+
+    FString Error;
+    if (!RejectArtistById(ArtistId, Error))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RejectArtist failed: %s"), *Error);
+    }
+}
+
+bool UArtistManagerSubsystem::RejectArtistById(const FString& ArtistId, FString& OutError)
+{
+    if (!IsInGameThread())
+    {
+        OutError = TEXT("Artist rejection must run on the game thread.");
+        return false;
+    }
+
+    if (ArtistId.IsEmpty())
+    {
+        OutError = TEXT("Artist id is required.");
+        return false;
+    }
+
+    const int32 ArtistIndex = UnsignedArtists.IndexOfByPredicate([&ArtistId](const FArtistData& Artist)
+    {
+        return Artist.ArtistId == ArtistId || Artist.ArtistName == ArtistId;
+    });
+
+    if (ArtistIndex == INDEX_NONE)
+    {
+        OutError = TEXT("Artist is not in the unsigned audition pool.");
+        return false;
+    }
+
+    FArtistData RejectedArtist = UnsignedArtists[ArtistIndex];
+    const FString RejectedArtistId = RejectedArtist.ArtistId.IsEmpty() ? RejectedArtist.ArtistName : RejectedArtist.ArtistId;
+    UnsignedArtists.RemoveAt(ArtistIndex);
+    UnsignedArtists.Add(RejectedArtist);
+
+    OnArtistRejected.Broadcast(RejectedArtistId);
+    OnArtistListChanged.Broadcast();
+
+    UE_LOG(LogTemp, Log, TEXT("Rejected audition artist '%s'; moved to back of unsigned roster."), *RejectedArtistId);
+    return true;
 }
 
 void UArtistManagerSubsystem::AdvanceMonth()
@@ -488,7 +590,7 @@ void UArtistManagerSubsystem::ProcessMonthlyContractFinancials(FArtistContract& 
     const float MomentumMultiplier = 1.f + (Contract.PerformanceMomentum / 200.f);
     const float MonthlyGrossRevenue = (12000.f + Contract.MonthsActive * 400.f) * PopularityFactor * MomentumMultiplier;
 
-    const float RoyaltyPayment = MonthlyGrossRevenue * (Contract.Terms.RoyaltyRate / 100.f);
+    const float RoyaltyPayment = MonthlyGrossRevenue * Contract.Terms.RoyaltyRate;
     Contract.LastRoyaltyPayment = RoyaltyPayment;
     Contract.CumulativeRoyaltyPaid += RoyaltyPayment;
 
@@ -570,6 +672,7 @@ void UArtistManagerSubsystem::SaveState(UMusicSaveGame* SaveObject)
         return;
     }
 
+    BuildSaveSnapshot(SaveObject->ArtistSnapshot);
     SaveObject->SavedContracts = ActiveContracts;
 }
 
@@ -582,12 +685,101 @@ void UArtistManagerSubsystem::LoadState(const UMusicSaveGame* SaveObject)
         return;
     }
 
-    ActiveContracts = SaveObject->SavedContracts;
-    ExpiredContracts.Reset();
+    ApplySaveSnapshot(SaveObject->ArtistSnapshot);
+}
+
+void UArtistManagerSubsystem::BuildSaveSnapshot(FArtistManagerSnapshot& OutSnapshot) const
+{
+    OutSnapshot.UnsignedArtists = UnsignedArtists;
+    OutSnapshot.ActiveContracts = ActiveContracts;
+    OutSnapshot.ExpiredContracts = ExpiredContracts;
+    OutSnapshot.SelectedArtistId = SelectedArtistId;
+    OutSnapshot.ArtistToSongs = ArtistToSongs;
+    OutSnapshot.ArtistMomentum = ArtistMomentum;
+    OutSnapshot.ArtistReputation = ArtistReputation;
+}
+
+void UArtistManagerSubsystem::ValidateSaveSnapshot(const FArtistManagerSnapshot& Snapshot, const TSet<FString>& KnownSongIds, FMusicSaveValidationResult& Result) const
+{
+    TSet<FString> ActiveArtistIds;
+    for (const FArtistContract& Contract : Snapshot.ActiveContracts)
+    {
+        if (Contract.ArtistId.IsEmpty())
+        {
+            Result.AddError(TEXT("Active contract has an empty artist id."));
+            continue;
+        }
+
+        if (ActiveArtistIds.Contains(Contract.ArtistId))
+        {
+            Result.AddError(FString::Printf(TEXT("Duplicate active contract for artist %s."), *Contract.ArtistId));
+        }
+        ActiveArtistIds.Add(Contract.ArtistId);
+
+        if (!Contract.bContractActive)
+        {
+            Result.AddError(FString::Printf(TEXT("Active contract for artist %s is marked inactive."), *Contract.ArtistId));
+        }
+
+        if (Contract.EndDate.GetTicks() > 0 && Contract.StartDate.GetTicks() > 0 && Contract.EndDate < Contract.StartDate)
+        {
+            Result.AddError(FString::Printf(TEXT("Contract for artist %s has end date before start date."), *Contract.ArtistId));
+        }
+    }
+
+    for (const FArtistContract& Contract : Snapshot.ExpiredContracts)
+    {
+        if (Contract.ArtistId.IsEmpty())
+        {
+            Result.AddError(TEXT("Expired contract has an empty artist id."));
+        }
+
+        if (Contract.bContractActive)
+        {
+            Result.AddError(FString::Printf(TEXT("Expired contract for artist %s is marked active."), *Contract.ArtistId));
+        }
+    }
+
+    for (const TPair<FString, FArtistSongList>& Pair : Snapshot.ArtistToSongs)
+    {
+        if (Pair.Key.IsEmpty())
+        {
+            Result.AddError(TEXT("Artist-to-song mapping has an empty artist id."));
+        }
+
+        for (const FString& SongId : Pair.Value.SongIds)
+        {
+            if (SongId.IsEmpty())
+            {
+                Result.AddError(FString::Printf(TEXT("Artist %s has an empty song id in mapping."), *Pair.Key));
+            }
+            else if (!KnownSongIds.Contains(SongId))
+            {
+                Result.AddError(FString::Printf(TEXT("Artist %s references missing song %s."), *Pair.Key, *SongId));
+            }
+        }
+    }
+}
+
+void UArtistManagerSubsystem::ApplySaveSnapshot(const FArtistManagerSnapshot& Snapshot)
+{
+    ActiveContracts = Snapshot.ActiveContracts;
+    ExpiredContracts = Snapshot.ExpiredContracts;
+    UnsignedArtists = Snapshot.UnsignedArtists;
+    ArtistToSongs = Snapshot.ArtistToSongs;
+    ArtistMomentum = Snapshot.ArtistMomentum;
+    ArtistReputation = Snapshot.ArtistReputation;
+    ConcurrentReleasesCache.Reset();
+    ArtistActionAvailability.Reset();
+
     OnMonthlyFinancialUpdate.Broadcast(ActiveContracts);
     OnArtistListChanged.Broadcast();
 
-    if (ActiveContracts.Num() > 0)
+    if (!Snapshot.SelectedArtistId.IsEmpty())
+    {
+        SetSelectedArtist(Snapshot.SelectedArtistId);
+    }
+    else if (ActiveContracts.Num() > 0)
     {
         SetSelectedArtist(ActiveContracts[0].ArtistId);
     }

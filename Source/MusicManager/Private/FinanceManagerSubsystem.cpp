@@ -1,4 +1,5 @@
 #include "FinanceManagerSubsystem.h"
+#include "MusicSaveGame.h"
 #include "RecordManagerSubsystem.h"
 
 void UFinanceManagerSubsystem::RegisterTransaction(const FCashFlowEntry& Entry)
@@ -241,4 +242,85 @@ void UFinanceManagerSubsystem::ProcessRecordSalesEntries(const TArray<FRecordSal
         RoyaltyEntry.RefId = Entry.RecordId;
         RegisterTransaction(RoyaltyEntry);
     }
+}
+
+void UFinanceManagerSubsystem::BuildSaveSnapshot(FFinanceSnapshot& OutSnapshot) const
+{
+    OutSnapshot.LabelAccounts = LabelAccounts;
+    OutSnapshot.MonthlySummaries = MonthlySummaries;
+    OutSnapshot.ClosedMonthlySummaryKeys = ClosedMonthlySummaryKeys;
+}
+
+void UFinanceManagerSubsystem::ValidateSaveSnapshot(const FFinanceSnapshot& Snapshot, const TSet<FString>& KnownLabelIds, FMusicSaveValidationResult& Result) const
+{
+    for (const TPair<FString, FLabelAccount>& Pair : Snapshot.LabelAccounts)
+    {
+        if (Pair.Key.IsEmpty() || Pair.Value.LabelId.IsEmpty())
+        {
+            Result.AddError(TEXT("Finance account has an empty label id."));
+            continue;
+        }
+
+        if (Pair.Key != Pair.Value.LabelId)
+        {
+            Result.AddError(FString::Printf(TEXT("Finance account key %s does not match account label %s."), *Pair.Key, *Pair.Value.LabelId));
+        }
+
+        if (!KnownLabelIds.Contains(Pair.Key))
+        {
+            Result.AddError(FString::Printf(TEXT("Finance account references unknown label %s."), *Pair.Key));
+        }
+
+        if (!FMath::IsFinite(Pair.Value.CurrentBalance))
+        {
+            Result.AddError(FString::Printf(TEXT("Finance account %s has invalid balance."), *Pair.Key));
+        }
+
+        for (const FCashFlowEntry& Entry : Pair.Value.Ledger)
+        {
+            if (Entry.LabelId != Pair.Key)
+            {
+                Result.AddError(FString::Printf(TEXT("Finance ledger entry label %s is stored under account %s."), *Entry.LabelId, *Pair.Key));
+            }
+            if (!FMath::IsFinite(Entry.Amount))
+            {
+                Result.AddError(FString::Printf(TEXT("Finance ledger entry for label %s has invalid amount."), *Pair.Key));
+            }
+            if (Entry.Timestamp.GetTicks() <= 0)
+            {
+                Result.AddError(FString::Printf(TEXT("Finance ledger entry for label %s has unset timestamp."), *Pair.Key));
+            }
+            if (!StaticEnum<ETransactionType>()->IsValidEnumValue(static_cast<int64>(Entry.Type)))
+            {
+                Result.AddError(FString::Printf(TEXT("Finance ledger entry for label %s has invalid transaction type."), *Pair.Key));
+            }
+        }
+    }
+
+    for (const FMonthlyFinanceSummary& Summary : Snapshot.MonthlySummaries)
+    {
+        if (Summary.LabelId.IsEmpty() || !KnownLabelIds.Contains(Summary.LabelId))
+        {
+            Result.AddError(FString::Printf(TEXT("Monthly finance summary references unknown label %s."), *Summary.LabelId));
+        }
+        if (Summary.Month < 1 || Summary.Month > 12 || Summary.Year < 1955)
+        {
+            Result.AddError(FString::Printf(TEXT("Monthly finance summary has invalid period %04d-%02d."), Summary.Year, Summary.Month));
+        }
+        if (Summary.PeriodStart.GetTicks() <= 0 || Summary.PeriodEnd.GetTicks() <= 0 || Summary.PeriodEnd <= Summary.PeriodStart)
+        {
+            Result.AddError(FString::Printf(TEXT("Monthly finance summary for %s has invalid date range."), *Summary.LabelId));
+        }
+        if (!FMath::IsNearlyEqual(Summary.NetTotal, Summary.IncomeTotal + Summary.ExpenseTotal, 0.01f))
+        {
+            Result.AddError(FString::Printf(TEXT("Monthly finance summary for %s has inconsistent totals."), *Summary.LabelId));
+        }
+    }
+}
+
+void UFinanceManagerSubsystem::ApplySaveSnapshot(const FFinanceSnapshot& Snapshot)
+{
+    LabelAccounts = Snapshot.LabelAccounts;
+    MonthlySummaries = Snapshot.MonthlySummaries;
+    ClosedMonthlySummaryKeys = Snapshot.ClosedMonthlySummaryKeys;
 }

@@ -4,6 +4,7 @@
 #include "Async/Async.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Widget.h"
+#include "Components/CanvasPanel.h"
 #include "NewsFeedList.h"
 #include "EventTickerWidget.h"
 #include "NewsFeedItemWidget.h"
@@ -18,8 +19,25 @@
 #include "UI/InspectorPanelWidget.h"
 #include "UI/MainCanvasHost.h"
 #include "UI/SignedArtistPanelWidget.h"
+#include "UI/TopStatusBarWidget.h"
+#include "UI/ActiveContractsWidget.h"
 #include "UI/RegionMapWidget.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/PanelWidget.h"
+
+namespace
+{
+    constexpr TCHAR PreferredArtistAuditionPanelClassPath[] = TEXT("/Game/GUI/Audition/ArtistAuditionPanelBP.ArtistAuditionPanelBP_C");
+    constexpr TCHAR LegacyAuditionPanelClassPath[] = TEXT("/Game/GUI/AuditionBP.AuditionBP_C");
+    constexpr TCHAR RecordingWidgetClassPath[] = TEXT("/Game/GUI/RecordingGUIBP.RecordingGUIBP_C");
+    constexpr TCHAR ActiveContractsWidgetClassPath[] = TEXT("/Game/GUI/Contracts/ActiveContractsBP.ActiveContractsBP_C");
+
+    bool IsLegacyAuditionPanelClass(const TSubclassOf<UAuditionWidget>& WidgetClass)
+    {
+        const UClass* Class = WidgetClass.Get();
+        return Class && Class->GetPathName() == LegacyAuditionPanelClassPath;
+    }
+}
 
 ULayout::ULayout(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -44,6 +62,11 @@ void ULayout::NativeConstruct()
         Layer2_Root->SetVisibility(ESlateVisibility::Visible);
     }
 
+    EnsureTopStatusBarWidget();
+    EnsureArtistAuditionPanelWidget();
+    EnsureRecordWidget();
+    EnsureActiveContractsWidget();
+
     if (MainCanvasHost)
     {
         MainCanvasHost->SetCanvasState(ECanvasState::Overview);
@@ -66,10 +89,21 @@ void ULayout::NativeConstruct()
     {
         SignedArtistsPanel->OnArtistSelected.AddDynamic(this, &ULayout::HandleArtistSelected);
     }
+
+    if (IsValid(NewsFeedList))
+    {
+        NewsFeedList->OnNewsFeedItemSelected.RemoveDynamic(this, &ULayout::HandleNewsFeedItemSelected);
+        NewsFeedList->OnNewsFeedItemSelected.AddDynamic(this, &ULayout::HandleNewsFeedItemSelected);
+    }
 }
 
 void ULayout::NativeDestruct()
 {
+    if (IsValid(NewsFeedList))
+    {
+        NewsFeedList->OnNewsFeedItemSelected.RemoveDynamic(this, &ULayout::HandleNewsFeedItemSelected);
+    }
+
     if (IsValid(SignedArtistsPanel))
     {
         SignedArtistsPanel->OnArtistSelected.RemoveDynamic(this, &ULayout::HandleArtistSelected);
@@ -84,6 +118,252 @@ void ULayout::NativeDestruct()
     }
 
     Super::NativeDestruct();
+}
+
+void ULayout::EnsureTopStatusBarWidget()
+{
+    if (IsValid(TopStatusBarWidget))
+    {
+        TopStatusBarWidget->RefreshFromSubsystems();
+        return;
+    }
+
+    if (!TopStatusBarWidgetClass)
+    {
+        TopStatusBarWidgetClass = LoadClass<UTopStatusBarWidget>(
+            nullptr,
+            TEXT("/Game/GUI/HUD/TopStatusBarBP.TopStatusBarBP_C"));
+    }
+
+    if (!TopStatusBarWidgetClass)
+    {
+        TopStatusBarWidgetClass = UTopStatusBarWidget::StaticClass();
+    }
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!IsValid(GameInstance) || !TopStatusBarWidgetClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureTopStatusBarWidget: Could not resolve GameInstance or widget class."));
+        return;
+    }
+
+    TopStatusBarWidget = CreateWidget<UTopStatusBarWidget>(GameInstance, TopStatusBarWidgetClass);
+    if (!IsValid(TopStatusBarWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureTopStatusBarWidget: Failed to create top status bar widget."));
+        return;
+    }
+
+    if (UCanvasPanel* Canvas = Cast<UCanvasPanel>(Layer1_Root))
+    {
+        UCanvasPanelSlot* CanvasSlot = Canvas->AddChildToCanvas(TopStatusBarWidget);
+        CanvasSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 0.f));
+        CanvasSlot->SetOffsets(FMargin(0.f, 0.f, 0.f, 72.f));
+        CanvasSlot->SetAlignment(FVector2D(0.f, 0.f));
+    }
+    else if (UPanelWidget* Panel = Cast<UPanelWidget>(Layer1_Root))
+    {
+        Panel->AddChild(TopStatusBarWidget);
+    }
+    else
+    {
+        TopStatusBarWidget->AddToViewport(50);
+        UE_LOG(LogTemp, Warning, TEXT("EnsureTopStatusBarWidget: Layer1_Root is not a panel, added top status bar to viewport."));
+    }
+
+    TopStatusBarWidget->RefreshFromSubsystems();
+}
+
+void ULayout::EnsureArtistAuditionPanelWidget()
+{
+    if (!ArtistAuditionPanelWidgetClass || IsLegacyAuditionPanelClass(ArtistAuditionPanelWidgetClass))
+    {
+        if (ArtistAuditionPanelWidgetClass)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("EnsureArtistAuditionPanelWidget: replacing legacy audition panel class '%s' with production panel '%s'."),
+                *ArtistAuditionPanelWidgetClass->GetPathName(),
+                PreferredArtistAuditionPanelClassPath);
+        }
+
+        ArtistAuditionPanelWidgetClass = LoadClass<UAuditionWidget>(
+            nullptr,
+            PreferredArtistAuditionPanelClassPath);
+    }
+
+    if (!ArtistAuditionPanelWidgetClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureArtistAuditionPanelWidget: ArtistAuditionPanelWidgetClass is not set."));
+        return;
+    }
+
+    if (IsValid(AuditionWidget) && AuditionWidget->GetClass() == ArtistAuditionPanelWidgetClass)
+    {
+        AuditionWidget->OnSignArtist.RemoveDynamic(this, &ULayout::HandleAuditionSigned);
+        AuditionWidget->OnSignArtist.AddDynamic(this, &ULayout::HandleAuditionSigned);
+        AuditionWidget->OnPass.RemoveDynamic(this, &ULayout::HandleAuditionPassed);
+        AuditionWidget->OnPass.AddDynamic(this, &ULayout::HandleAuditionPassed);
+        return;
+    }
+
+    if (IsValid(AuditionWidget))
+    {
+        AuditionWidget->SetVisibility(ESlateVisibility::Collapsed);
+    }
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!IsValid(GameInstance))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureArtistAuditionPanelWidget: GameInstance is invalid."));
+        return;
+    }
+
+    UAuditionWidget* NewAuditionWidget = CreateWidget<UAuditionWidget>(GameInstance, ArtistAuditionPanelWidgetClass);
+    if (!IsValid(NewAuditionWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureArtistAuditionPanelWidget: Failed to create %s."), *GetNameSafe(ArtistAuditionPanelWidgetClass));
+        return;
+    }
+
+    if (UCanvasPanel* CanvasRoot = Cast<UCanvasPanel>(Layer1_Root))
+    {
+        UCanvasPanelSlot* CanvasSlot = CanvasRoot->AddChildToCanvas(NewAuditionWidget);
+        CanvasSlot->SetAnchors(FAnchors(0.f, 0.f, 0.f, 1.f));
+        CanvasSlot->SetAlignment(FVector2D(0.f, 0.f));
+        CanvasSlot->SetOffsets(FMargin(12.f, 84.f, 520.f, 20.f));
+        CanvasSlot->SetZOrder(20);
+    }
+    else
+    {
+        NewAuditionWidget->AddToViewport(20);
+        NewAuditionWidget->SetPositionInViewport(FVector2D(12.f, 84.f), false);
+    }
+
+    NewAuditionWidget->SetVisibility(ESlateVisibility::Collapsed);
+    NewAuditionWidget->OnSignArtist.RemoveDynamic(this, &ULayout::HandleAuditionSigned);
+    NewAuditionWidget->OnSignArtist.AddDynamic(this, &ULayout::HandleAuditionSigned);
+    NewAuditionWidget->OnPass.RemoveDynamic(this, &ULayout::HandleAuditionPassed);
+    NewAuditionWidget->OnPass.AddDynamic(this, &ULayout::HandleAuditionPassed);
+    AuditionWidget = NewAuditionWidget;
+    UE_LOG(LogTemp, Warning, TEXT("EnsureArtistAuditionPanelWidget: Created audition panel Widget='%s' Class='%s'."),
+        *GetNameSafe(NewAuditionWidget),
+        *GetPathNameSafe(NewAuditionWidget->GetClass()));
+}
+
+void ULayout::EnsureActiveContractsWidget()
+{
+    if (IsValid(ActiveContractsWidget))
+    {
+        ActiveContractsWidget->SetVisibility(ESlateVisibility::Collapsed);
+        return;
+    }
+
+    if (!ActiveContractsWidgetClass)
+    {
+        ActiveContractsWidgetClass = LoadClass<UActiveContractsWidget>(nullptr, ActiveContractsWidgetClassPath);
+    }
+
+    if (!ActiveContractsWidgetClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureActiveContractsWidget: ActiveContractsWidgetClass is not set and could not load %s."), ActiveContractsWidgetClassPath);
+        return;
+    }
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!IsValid(GameInstance))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureActiveContractsWidget: GameInstance is invalid."));
+        return;
+    }
+
+    UActiveContractsWidget* NewContractsWidget = CreateWidget<UActiveContractsWidget>(GameInstance, ActiveContractsWidgetClass);
+    if (!IsValid(NewContractsWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureActiveContractsWidget: Failed to create %s."), *GetNameSafe(ActiveContractsWidgetClass));
+        return;
+    }
+
+    if (UCanvasPanel* CanvasRoot = Cast<UCanvasPanel>(Layer1_Root))
+    {
+        UCanvasPanelSlot* CanvasSlot = CanvasRoot->AddChildToCanvas(NewContractsWidget);
+        CanvasSlot->SetAnchors(FAnchors(0.08f, 0.10f, 0.92f, 0.92f));
+        CanvasSlot->SetAlignment(FVector2D(0.f, 0.f));
+        CanvasSlot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
+        CanvasSlot->SetZOrder(34);
+    }
+    else if (UPanelWidget* Panel = Cast<UPanelWidget>(Layer1_Root))
+    {
+        Panel->AddChild(NewContractsWidget);
+    }
+    else
+    {
+        NewContractsWidget->AddToViewport(34);
+        UE_LOG(LogTemp, Warning, TEXT("EnsureActiveContractsWidget: Layer1_Root is not a panel, added contracts widget to viewport."));
+    }
+
+    NewContractsWidget->SetVisibility(ESlateVisibility::Collapsed);
+    NewContractsWidget->OnCloseRequested.RemoveDynamic(this, &ULayout::HandleActiveContractsCloseRequested);
+    NewContractsWidget->OnCloseRequested.AddDynamic(this, &ULayout::HandleActiveContractsCloseRequested);
+    ActiveContractsWidget = NewContractsWidget;
+    UE_LOG(LogTemp, Warning, TEXT("EnsureActiveContractsWidget: Created active contracts widget Widget='%s' Class='%s'."),
+        *GetNameSafe(NewContractsWidget),
+        *GetPathNameSafe(NewContractsWidget->GetClass()));
+}
+void ULayout::EnsureRecordWidget()
+{
+    if (IsValid(RecordWidget))
+    {
+        RecordWidget->SetVisibility(ESlateVisibility::Collapsed);
+        return;
+    }
+
+    if (!RecordWidgetClass)
+    {
+        RecordWidgetClass = LoadClass<URecordWidget>(nullptr, RecordingWidgetClassPath);
+    }
+
+    if (!RecordWidgetClass)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureRecordWidget: RecordWidgetClass is not set and could not load %s."), RecordingWidgetClassPath);
+        return;
+    }
+
+    UGameInstance* GameInstance = GetGameInstance();
+    if (!IsValid(GameInstance))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureRecordWidget: GameInstance is invalid."));
+        return;
+    }
+
+    URecordWidget* NewRecordWidget = CreateWidget<URecordWidget>(GameInstance, RecordWidgetClass);
+    if (!IsValid(NewRecordWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("EnsureRecordWidget: Failed to create %s."), *GetNameSafe(RecordWidgetClass));
+        return;
+    }
+
+    if (UCanvasPanel* CanvasRoot = Cast<UCanvasPanel>(Layer1_Root))
+    {
+        UCanvasPanelSlot* CanvasSlot = CanvasRoot->AddChildToCanvas(NewRecordWidget);
+        CanvasSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+        CanvasSlot->SetAlignment(FVector2D(0.f, 0.f));
+        CanvasSlot->SetOffsets(FMargin(24.f, 84.f, 24.f, 24.f));
+        CanvasSlot->SetZOrder(30);
+    }
+    else if (UPanelWidget* Panel = Cast<UPanelWidget>(Layer1_Root))
+    {
+        Panel->AddChild(NewRecordWidget);
+    }
+    else
+    {
+        NewRecordWidget->AddToViewport(30);
+        UE_LOG(LogTemp, Warning, TEXT("EnsureRecordWidget: Layer1_Root is not a panel, added recording widget to viewport."));
+    }
+
+    NewRecordWidget->SetVisibility(ESlateVisibility::Collapsed);
+    RecordWidget = NewRecordWidget;
+    UE_LOG(LogTemp, Warning, TEXT("EnsureRecordWidget: Created recording widget Widget='%s' Class='%s'."),
+        *GetNameSafe(NewRecordWidget),
+        *GetPathNameSafe(NewRecordWidget->GetClass()));
 }
 
 UUserWidget* ULayout::GetChildByNameOrClass(FName WidgetName, TSubclassOf<UUserWidget> WidgetClass) const
@@ -128,7 +408,10 @@ UUserWidget* ULayout::GetChildByNameOrClass(FName WidgetName, TSubclassOf<UUserW
 
 void ULayout::AddNewsCardToFeed(const FMusicNewsEvent& Event)
 {
-    UE_LOG(LogTemp, Warning, TEXT("Trying to add NewsCard"));
+    UE_LOG(LogTemp, Warning, TEXT("Layout %s adding news card: Headline='%s' Type=%d."),
+        *GetNameSafe(this),
+        *Event.Headline,
+        static_cast<int32>(Event.NewsType));
     if (!ensure(IsInGameThread()))
     {
         UE_LOG(LogTemp, Warning, TEXT("AddNewsCardToFeed called off the game thread."));
@@ -147,7 +430,7 @@ void ULayout::AddNewsCardToFeed(const FMusicNewsEvent& Event)
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("AddNewsCardToFeed: Failed to add news card."));
+        UE_LOG(LogTemp, Warning, TEXT("AddNewsCardToFeed: Failed to add news card. Headline='%s'."), *Event.Headline);
     }
 }
 
@@ -238,6 +521,33 @@ void ULayout::HandleTickerClicked(UEventTickerWidget* ClickedTicker)
     }
 }
 
+void ULayout::HandleNewsFeedItemSelected(UNewsFeedItemWidget* Card, const FMusicNewsEvent& EventData)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<ULayout> WeakThis(this);
+        TWeakObjectPtr<UNewsFeedItemWidget> WeakCard(Card);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, WeakCard, EventData]()
+        {
+            if (ULayout* Self = WeakThis.Get())
+            {
+                Self->HandleNewsFeedItemSelected(WeakCard.Get(), EventData);
+            }
+        });
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("Layout selected news feed item: Card=%s Headline='%s' Type=%d."),
+        *GetNameSafe(Card),
+        *EventData.Headline,
+        static_cast<int32>(EventData.NewsType));
+
+    if (UUIManagerSubsystem* UI = GetUIManagerSubsystem())
+    {
+        UI->HandleNewsCardSelected(EventData);
+    }
+}
+
 void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
 {
     if (!IsInGameThread())
@@ -253,17 +563,53 @@ void ULayout::ShowAuditionWidgetWithData(const FAuditionEvent& EventData)
         return;
     }
 
+    EnsureArtistAuditionPanelWidget();
+
     if (!IsValid(AuditionWidget))
     {
+        UE_LOG(LogTemp, Warning, TEXT("ShowAuditionWidgetWithData: AuditionWidget is invalid for artist '%s'."),
+            *EventData.ArtistData.ArtistName);
         return;
     }
 
     AuditionWidget->AuditionData = EventData;
+    AuditionWidget->RefreshDisplay();
 
     if (!AuditionWidget->IsVisible())
     {
         AuditionWidget->SetVisibility(ESlateVisibility::Visible);
     }
+}
+
+void ULayout::ShowAuditionWidgetForArtist(const FArtistData& ArtistData)
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistData]()
+        {
+            if (ULayout* Self = WeakThis.Get())
+            {
+                Self->ShowAuditionWidgetForArtist(ArtistData);
+            }
+        });
+        return;
+    }
+
+    EnsureArtistAuditionPanelWidget();
+
+    if (!IsValid(AuditionWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ShowAuditionWidgetForArtist: AuditionWidget is invalid for artist '%s'."), *ArtistData.ArtistName);
+        return;
+    }
+
+    AuditionWidget->CreateAuditionFromArtist(ArtistData);
+    AuditionWidget->SetVisibility(ESlateVisibility::Visible);
+
+    UE_LOG(LogTemp, Warning, TEXT("ShowAuditionWidgetForArtist: opened audition panel for ArtistId='%s' Name='%s'."),
+        *ArtistData.ArtistId,
+        *ArtistData.ArtistName);
 }
 
 void ULayout::ShowRegionMap()
@@ -306,14 +652,18 @@ void ULayout::ShowAuditionWidget()
         return;
     }
 
-    if (!IsValid(AuditionWidget))
-    {
-        return;
-    }
+    EnsureArtistAuditionPanelWidget();
 
     UArtistManagerSubsystem* ArtistSub = GetArtistManagerSubsystem();
     if (!ArtistSub)
     {
+        UE_LOG(LogTemp, Warning, TEXT("ShowAuditionWidget: Artist subsystem is unavailable."));
+        return;
+    }
+
+    if (!IsValid(AuditionWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ShowAuditionWidget: AuditionWidget is invalid after ensure."));
         return;
     }
 
@@ -321,16 +671,16 @@ void ULayout::ShowAuditionWidget()
     if (!ArtistSub->GetNextUnsignedArtist(ArtistForAudition))
     {
         UE_LOG(LogTemp, Warning, TEXT("No unsigned artists available for audition."));
+        CloseAuditionWidget();
         return;
     }
 
     AuditionWidget->CreateAuditionFromArtist(ArtistForAudition);
-    const FAuditionEvent EventData = AuditionWidget->AuditionData;
+    AuditionWidget->SetVisibility(ESlateVisibility::Visible);
 
-    if (UUIManagerSubsystem* UI = GetUIManagerSubsystem())
-    {
-        UI->ShowAudition(EventData);
-    }
+    UE_LOG(LogTemp, Warning, TEXT("ShowAuditionWidget: opened next audition artist ArtistId='%s' Name='%s'."),
+        *ArtistForAudition.ArtistId,
+        *ArtistForAudition.ArtistName);
 }
 
 void ULayout::CloseAuditionWidget()
@@ -357,6 +707,44 @@ void ULayout::CloseAuditionWidget()
     }
 }
 
+void ULayout::HandleAuditionSigned()
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (ULayout* Strong = WeakThis.Get())
+            {
+                Strong->HandleAuditionSigned();
+            }
+        });
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("Audition decision handled by layout: signed artist; closing audition panel."));
+    CloseAuditionWidget();
+}
+
+void ULayout::HandleAuditionPassed()
+{
+    if (!IsInGameThread())
+    {
+        const TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (ULayout* Strong = WeakThis.Get())
+            {
+                Strong->HandleAuditionPassed();
+            }
+        });
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("Audition decision handled by layout: passed artist; closing audition panel."));
+    CloseAuditionWidget();
+}
+
 void ULayout::ShowRecordWidget()
 {
     if (!IsInGameThread())
@@ -372,26 +760,50 @@ void ULayout::ShowRecordWidget()
         return;
     }
 
+    EnsureRecordWidget();
+
     if (!IsValid(RecordWidget))
     {
         UE_LOG(LogTemp, Warning, TEXT("ShowRecordWidget: RecordWidget is invalid."));
         return;
     }
 
-    // Resolve selected artist
+    // Resolve selected artist. Older UI paths may still store artist names, but the
+    // recording flow needs the stable contract ArtistId.
     FString ArtistId;
     if (UArtistManagerSubsystem* ArtistSub = GetArtistManagerSubsystem())
     {
         ArtistId = ArtistSub->GetSelectedArtist();
+        if (!ArtistId.IsEmpty())
+        {
+            if (const FArtistContract* SelectedContract = ArtistSub->GetContractByArtistId(ArtistId))
+            {
+                ArtistId = SelectedContract->ArtistId;
+            }
+            else if (const FArtistContract* SelectedByName = ArtistSub->FindContractByArtistName(ArtistId))
+            {
+                ArtistId = SelectedByName->ArtistId;
+                ArtistSub->SetSelectedArtist(ArtistId);
+                UE_LOG(LogTemp, Log, TEXT("ShowRecordWidget: Resolved selected artist name to ArtistId '%s'."), *ArtistId);
+            }
+        }
+
+        if (ArtistId.IsEmpty() && ArtistSub->ActiveContracts.Num() > 0)
+        {
+            ArtistId = ArtistSub->ActiveContracts[0].ArtistId;
+            ArtistSub->SetSelectedArtist(ArtistId);
+            UE_LOG(LogTemp, Warning, TEXT("ShowRecordWidget: No artist was selected; defaulting to first signed artist '%s'."), *ArtistId);
+        }
     }
 
     if (ArtistId.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("ShowRecordWidget: No selected artist. Unable to populate songs."));
+        UE_LOG(LogTemp, Warning, TEXT("ShowRecordWidget: No selected/signed artist. Unable to populate songs."));
     }
     else
     {
         // Initialize RecordWidget for selected artist
+        UE_LOG(LogTemp, Log, TEXT("ShowRecordWidget: Initializing recording widget for ArtistId '%s'."), *ArtistId);
         RecordWidget->InitializeForArtist(ArtistId);
     }
 
@@ -432,31 +844,87 @@ void ULayout::RefreshSignedArtists(const TArray<FArtistData>& Artists)
 
 void ULayout::ShowContract(const FArtistContract& SignedContract)
 {
+    ShowActiveContractsWidgetForArtist(SignedContract.ArtistId);
+}
+
+void ULayout::ShowActiveContractsWidget()
+{
     if (!IsInGameThread())
     {
         TWeakObjectPtr<ULayout> WeakThis(this);
-        AsyncTask(ENamedThreads::GameThread, [WeakThis, SignedContract]()
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
         {
             if (ULayout* Self = WeakThis.Get())
             {
-                Self->ShowContract(SignedContract);
+                Self->ShowActiveContractsWidget();
             }
         });
         return;
     }
 
-    if (!IsValid(ContractWidget))
+    EnsureActiveContractsWidget();
+
+    if (!IsValid(ActiveContractsWidget))
     {
-        UE_LOG(LogTemp, Warning, TEXT("ShowContract: ContractWidget is not bound on layout %s."), *GetName());
+        UE_LOG(LogTemp, Warning, TEXT("ShowActiveContractsWidget: ActiveContractsWidget is invalid."));
         return;
     }
 
-    ContractWidget->SetContractData(SignedContract);
+    ActiveContractsWidget->RefreshContracts();
+    ActiveContractsWidget->SetVisibility(ESlateVisibility::Visible);
+}
 
-    if (!ContractWidget->IsVisible())
+void ULayout::ShowActiveContractsWidgetForArtist(const FString& ArtistId)
+{
+    if (!IsInGameThread())
     {
-        ContractWidget->SetVisibility(ESlateVisibility::Visible);
+        TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ArtistId]()
+        {
+            if (ULayout* Self = WeakThis.Get())
+            {
+                Self->ShowActiveContractsWidgetForArtist(ArtistId);
+            }
+        });
+        return;
     }
+
+    EnsureActiveContractsWidget();
+
+    if (!IsValid(ActiveContractsWidget))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ShowActiveContractsWidgetForArtist: ActiveContractsWidget is invalid for ArtistId='%s'."), *ArtistId);
+        return;
+    }
+
+    ActiveContractsWidget->ShowForArtist(ArtistId);
+    ActiveContractsWidget->SetVisibility(ESlateVisibility::Visible);
+}
+
+void ULayout::CloseActiveContractsWidget()
+{
+    if (!IsInGameThread())
+    {
+        TWeakObjectPtr<ULayout> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            if (ULayout* Self = WeakThis.Get())
+            {
+                Self->CloseActiveContractsWidget();
+            }
+        });
+        return;
+    }
+
+    if (IsValid(ActiveContractsWidget))
+    {
+        ActiveContractsWidget->SetVisibility(ESlateVisibility::Collapsed);
+    }
+}
+
+void ULayout::HandleActiveContractsCloseRequested()
+{
+    CloseActiveContractsWidget();
 }
 
 UAuditionWidget* ULayout::GetAuditionWidget() const

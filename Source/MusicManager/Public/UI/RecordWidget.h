@@ -4,12 +4,16 @@
 #include "Blueprint/UserWidget.h"
 #include "Containers/Map.h"
 #include "FSongData.h"
+#include "RecordManagerSubsystem.h"
+#include "Types/SlateEnums.h"
 #include "RecordWidget.generated.h"
 
 class UButton;
 class UCheckBox;
+class UComboBoxString;
 class UEditableTextBox;
 class UListView;
+class UTextBlock;
 class URecordSongListItemWidget;
 class URecordManagerSubsystem;
 
@@ -55,6 +59,7 @@ public:
 
     void AddSongToRecord(const FString& SongId);
     void RemoveSongFromRecord(const FString& SongId);
+    bool IsSongSelected(const FString& SongId) const;
 
 protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
@@ -62,6 +67,9 @@ protected:
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UCheckBox* bIsLP;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UCheckBox* bIsEP;
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UEditableTextBox* AlbumNameBox;
@@ -78,6 +86,51 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
     UListView* RecordSongListView;
 
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UComboBoxString* GenreFilterBox;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UEditableTextBox* SearchTextBox;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* RecordingCostText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* RecordingDurationText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* RecordingWarningText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ArtistNameText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ArtistGenreText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ArtistPopularityText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ArtistFansText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ArtistReputationText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ReleaseFormatText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ReleaseTracksText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* ReleaseDurationText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* SelectedTrackCountText;
+
+    UPROPERTY(BlueprintReadWrite, meta = (BindWidgetOptional))
+    UTextBlock* TotalDurationText;
+
 private:
     UFUNCTION()
     void HandleConfirmClicked();
@@ -85,13 +138,37 @@ private:
     UFUNCTION()
     void HandleCancelClicked();
 
+    UFUNCTION()
+    void HandleSingleChanged(bool bIsChecked);
+
+    UFUNCTION()
+    void HandleEPChanged(bool bIsChecked);
+
+    UFUNCTION()
+    void HandleLPChanged(bool bIsChecked);
+
+    UFUNCTION()
+    void HandleGenreSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
+
+    UFUNCTION()
+    void HandleSearchTextChanged(const FText& NewText);
+
     // NOTE: Not a UFUNCTION because UE delegates use a reference signature.
     void HandleEntryGenerated(UUserWidget& EntryWidget);
 
     UFUNCTION()
     void PopulateSongsForArtist(const FString& ArtistId);
+    void RefreshAvailableSongsList();
     void RefreshRecordSongList();
+    void RefreshRecordingProjection();
+    void RefreshArtistHeader(const FString& ArtistId);
+    void RefreshSelectedTrackStats();
     void BindButtonDelegates();
+    void BindFilterDelegates();
+    ERecordType GetSelectedRecordType() const;
+    void SelectRecordType(ERecordType RecordType);
+    FString FormatSelectedDuration() const;
+    bool SongMatchesCurrentFilters(const FSongData& SongData) const;
 
     FString CurrentArtistId;
 
@@ -102,5 +179,11 @@ private:
     TArray<FString> RecordSongIds;
 
     UPROPERTY()
+    TArray<TObjectPtr<URecordSongListEntryObject>> AvailableSongEntries;
+
+    UPROPERTY()
     TMap<FString, FSongData> SongDataById;
+
+    FString ActiveGenreFilter = TEXT("All Genres");
+    FString ActiveSongSearch;
 };

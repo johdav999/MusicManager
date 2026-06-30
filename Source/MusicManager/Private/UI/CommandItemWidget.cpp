@@ -4,6 +4,7 @@
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
+#include "Components/TextBlock.h"
 
 UCommandItemWidget::UCommandItemWidget(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer)
@@ -35,6 +36,10 @@ void UCommandItemWidget::NativeDestruct()
 void UCommandItemWidget::SetCommandName(const FString& InCommandName)
 {
     CommandName = InCommandName;
+    if (CommandLabelText)
+    {
+        CommandLabelText->SetText(FText::FromString(CommandName));
+    }
 }
 
 void UCommandItemWidget::SetCommandIcon(const FSlateBrush& InBrush)

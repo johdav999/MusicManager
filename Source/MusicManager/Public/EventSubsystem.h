@@ -4,10 +4,13 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Engine/World.h"
 #include "Containers/Set.h"
+#include "GameTimeSubsystem.h"
 
 #include "EventSubsystem.generated.h"
 
 class UGameTimeSubsystem;
+struct FMusicSaveValidationResult;
+struct FNewsSnapshot;
 
 class AAuditionEventActor;
 
@@ -144,8 +147,16 @@ public:
     void HandleMonthAdvanced(const FDateTime& NewDate);
     UFUNCTION()
     void HandleMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd, const FDateTime& NewDate);
+    UFUNCTION()
+    void HandleMonthlySummaryClosed(const FMonthlyCloseSummary& Summary);
     UFUNCTION(BlueprintCallable)
     void GetMonthlyNewsSummaries(TArray<FMonthlyNewsSummary>& OutSummaries) const;
+
+    bool PublishNewsEvent(const FMusicNewsEvent& Event, const FString& DeduplicationKey);
+
+    void BuildSaveSnapshot(FNewsSnapshot& OutSnapshot) const;
+    void ValidateSaveSnapshot(const FNewsSnapshot& Snapshot, FMusicSaveValidationResult& Result) const;
+    void ApplySaveSnapshot(const FNewsSnapshot& Snapshot);
 
     UFUNCTION()
     void HandleTimeBatchAdvanced(int32 WeeksAdvanced, const FDateTime& NewDate);
@@ -161,6 +172,7 @@ private:
 
     void ProcessMonthAdvanced(const FDateTime& NewDate);
     void ProcessMonthClosed(int32 ClosedYear, int32 ClosedMonth, const FDateTime& PeriodStart, const FDateTime& PeriodEnd, const FDateTime& NewDate);
+    void EmitNewsEvent(const FMusicNewsEvent& Event, const FString& SourceContext);
     FMusicNewsEvent BuildMonthlyNews(const FDateTime& NewDate) const;
     FMusicNewsEvent BuildMonthlyNews(int32 ClosedYear, int32 ClosedMonth, const FDateTime& NewDate) const;
     /** Tracks unique news triggers using a stable string key (e.g., ArtistId + NewsType). */

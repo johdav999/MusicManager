@@ -6,6 +6,9 @@
 #include "MarketRegion.h"
 #include "MarketManagerSubsystem.generated.h"
 
+struct FMarketSnapshot;
+struct FMusicSaveValidationResult;
+
 /** Snapshot of all genre demand within a specific market at a single point in time. */
 USTRUCT(BlueprintType)
 struct FMarketDemandSnapshot
@@ -126,6 +129,12 @@ public:
     UFUNCTION(BlueprintCallable)
     void GetAllRegions(TArray<FMarketRegion>& OutRegions) const;
 
+    UFUNCTION(BlueprintCallable, Category="Market|Exposure")
+    bool AddRecordExposure(const FString& RegionId, const FString& RecordId, float ExposureAmount);
+
+    UFUNCTION(BlueprintCallable, Category="Market|Exposure")
+    float GetRecordExposure(const FString& RegionId, const FString& RecordId) const;
+
     /** Aggregate segment-level demand into a market snapshot. */
     void BuildMarketDemandSnapshot(const FMarketRegion& Region, FMarketDemandSnapshot& OutSnapshot) const;
 
@@ -134,6 +143,10 @@ public:
 
     /** Utility: compute all market snapshots for the current month. */
     void GetAllDemandSnapshots(TArray<FMarketDemandSnapshot>& OutSnapshots) const;
+
+    void BuildSaveSnapshot(FMarketSnapshot& OutSnapshot) const;
+    void ValidateSaveSnapshot(const FMarketSnapshot& Snapshot, const TSet<FString>& KnownArtistIds, const TSet<FString>& KnownRecordIds, FMusicSaveValidationResult& Result) const;
+    void ApplySaveSnapshot(const FMarketSnapshot& Snapshot);
 
 private:
 

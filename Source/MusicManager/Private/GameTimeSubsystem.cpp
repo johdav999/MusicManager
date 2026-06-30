@@ -1,8 +1,10 @@
 #include "GameTimeSubsystem.h"
 
 #include "ArtistManagerSubsystem.h"
+#include "ChartManagerSubsystem.h"
 #include "EventSubsystem.h"
 #include "FinanceManagerSubsystem.h"
+#include "MarketingManagerSubsystem.h"
 #include "MarketManagerSubsystem.h"
 #include "MusicSaveGame.h"
 #include "RecordManagerSubsystem.h"
@@ -69,17 +71,26 @@ void UGameTimeSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
 
+    FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
+    FWorldDelegates::OnPostWorldInitialization.AddUObject(this, &UGameTimeSubsystem::HandleWorldInitialized);
+
     CurrentGameDate = FDateTime(1955, 1, 1);
     bHasReachedSimulationEnd = false;
     bIsTimeRunning = false;
     bIsBatchAdvancing = false;
     LastExecutedWeeklyPhases.Reset();
 
-    UE_LOG(LogMusicSimTime, Log, TEXT("Game time initialized at %s. Automatic timer advancement is disabled; use explicit weekly advancement."), *CurrentGameDate.ToString());
+    UE_LOG(LogMusicSimTime, Warning, TEXT("Game time initialized at %s. Automatic month timer interval is %.2f seconds."),
+        *CurrentGameDate.ToString(),
+        AutoAdvanceMonthIntervalSeconds);
+
+    StartAutoAdvance();
 }
 
 void UGameTimeSubsystem::Deinitialize()
 {
+    FWorldDelegates::OnPostWorldInitialization.RemoveAll(this);
+    ClearAutoAdvanceTimer();
     Super::Deinitialize();
 }
 
@@ -174,6 +185,11 @@ int32 UGameTimeSubsystem::AdvanceWeeks(int32 NumWeeks)
 
     bIsBatchAdvancing = bWasBatchAdvancing;
 
+    if (HasSimulationEnded())
+    {
+        StopAutoAdvance();
+    }
+
     if (BatchUIManager)
     {
         BatchUIManager->EndSimulationBatchUpdate(WeeksProcessed, CurrentGameDate);
@@ -201,6 +217,7 @@ void UGameTimeSubsystem::AdvanceMonth()
 
     if (HasSimulationEnded())
     {
+        StopAutoAdvance();
         return;
     }
 
@@ -217,6 +234,10 @@ void UGameTimeSubsystem::AdvanceMonth()
 
         if (HasSimulationEnded() || CurrentGameDate.GetMonth() != StartingMonth || CurrentGameDate.GetYear() != StartingYear)
         {
+            if (HasSimulationEnded())
+            {
+                StopAutoAdvance();
+            }
             return;
         }
     }
@@ -268,6 +289,13 @@ void UGameTimeSubsystem::RunWeeklySimulationPhase(EMusicWeeklySimulationPhase Ph
         break;
 
     case EMusicWeeklySimulationPhase::ChartCalculation:
+        if (UGameInstance* GameInstance = GetGameInstance())
+        {
+            if (UChartManagerSubsystem* ChartSubsystem = GameInstance->GetSubsystem<UChartManagerSubsystem>())
+            {
+                ChartSubsystem->ResolveWeeklyCharts(NewDate);
+            }
+        }
         break;
 
     case EMusicWeeklySimulationPhase::TourResolution:
@@ -335,7 +363,7 @@ FMonthlyCloseSummary UGameTimeSubsystem::BuildMonthlyCloseSummary(int32 ClosedYe
 
 void UGameTimeSubsystem::CloseMonth(const FMonthlyCloseSummary& Summary)
 {
-    UE_LOG(LogMusicSimTime, Log, TEXT("Month closed: %s at weekly boundary %s -> %s"),
+        UE_LOG(LogMusicSimTime, Warning, TEXT("Month closed: %s at weekly boundary %s -> %s"),
         *Summary.MonthKey,
         *Summary.PreviousDate.ToString(),
         *Summary.NewDate.ToString());
@@ -370,6 +398,12 @@ void UGameTimeSubsystem::RunMonthlyCompatibilityPass(const FMonthlyCloseSummary&
         ArtistSubsystem->HandleMonthAdvanced(Summary.NewDate);
     }
 
+    if (UMarketingManagerSubsystem* MarketingSubsystem = GameInstance->GetSubsystem<UMarketingManagerSubsystem>())
+    {
+        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=MarketingManagerSubsystem ClosedMonth=%s Date=%s"), *Summary.MonthKey, *Summary.NewDate.ToString());
+        MarketingSubsystem->HandleMonthAdvanced(Summary.NewDate);
+    }
+
     if (URecordManagerSubsystem* RecordSubsystem = GameInstance->GetSubsystem<URecordManagerSubsystem>())
     {
         UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=RecordManagerSubsystem ClosedMonth=%s Date=%s"), *Summary.MonthKey, *Summary.NewDate.ToString());
@@ -382,11 +416,8 @@ void UGameTimeSubsystem::RunMonthlyCompatibilityPass(const FMonthlyCloseSummary&
         FinanceSubsystem->HandleMonthClosed(Summary.ClosedYear, Summary.ClosedMonth, Summary.PeriodStart, Summary.PeriodEnd);
     }
 
-    if (UEventSubsystem* EventSubsystem = GameInstance->GetSubsystem<UEventSubsystem>())
-    {
-        UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility Subsystem=EventSubsystem ClosedMonth=%s Date=%s"), *Summary.MonthKey, *Summary.NewDate.ToString());
-        EventSubsystem->HandleMonthClosed(Summary.ClosedYear, Summary.ClosedMonth, Summary.PeriodStart, Summary.PeriodEnd, Summary.NewDate);
-    }
+    UE_LOG(LogMusicSimTime, Verbose, TEXT("MonthlyCompatibility EventSubsystem skipped here; news generation listens to OnMonthlySummaryClosed for ClosedMonth=%s."),
+        *Summary.MonthKey);
 }
 
 bool UGameTimeSubsystem::DidCrossMonthBoundary(const FDateTime& PreviousDate, const FDateTime& NewDate) const
@@ -419,11 +450,139 @@ void UGameTimeSubsystem::PauseTime(bool bPause)
 {
     check(IsInGameThread());
 
-    // TASK-7.1.7: business simulation must not self-advance from a repeating timer.
-    // Keep this Blueprint-callable method as a no-op compatibility hook.
+    if (bPause)
+    {
+        StopAutoAdvance();
+    }
+    else
+    {
+        StartAutoAdvance();
+    }
+
+    UE_LOG(LogMusicSimTime, Log, TEXT("PauseTime(%s): Auto month advancement is now %s."),
+        bPause ? TEXT("true") : TEXT("false"),
+        bIsTimeRunning ? TEXT("running") : TEXT("stopped"));
+}
+
+void UGameTimeSubsystem::StartAutoAdvance()
+{
+    check(IsInGameThread());
+
+    if (HasSimulationEnded())
+    {
+        bIsTimeRunning = false;
+        ClearAutoAdvanceTimer();
+        UE_LOG(LogMusicSimTime, Log, TEXT("StartAutoAdvance ignored because the simulation has ended at %s."),
+            *CurrentGameDate.ToString());
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!IsValid(World))
+    {
+        bIsTimeRunning = false;
+        UE_LOG(LogMusicSimTime, Warning, TEXT("StartAutoAdvance waiting because GetWorld() is invalid. Timer will retry after world initialization."));
+        return;
+    }
+
+    if (!IsValid(GetGameInstance()))
+    {
+        bIsTimeRunning = false;
+        UE_LOG(LogMusicSimTime, Warning, TEXT("StartAutoAdvance waiting because GameInstance is invalid for World=%s."), *GetNameSafe(World));
+        return;
+    }
+
+    if (World->GetGameInstance() != GetGameInstance())
+    {
+        bIsTimeRunning = false;
+        UE_LOG(LogMusicSimTime, Warning, TEXT("StartAutoAdvance waiting because World=%s does not belong to this GameInstance."), *GetNameSafe(World));
+        return;
+    }
+
+    const float Interval = FMath::Max(0.1f, AutoAdvanceMonthIntervalSeconds);
+    const bool bWasTimerActive = World->GetTimerManager().IsTimerActive(AutoAdvanceMonthTimerHandle);
+    World->GetTimerManager().ClearTimer(AutoAdvanceMonthTimerHandle);
+    World->GetTimerManager().SetTimer(
+        AutoAdvanceMonthTimerHandle,
+        this,
+        &UGameTimeSubsystem::HandleAutoAdvanceTimerElapsed,
+        Interval,
+        true);
+
+    bIsTimeRunning = true;
+    UE_LOG(LogMusicSimTime, Warning, TEXT("Automatic month advancement %s. Interval=%.2f seconds CurrentDate=%s World=%s TimerHandleValid=%s."),
+        bWasTimerActive ? TEXT("restarted") : TEXT("started"),
+        Interval,
+        *CurrentGameDate.ToString(),
+        *GetNameSafe(World),
+        AutoAdvanceMonthTimerHandle.IsValid() ? TEXT("true") : TEXT("false"));
+}
+
+void UGameTimeSubsystem::StopAutoAdvance()
+{
+    check(IsInGameThread());
+
+    ClearAutoAdvanceTimer();
     bIsTimeRunning = false;
-    UE_LOG(LogMusicSimTime, Verbose, TEXT("PauseTime(%s) ignored; simulation advances only through explicit AdvanceOneWeek/AdvanceWeeks calls."),
-        bPause ? TEXT("true") : TEXT("false"));
+    UE_LOG(LogMusicSimTime, Warning, TEXT("Automatic month advancement stopped at %s."), *CurrentGameDate.ToString());
+}
+
+void UGameTimeSubsystem::HandleAutoAdvanceTimerElapsed()
+{
+    check(IsInGameThread());
+
+    if (HasSimulationEnded())
+    {
+        StopAutoAdvance();
+        return;
+    }
+
+    UE_LOG(LogMusicSimTime, Warning, TEXT("Automatic month timer elapsed. Advancing month from %s. Interval=%.2f TimerRunning=%s."),
+        *CurrentGameDate.ToString(),
+        AutoAdvanceMonthIntervalSeconds,
+        bIsTimeRunning ? TEXT("true") : TEXT("false"));
+    AdvanceMonth();
+}
+
+void UGameTimeSubsystem::ClearAutoAdvanceTimer()
+{
+    if (UWorld* World = GetWorld())
+    {
+        const bool bWasActive = World->GetTimerManager().IsTimerActive(AutoAdvanceMonthTimerHandle);
+        World->GetTimerManager().ClearTimer(AutoAdvanceMonthTimerHandle);
+        UE_LOG(LogMusicSimTime, Verbose, TEXT("ClearAutoAdvanceTimer called. WasActive=%s World=%s."),
+            bWasActive ? TEXT("true") : TEXT("false"),
+            *GetNameSafe(World));
+    }
+    else
+    {
+        UE_LOG(LogMusicSimTime, Verbose, TEXT("ClearAutoAdvanceTimer called with no valid World."));
+    }
+}
+
+void UGameTimeSubsystem::HandleWorldInitialized(UWorld* World, const UWorld::InitializationValues IVS)
+{
+    if (!IsInGameThread())
+    {
+        return;
+    }
+
+    UE_LOG(LogMusicSimTime, Warning, TEXT("HandleWorldInitialized received World=%s Type=%d HasGI=%s CurrentGI=%s TimerRunning=%s."),
+        *GetNameSafe(World),
+        IsValid(World) ? static_cast<int32>(World->WorldType) : -1,
+        IsValid(World) && IsValid(World->GetGameInstance()) ? TEXT("true") : TEXT("false"),
+        IsValid(GetGameInstance()) ? TEXT("true") : TEXT("false"),
+        bIsTimeRunning ? TEXT("true") : TEXT("false"));
+
+    if (!IsValid(World) || World->GetGameInstance() != GetGameInstance())
+    {
+        return;
+    }
+
+    if (!bIsTimeRunning)
+    {
+        StartAutoAdvance();
+    }
 }
 
 bool UGameTimeSubsystem::HasSimulationEnded() const
@@ -450,6 +609,7 @@ void UGameTimeSubsystem::SaveState(UMusicSaveGame* SaveObject)
 
     if (SaveObject)
     {
+        BuildSaveSnapshot(SaveObject->TimeSnapshot);
         SaveObject->SavedGameDate = CurrentGameDate;
     }
 }
@@ -463,6 +623,48 @@ void UGameTimeSubsystem::LoadState(const UMusicSaveGame* SaveObject)
 
     if (SaveObject)
     {
-        CurrentGameDate = SaveObject->SavedGameDate;
+        ApplySaveSnapshot(SaveObject->TimeSnapshot);
+    }
+}
+
+void UGameTimeSubsystem::BuildSaveSnapshot(FTimeSnapshot& OutSnapshot) const
+{
+    OutSnapshot.CurrentGameDate = CurrentGameDate;
+    OutSnapshot.bHasReachedSimulationEnd = bHasReachedSimulationEnd;
+}
+
+void UGameTimeSubsystem::ValidateSaveSnapshot(const FTimeSnapshot& Snapshot, FMusicSaveValidationResult& Result) const
+{
+    if (Snapshot.CurrentGameDate.GetTicks() <= 0)
+    {
+        Result.AddError(TEXT("Time snapshot date is unset."));
+        return;
+    }
+
+    if (Snapshot.CurrentGameDate.GetYear() < 1955)
+    {
+        Result.AddError(FString::Printf(TEXT("Time snapshot date %s is before supported campaign start."), *Snapshot.CurrentGameDate.ToString()));
+    }
+
+    if (Snapshot.CurrentGameDate.GetYear() > 2026)
+    {
+        Result.AddError(FString::Printf(TEXT("Time snapshot date %s is after supported simulation end."), *Snapshot.CurrentGameDate.ToString()));
+    }
+}
+
+void UGameTimeSubsystem::ApplySaveSnapshot(const FTimeSnapshot& Snapshot)
+{
+    CurrentGameDate = Snapshot.CurrentGameDate;
+    bHasReachedSimulationEnd = Snapshot.bHasReachedSimulationEnd || CurrentGameDate.GetYear() > 2026;
+    bIsBatchAdvancing = false;
+    LastExecutedWeeklyPhases.Reset();
+
+    if (bHasReachedSimulationEnd)
+    {
+        StopAutoAdvance();
+    }
+    else
+    {
+        StartAutoAdvance();
     }
 }

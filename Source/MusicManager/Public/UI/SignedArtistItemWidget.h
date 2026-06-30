@@ -29,7 +29,7 @@ public:
 
     void SetSelected(bool bSelected);
 
-    FString GetArtistId() const { return LocalArtistData.ArtistName; }
+    FString GetArtistId() const { return LocalArtistData.ArtistId.IsEmpty() ? LocalArtistData.ArtistName : LocalArtistData.ArtistId; }
 
     void UpdateVisualState();
 

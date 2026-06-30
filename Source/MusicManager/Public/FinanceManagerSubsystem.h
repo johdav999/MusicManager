@@ -7,6 +7,8 @@
 struct FRecordSalesEntry;
 struct FRecordFormatRule;
 struct FRecordData;
+struct FFinanceSnapshot;
+struct FMusicSaveValidationResult;
 enum class ERecordFormat : uint8;
 
 UENUM(BlueprintType)
@@ -132,6 +134,10 @@ public:
 
     /** Book ledger entries for monthly sales without altering unit demand. */
     void ProcessRecordSalesEntries(const TArray<FRecordSalesEntry>& Entries, const TMap<ERecordFormat, FRecordFormatRule>& FormatRules, const TMap<FString, FRecordData>& RecordDataById);
+
+    void BuildSaveSnapshot(FFinanceSnapshot& OutSnapshot) const;
+    void ValidateSaveSnapshot(const FFinanceSnapshot& Snapshot, const TSet<FString>& KnownLabelIds, FMusicSaveValidationResult& Result) const;
+    void ApplySaveSnapshot(const FFinanceSnapshot& Snapshot);
 
 private:
     UPROPERTY()
